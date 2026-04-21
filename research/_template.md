@@ -2,7 +2,7 @@
 - [Insert clear, technical title describing the system or topic]
 
 # 2. Executive Summary
-- [5–10] [What the system is]
+- [5–10 bullet points maximum: what the system is]
 - [Why it matters]
 - [Key insight or design idea]
 - [Additional critical summary points as needed]
