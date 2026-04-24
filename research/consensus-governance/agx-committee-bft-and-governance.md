@@ -3,8 +3,8 @@
 
 # 2. Executive Summary
 - Hyperfluid should launch with committee-based BFT from day 1, not full-set voting, to preserve liveness and decentralization if participation scales quickly.
-- The current core stack choice remains strong: Ockam for secure transport, Malachite for BFT, ML-DSA for signatures, SMT for compact state, and gix for governance execution.
-- The original staking intuition is good (lock + jittered expiry + auto-restake), but production safety requires longer unbonding, slashing, and anti-sybil committee design.
+- The selected core stack is strong: Ockam for secure transport, Malachite for BFT, ML-DSA for signatures, SMT for compact state, and gix for governance execution.
+- Staking should use lock + jittered expiry + auto-restake, with stronger economic safety from longer unbonding, slashing, and anti-sybil committee design.
 - Zero-fee transfers can work only with layered admission: PoW, adaptive difficulty, per-identity quotas, and bounded mempool budgets.
 - Governance through `git:head` is a strategic differentiator, but determinism must be enforced with hermetic execution and reproducible input bundles.
 - Decentralization quality depends on operating constraints, not only protocol slogans: relay diversity, committee randomness, witness availability, and anti-capture rules are mandatory.
@@ -66,7 +66,7 @@ flowchart TD
 - **Transaction types**
   - `TransferTx`: AGX transfer; first outbound transfer must include pubkey reveal.
   - `StakeBondTx`: lock AGX to enter validator candidate pool.
-  - `StakeRenewTx`: extend active stake before/at expiry.
+  - `StakeRenewTx`: extend active stake before/at expiry, or reactivate `inactive_bonded` stake after reactivation delay.
   - `UnbondRequestTx`: begin unbonding timer (funds still slashable during window).
   - `WithdrawUnbondedTx`: withdraw after unbonding delay.
   - `GovernanceProposeTx`: propose candidate `git:head` + deposit.
@@ -87,8 +87,33 @@ flowchart TD
   - Use lifecycle states:
     - `active`,
     - `probationary` (temporary misses),
-    - `inactive` (persistent misses).
+    - `inactive_bonded` (persistent misses or expired-not-renewed, still bonded).
   - Auto-restake remains useful but must include randomized backoff.
+  - Governance voting eligibility: only `active` validators at governance snapshot block can submit `GovernanceVoteTx`.
+
+- **Default protocol parameters (recommended launch values)**
+  - `min_validator_stake`: `1,000 AGX`.
+  - `bonding_delay`: `24 hours` (stake is locked, but validator is not committee-eligible yet).
+  - `unbonding_delay`: `14 days` (funds are locked and still slashable before withdrawal).
+  - `equivocation_slash`: `10% of bonded stake` per proven event.
+  - `downtime_slash`: `0.1%` per liveness window breach; escalate to `1%` on repeated breaches.
+  - `equivocation_jail`: `30 days` minimum before re-entry eligibility.
+  - `governance_proposal_deposit`: `500 AGX` (burn on invalid/non-deterministic proposal).
+  - `committee_overlap`: `33%` retained members between consecutive epochs.
+  - `reactivation_delay`: `1 epoch` before `inactive_bonded` validators become committee-eligible after `StakeRenewTx`.
+
+- **Plain-language definitions**
+  - **Bonding delay**: waiting period after staking before validator can be selected into committees.
+  - **Unbonding timer**: cooldown period after requesting exit; stake is locked and can still be slashed until timer ends.
+  - **Probationary**: warning state for validators with short-term misses; recover in grace window to return active.
+  - **Inactive-bonded**: not validating and cannot vote, but stake remains locked and slashable until unbond withdrawal.
+  - **Equivocation**: validator signs two conflicting votes for the same height/round (double-signing).
+  - **EvidenceTx**: transaction that submits cryptographic proof of validator fault (for example, equivocation or severe liveness failure) so the chain can slash/jail automatically.
+
+- **Penalty matrix (recommended defaults)**
+  - Missed committee duties in one liveness window: move to `probationary` and slash `0.1%`.
+  - Repeated misses in rolling windows: move to `inactive_bonded` and slash `1%`.
+  - Proven equivocation: immediate `10%` slash + `30 days` jail + state set to `inactive_bonded`.
 
 - **Committee BFT from day 1**
   - Epoch seed derived from prior finalized randomness beacon.
@@ -113,9 +138,11 @@ stateDiagram-v2
     Candidate --> Active: StakeBond and selected in committee set
     Active --> Probationary: Missed participation window
     Probationary --> Active: Recovery in grace window
-    Probationary --> Inactive: Grace exceeded
+    Probationary --> InactiveBonded: Grace exceeded
+    Active --> InactiveBonded: Stake expiry without renew
+    InactiveBonded --> Active: StakeRenew plus 1 epoch reactivation delay
     Active --> Unbonding: UnbondRequest
-    Inactive --> Unbonding: UnbondRequest
+    InactiveBonded --> Unbonding: UnbondRequest
     Unbonding --> Withdrawn: WithdrawUnbonded after delay
     Active --> Slashed: Equivocation or severe fault
     Probationary --> Slashed: Repeated faults
@@ -124,7 +151,7 @@ stateDiagram-v2
 ## Pseudocode (for complex mechanisms)
 ```text
 function select_committee(epoch, validator_pool, seed):
-    candidates = filter(validator_pool, status in [active, probationary] and stake >= min_stake)
+    candidates = filter(validator_pool, status == active and stake >= min_stake)
     weighted = apply_stake_weights_with_operator_cap(candidates)
     committee = deterministic_weighted_sample(weighted, seed, committee_size(epoch))
     return committee
@@ -147,6 +174,9 @@ function apply_governance_proposal(p, state):
         return REJECT
     open_vote_window(p, governance_window_blocks)
     return ACCEPT_PENDING_VOTE
+
+function can_vote_governance(v, snapshot_state):
+    return snapshot_state.status(v) == active
 ```
 
 # 6. Design Decisions & Tradeoffs

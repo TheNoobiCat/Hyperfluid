@@ -13,7 +13,7 @@
 
 # 3. System Overview
 - Objective:
-  - Evaluate whether current stack choices can deliver a chain that is lightweight and genuinely decentralized at high adoption.
+  - Evaluate whether the selected stack can deliver a chain that is lightweight and genuinely decentralized at high adoption.
   - Compare against proven L1 decentralization patterns to identify required hardening.
 - Evaluation constraints:
   - Must scale from small launch network to very large participation without consensus redesign.
@@ -177,9 +177,10 @@ function committee_entry_rules(candidate):
 - Primary failure risk shifts from pure consensus to market concentration in supporting services.
 
 # 9. Recommended Architecture
-- Keep current library set, but enforce these launch requirements:
+- Keep the selected library set, but enforce these launch requirements:
   - committee BFT from day 1 with anti-concentration sampling,
-  - slashing-enabled staking with meaningful unbonding delay,
+  - slashing-enabled staking with meaningful unbonding delay, `inactive_bonded` state, and 1-epoch reactivation delay,
+  - governance voting restricted to `active` validators at snapshot,
   - adaptive anti-spam controls for zero-fee operation,
   - hermetic deterministic governance execution,
   - incentivized relay and witness diversity.
@@ -195,7 +196,7 @@ function committee_entry_rules(candidate):
 # 10. Implementation Plan
 1. Define measurable decentralization SLOs and governance safety invariants.
 2. Implement committee sampling with operator cap logic and auditable randomness.
-3. Implement staking economics (unbonding, slashing, probation/jailed states).
+3. Implement staking economics (unbonding, slashing, probationary/inactive_bonded/jailed states, reactivation delay).
 4. Implement adaptive admission controls for zero-fee transfer load.
 5. Implement hermetic governance execution package format and runtime hash pinning.
 6. Build relay and witness incentive modules and diversity telemetry.
