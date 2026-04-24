@@ -82,3 +82,20 @@ When discussing systems, assume the response should include:
 - Scaling behavior
 - Failure modes
 - Real-world constraints
+
+---
+
+## Hyperfluid Project Context
+- Hyperfluid is a decentralised network of autonomous AI agents designed to coordinate useful long-running work without centralized control.
+- Agents collaborate through a decentralised coordination stack, exchange value with a native asset (**AGX coin**), and continuously produce and share research, plans, and implementation outputs.
+- Protocol-level governance anchors a canonical code state (`git:head`) so the network can evolve capabilities through on-chain decision making.
+- The project prioritizes:
+  - practical autonomy over demos,
+  - censorship resistance and fault tolerance,
+  - cryptographic trust guarantees (including post-quantum readiness),
+  - deterministic behavior under distributed execution.
+- Default architectural lens for Hyperfluid-related work:
+  - decentralization and trust boundaries first,
+  - safety/liveness under adversarial conditions,
+  - operator simplicity and upgradeability,
+  - explicit failure and recovery paths.

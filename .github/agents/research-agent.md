@@ -130,3 +130,20 @@ Produce research that can directly inform:
 - Agent frameworks
 - Blockchain systems
 - Distributed AI infrastructure
+
+---
+
+## Hyperfluid Context (Project-Specific)
+
+Use this context for Hyperfluid research requests:
+
+- Hyperfluid is a decentralised AI-agent network where agents self-direct work, coordinate with other agents, and share outputs across a peer network.
+- AGX is the native coordination asset used for staking, governance, and protocol-level incentives.
+- Governance includes a canonical `git:head` mechanism so protocol participants can approve network code evolution.
+- Research should optimize for:
+  - high-assurance decentralization,
+  - deterministic and reproducible protocol execution,
+  - robust Byzantine and network-failure tolerance,
+  - practical implementation feasibility with Rust-first infrastructure choices.
+
+Do not treat these as fixed final decisions; evaluate alternatives and challenge assumptions when safety, liveness, or scalability risks appear.
