@@ -19,15 +19,23 @@
 - [Data/message flow]
 - [Network topology (if applicable)]
 
-## ASCII Diagram
-```text
-[Client]
-   |
-   v
-[Ingress/API] ---> [Control Plane]
-   |                    |
-   v                    v
-[Data Plane] <------ [State Store]
+## Diagrams (REQUIRED)
+Use the **mermaid skill** to generate diagrams. Preferred diagram types:
+- Flowchart: System topology, data flows, decision trees
+- Sequence Diagram: Component interactions, message ordering
+- Architecture Diagram: System layers, component relationships
+- State Machine: Protocol states, state transitions
+- Class Diagram: System hierarchies and relationships
+
+Mermaid skill usage: Invoke the mermaid skill with your diagram requirements. It will generate publication-ready diagrams.
+
+## Example Diagram
+```mermaid
+flowchart LR
+    Client[Client] --> Ingress[Ingress/API]
+    Ingress --> Control[Control Plane]
+    Ingress --> Data[Data Plane]
+    State[State Store] --> Data
 ```
 
 ## Component Responsibilities

@@ -52,59 +52,35 @@ Hindsight treats memory as a **structured, first-class substrate for reasoning**
 
 ### High-Level System Decomposition
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Agent/Application Layer                   │
-│  (LLM client, conversational interface, tool calls)          │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        │              │              │
-    ┌───▼───┐      ┌───▼───┐     ┌───▼────┐
-    │ Retain│      │ Recall│     │ Reflect│
-    └───┬───┘      └───┬───┘     └───┬────┘
-        │              │             │
-┌───────▼──────────────▼─────────────▼──────────────┐
-│        Hindsight Memory API (HTTP/gRPC)           │
-│  (OpenAPI-generated, supports Python/JS clients) │
-└───────┬──────────────────────────────────────────┘
-        │
-┌───────▼─────────────────────────────────────────────────────┐
-│              Memory Processing Engine (PostgreSQL)           │
-├──────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌─────────────────┐  ┌──────────────┐  ┌────────────────┐ │
-│  │  Entity/Fact    │  │   Temporal   │  │  Vector Index  │ │
-│  │  Extraction     │  │  Index       │  │  (Semantic)    │ │
-│  │  (via LLM)      │  │  (Range Ops) │  │  (VectorDB)    │ │
-│  └────────┬────────┘  └──────┬───────┘  └────────┬───────┘ │
-│           │                  │                    │          │
-│  ┌────────▼──────────────────▼────────────────────▼──────┐  │
-│  │  Memory Bank Schema                                     │  │
-│  │  ├─ Facts (World, Experience)                         │  │
-│  │  │  └─ entities, relationships, timestamps, vectors   │  │
-│  │  ├─ Observations (Consolidated)                       │  │
-│  │  │  └─ evidence tracking, trends, freshness           │  │
-│  │  ├─ Mental Models (User-curated)                      │  │
-│  │  ├─ Belief Updates (Reflection outcomes)              │  │
-│  │  └─ Bank Config (mission, directives, disposition)    │  │
-│  └────────────────────────────────────────────────────────┘  │
-│           │                                                   │
-│  ┌────────▼──────────────────────────────────────────────┐  │
-│  │  BM25 Keyword Index (Exact matching)                  │  │
-│  │  Graph Index (Entity/temporal relationships)          │  │
-│  │  Temporal Range Index (June, Q3, 2025, etc.)         │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-        │
-        └─────────────────────────────┬──────────────────────────┐
-                                      │                           │
-                            ┌─────────▼────────┐    ┌────────────▼────┐
-                            │  PostgreSQL DB   │    │  Vector Store   │
-                            │  (Metadata,      │    │  (Embedding     │
-                            │   Relationships) │    │   Storage)      │
-                            └──────────────────┘    └─────────────────┘
+```mermaid
+flowchart TD
+    Agent["Agent / Application Layer<br/>(LLM client, conversation, tool calls)"]
+    Retain["Retain"]
+    Recall["Recall"]
+    Reflect["Reflect"]
+    API["Hindsight Memory API (HTTP/gRPC)<br/>OpenAPI client surface"]
+
+    subgraph Engine["Memory Processing Engine (PostgreSQL)"]
+        Extract["Entity/Fact Extraction (via LLM)"]
+        Temporal["Temporal Index (range ops)"]
+        Vector["Vector Index (semantic)"]
+        Schema["Memory Bank Schema<br/>Facts (world/experience)<br/>Observations<br/>Mental Models<br/>Belief Updates<br/>Bank Config"]
+        BM25["BM25 / Graph / Temporal secondary indexes"]
+    end
+
+    PG["PostgreSQL DB (metadata + relationships)"]
+    VS["Vector Store (embedding storage)"]
+
+    Agent --> Retain --> API
+    Agent --> Recall --> API
+    Agent --> Reflect --> API
+    API --> Engine
+    Extract --> Schema
+    Temporal --> Schema
+    Vector --> Schema
+    Schema --> BM25
+    Engine --> PG
+    Engine --> VS
 ```
 
 ### Core Memory Networks (Four-Tier Hierarchy)

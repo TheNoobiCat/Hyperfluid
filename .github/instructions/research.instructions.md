@@ -25,7 +25,8 @@ Every research document must follow the exact section sequence and headings belo
 - Explain network topology where applicable.
 
 ### Mandatory requirements
-- Include ASCII diagrams.
+- Include diagrams using the **mermaid skill** (flowcharts, sequence diagrams, architecture diagrams, state machines).
+- ASCII diagrams acceptable as fallback only.
 - Describe component responsibilities clearly.
 - Explain data movement step-by-step.
 
@@ -73,12 +74,18 @@ Every research document must follow the exact section sequence and headings belo
 ## Formatting Rules (Mandatory)
 - Use the section headers exactly as defined above.
 - Use bullet points for clarity.
-- Use ASCII diagrams where useful (required in Architecture section).
+- **Use the mermaid skill for diagrams**: Generate flowcharts, sequence diagrams, architecture diagrams, state machines, or class diagrams (especially for Architecture and Core Mechanisms sections).
+- ASCII diagrams are acceptable as fallback only.
+- Mermaid diagrams must follow the repository style used in `research/infinite-agent/infinite-agent.md`:
+  - Prefer `flowchart TD` for flow/architecture diagrams and `stateDiagram-v2` for state machines.
+  - Use plain technical labels (no emojis).
+  - Do not use Mermaid `style`, `classDef`, theme-init blocks, or custom color directives.
+  - Keep labels concise; use `<br/>` only when line breaks are needed for readability.
 - Include pseudocode for complex systems.
 - Avoid filler text entirely.
 - Every sentence must add technical value.
 
 ## Enforcement Policy
 - Documents not matching this format are non-compliant.
-- Missing required sections, missing Architecture ASCII diagrams, or fewer than 3 major tradeoffs are non-compliant.
+- Missing required sections, missing diagrams (generated via mermaid skill or ASCII fallback), or fewer than 3 major tradeoffs are non-compliant.
 - Any non-compliant research document must be revised to match this specification exactly.

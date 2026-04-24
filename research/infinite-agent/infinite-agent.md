@@ -27,56 +27,20 @@ Standard agent frameworks assume short-lived sessions:
 
 ### Solution: One Infinite Loop, State in Database
 
-```text
-┌─────────────────────────────────────────┐
-│         Startup (once per session)      │
-│ ├─ Load system prompt (identity)        │
-│ ├─ Fetch project knowledge (newest)     │
-│ ├─ Load active todos                    │
-│ ├─ Load last handoff (if any)           │
-│ └─ Initialize fresh message array       │
-└──────────────┬──────────────────────────┘
-               │
-         ┌─────▼─────┐
-         │   LOOP    │
-         │  FOREVER  │  ◄─────────────┐
-         └─────┬─────┘               │
-               │                     │
-         ┌─────▼──────────────────┐  │
-         │ 1. Call LLM            │  │
-         │    (fresh messages)    │  │
-         └─────┬──────────────────┘  │
-               │                     │
-         ┌─────▼──────────────────┐  │
-         │ 2. Execute Tool Calls  │  │
-         │    (failure guard)     │  │
-         └─────┬──────────────────┘  │
-               │                     │
-         ┌─────▼──────────────────┐  │
-         │ 3. Append to Messages  │  │
-         │    (audit trail)       │  │
-         └─────┬──────────────────┘  │
-               │                     │
-         ┌─────▼──────────────────┐  │
-         │ 4. Check Token Count   │  │
-         └─────┬──────────────────┘  │
-               │                     │
-          ┌────┴───────────────┐     │
-          │                    │     │
-      <70%?            ≥70%?   │     │
-          │                    │     │
-          │            ┌───────▼───┐ │
-          │            │ Handoff:  │ │
-          │            │ ├─ Inject │ │
-          │            │ │ "summ"  │ │
-          │            │ ├─ Capture│ │
-          │            │ ├─ Save   │ │
-          │            │ └─ Reset  │ │
-          │            └───────┬───┘ │
-          │                    │     │
-          └────────┬───────────┘     │
-                   │                 │
-                   └─────────────────┘
+```mermaid
+flowchart TD
+    Startup["Startup (once per session)<br/>Load identity/system prompt<br/>Fetch project knowledge<br/>Load active todos<br/>Load last handoff<br/>Initialize fresh message array"]
+    Loop["Loop forever"]
+    Call["1. Call LLM (fresh messages)"]
+    Tools["2. Execute tool calls (failure guard)"]
+    Append["3. Append to messages (audit trail)"]
+    Token["4. Check token count"]
+    Handoff["Handoff<br/>Inject summary prompt<br/>Capture summary<br/>Save handoff<br/>Reset messages"]
+
+    Startup --> Loop
+    Loop --> Call --> Tools --> Append --> Token
+    Token -->|" < 70% "| Loop
+    Token -->|" >= 70% "| Handoff --> Loop
 ```
 
 ### Constraints
@@ -199,83 +163,27 @@ CREATE INDEX idx_failures_hash_ts ON failures(action_hash, ts);
 
 ### 4.3 Data Flow (Complete Session)
 
-```text
-┌─────────────────────────────────────┐
-│ Session Start                       │
-├─────────────────────────────────────┤
-│ 1. Read from DB:                    │
-│    • Identity (fixed string)        │
-│    • project_knowledge (newest N)   │
-│    • todos (status != done)         │
-│    • handoffs (most recent 1)       │
-│                                     │
-│ 2. Build system_prompt              │
-│    [IDENTITY] + [KNOWLEDGE] +       │
-│    [TODOS] + [HANDOFF]              │
-│                                     │
-│ 3. Initialize messages = [          │
-│    {"role": "user", "content":      │
-│     system_prompt}                  │
-│    ]                                │
-└─────────────────────────────────────┘
-                 │
-         ┌───────▼───────┐
-         │  Loop Start   │
-         └───────┬───────┘
-                 │
-    ┌────────────▼──────────────┐
-    │ Call LLM.complete()       │
-    │ • system_prompt           │
-    │ • messages array          │
-    │ • tools schema            │
-    └────────────┬──────────────┘
-                 │
-    ┌────────────▼──────────────┐
-    │ Parse assistant response  │
-    │ • text                    │
-    │ • tool calls (if any)     │
-    └────────────┬──────────────┘
-                 │
-         ┌───────▼────────┐
-         │ For each tool: │
-         └───────┬────────┘
-                 │
-    ┌────────────▼──────────────┐
-    │ Failure Guard Check       │
-    │ hash = H(tool + params)   │
-    │ recent = COUNT failures   │
-    │  WHERE hash=H AND ts>now-1h
-    │ if recent >= 3: BLOCK     │
-    └────────────┬──────────────┘
-                 │
-      ┌──────────┴──────────┐
-      │                     │
-    Block            Execute
-      │                     │
-      │          ┌──────────▼─────┐
-      │          │ Run tool       │
-      │          │ Capture result │
-      │          └──────────┬─────┘
-      │                     │
-      └──────────┬──────────┘
-                 │
-    ┌────────────▼──────────────┐
-    │ Append to messages:       │
-    │ • tool result or error    │
-    │ • record in messages DB   │
-    └────────────┬──────────────┘
-                 │
-    ┌────────────▼──────────────┐
-    │ Check token count         │
-    │ current / max < 0.70?     │
-    └────────────┬──────────────┘
-                 │
-          ┌──────┴──────┐
-          │             │
-        YES            NO
-          │             │
-       Loop          Handoff
-       again
+```mermaid
+flowchart TD
+    Start["Session start"]
+    Read["Read identity, project knowledge, todos, handoff from DB"]
+    Build["Build system_prompt"]
+    Init["Initialize messages with system_prompt"]
+    Call["Call LLM.complete()"]
+    Parse["Parse assistant response (text + tool calls)"]
+    Guard["Failure guard check (action hash in last hour)"]
+    Block["Block and return replanning error"]
+    Exec["Execute tool and capture result"]
+    Append["Append tool result/error and persist message record"]
+    Check["Check token count (< 70%?)"]
+    Handoff["Create handoff summary and reset message array"]
+
+    Start --> Read --> Build --> Init --> Call --> Parse --> Guard
+    Guard -->|"blocked"| Block --> Append
+    Guard -->|"allowed"| Exec --> Append
+    Append --> Check
+    Check -->|"yes"| Call
+    Check -->|"no"| Handoff --> Call
 ```
 
 ### 4.4 System Prompt Template (Every Session)
@@ -316,46 +224,16 @@ Use them to keep your state synchronized with the database.
 
 ### 5.1 Todo State Machine (Enforced by Prompt)
 
-```text
-START
-  │
-  ▼
-[NO TODOS]
-  │
-  ├─ Agent: "I'll create a list"
-  │
-  ▼
-[CALLS todo_write(["task1", "task2", ...])]
-  │
-  ▼
-[TODOS EXIST]
-  │
-  ├─ Agent picks first pending item
-  │
-  ▼
-[CALLS todo_update(id=1, status='in_progress')]
-  │
-  ├─ Agent does the work
-  │
-  ▼
-[CALLS remember() if finding discovered]
-  │
-  ├─ Agent finishes
-  │
-  ▼
-[CALLS todo_update(id=1, status='done')]
-  │
-  ▼
-[PICKS NEXT PENDING ITEM]
-  │
-  └─ Loop until all done
-
-[ALL TODOS DONE]
-  │
-  ├─ Agent: "Making a new list"
-  │
-  ▼
-[CALLS todo_write(...) again]
+```mermaid
+stateDiagram-v2
+    [*] --> NoTodos
+    NoTodos --> WriteTodos: todo_write(task list)
+    WriteTodos --> HasTodos
+    HasTodos --> InProgress: todo_update(id, in_progress)
+    InProgress --> Remember: remember(finding)
+    Remember --> Done: todo_update(id, done)
+    Done --> HasTodos: pick next pending item
+    Done --> NoTodos: all todos complete
 ```
 
 The system prompt enforces this cycle. No code checks needed—the agent is told "always have a list, always mark progress, when done make a new one."
@@ -753,3 +631,5 @@ def handle_forget(db, id):
 - **Performance profiling** — track LLM API costs, tool latency, handoff frequency; optimize
 - **Human feedback integration** — agent requests clarification on ambiguous todos; human adds context
 - **Replay and debugging** — re-run full session from message log; inspect state at any point
+
+

@@ -49,12 +49,20 @@ Every system-level answer must analyze:
 
 ### 5. Architecture-First Output Bias
 Prefer:
-- System diagrams (conceptual or structured descriptions)
+- System diagrams (use the **mermaid skill** for flowcharts, architecture diagrams, sequence diagrams, and state machines)
 - Component-based breakdowns
 - Interface definitions between subsystems
 Over:
 - Narrative explanations
 - Generic summaries
+
+**Mermaid Skill Usage**: When designing systems or workflows, use the mermaid skill to generate:
+- Flowcharts (workflows, decision trees, process flows)
+- Sequence diagrams (component interactions, message flows)
+- Architecture diagrams (system topology, data flows)
+- State machines (protocol state transitions)
+- Class diagrams (system hierarchies)
+- Gantt charts (implementation timelines)
 
 ---
 

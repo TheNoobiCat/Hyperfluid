@@ -53,14 +53,12 @@
 
 ### 4.1 Single-Struct Mental Model
 
-```text
-Agent { think() / act() / tool() }
-    |
-    +-- Memory (always on, internal)
-          |
-          +-- SQLite (events + failures + summaries) [same file]
-          +-- sqlite-vec (summary embeddings)        [same file]
-          +-- all-MiniLM-L6-v2 (~22MB in-process)    [local model]
+```mermaid
+flowchart TD
+    Agent["Agent (think / act / tool)"] --> Memory["Memory (always on, internal)"]
+    Memory --> SQLite["SQLite (events + failures + summaries)<br/>same file"]
+    Memory --> Vec["sqlite-vec (summary embeddings)<br/>same file"]
+    Memory --> MiniLM["all-MiniLM-L6-v2 embedding model<br/>local/in-process"]
 ```
 
 - One public `Memory` abstraction.
@@ -96,36 +94,16 @@ Agent { think() / act() / tool() }
 
 ### 4.3 Data and Control Flow (Step-by-Step)
 
-```text
-1) Observe state
-   -> INSERT events(type='observation')
+```mermaid
+flowchart TD
+    Observe["1) Observe state<br/>INSERT events(observation)"]
+    Build["2) Build context<br/>system block + last N cycles + failures + semantic episodes"]
+    Call["3) LLM call<br/>INSERT llm_request -> provider call -> INSERT llm_response"]
+    Guard["4) Parse action + preflight guard<br/>hash(tool+params) + recent failure check"]
+    Tool["5) Tool execution<br/>INSERT tool_call -> run -> INSERT tool_result/error"]
+    Summary["6) End cycle summary<br/>INSERT cycle_summaries + embedding index"]
 
-2) Build context
-   -> fixed system block
-   -> last N cycles (N=5) from events
-   -> failure matches from failures table
-   -> semantic episodes from sqlite-vec (summaries)
-
-3) LLM call
-   -> INSERT events(type='llm_request', payload=exact request)
-   -> call provider (OpenAI/Anthropic/local)
-   -> INSERT events(type='llm_response', payload=exact response)
-
-4) Parse action + preflight guard
-   -> hash(normalized tool + params)
-   -> query failures(action_hash, recent window)
-   -> block/replan if repeated failures exceed threshold
-
-5) Tool execution
-   -> INSERT events(type='tool_call', payload=args)
-   -> run tool
-   -> INSERT events(type='tool_result'|'error', payload=result)
-   -> INSERT/UPDATE failures row if failed
-
-6) End cycle summary
-   -> deterministic one-sentence summary
-   -> INSERT cycle_summaries
-   -> embed summary and INSERT into sqlite-vec index
+    Observe --> Build --> Call --> Guard --> Tool --> Summary
 ```
 
 ### 4.4 Schema (Minimal and Sufficient)

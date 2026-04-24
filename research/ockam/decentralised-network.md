@@ -36,36 +36,27 @@
   - **Trust Plane**: identity verification, credential checks, authorization policy evaluation.
   - **Connection Manager**: finite-state controller implementing direct-first/fallback/upgrade lifecycle.
 
-## ASCII Diagram
-```text
-                           +----------------------+
-                           |   Bootstrap Nodes    |
-                           | seeds + policy +     |
-                           | relay directory      |
-                           +----------+-----------+
-                                      |
-                       join + peer table snapshot
-                                      |
-          ------------------------------------------------------
-          |                 Discovery Overlay                  |
-          |      Gossip + Kademlia-style DHT records          |
-          ------------------------------------------------------
-             |                    |                     |
-             |                    |                     |
-      +------+-----+       +------+-----+       +------+-----+
-      | Peer A     |<----->| Peer B     |<----->| Peer C     |
-      | direct OK  |       | direct OK  |       | NATed      |
-      +------+-----+       +------+-----+       +------+-----+
-             \                   ^                     |
-              \                  |                     |
-               \         direct secure channels        |
-                \                                      |
-                 \                                 relay path
-                  \                                    |
-                   \                           +--------v-------+
-                    +------------------------->| Relay Nodes    |
-                                                | forward addr  |
-                                                +----------------+
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+    Bootstrap["Bootstrap Nodes<br/>Seeds, policy, relay directory"]
+    Discovery["Discovery Overlay<br/>Gossip + Kademlia-style DHT records"]
+    PeerA["Peer A<br/>Direct OK"]
+    PeerB["Peer B<br/>Direct OK"]
+    PeerC["Peer C<br/>NATed"]
+    Relay["Relay Nodes<br/>Forward addresses"]
+
+    Bootstrap -->|Join + peer table snapshot| Discovery
+    Discovery -->|Peer records| PeerA
+    Discovery -->|Peer records| PeerB
+    Discovery -->|Peer records| PeerC
+
+    PeerA <-->|Direct secure channels| PeerB
+    PeerB <-->|Direct secure channels| PeerC
+
+    PeerA -->|Direct path| Relay
+    PeerC -->|Relay path| Relay
 ```
 
 ## Component Responsibilities
