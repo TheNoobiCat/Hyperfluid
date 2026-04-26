@@ -70,7 +70,7 @@ flowchart TD
   - `UnbondRequestTx`: begin unbonding timer (funds still slashable during window).
   - `WithdrawUnbondedTx`: withdraw after unbonding delay.
   - `GovernanceProposeTx`: propose candidate `git:head` + deposit.
-  - `GovernanceVoteTx`: vote yes/no during governance window.
+  - `GovernanceVoteTx`: vote yes/no during governance window, with optional `reason_hash` (content-addressed review rationale).
   - `EvidenceTx`: submit equivocation or protocol-fault evidence.
 
 - **Addressing and first-spend reveal**
@@ -123,8 +123,29 @@ flowchart TD
 
 - **Governance determinism**
   - Proposal must be fast-forward or deterministic clean merge.
+  - `GovernanceProposeTx` must include:
+    - `proposed_commit`,
+    - `bundle_manifest_hash`,
+    - `proposer_fetch_endpoints` (Ockam routes).
+  - Validators fetch required git objects directly from proposer endpoints over authenticated Ockam channels.
+  - Validators recompute manifest hash and verify every fetched object ID against manifest before merge simulation.
+  - Validators verify fetched graph reaches exactly `proposed_commit`; accept only if resulting commit hash equals proposal hash.
+  - Commit-hash equality is sufficient integrity check only when object IDs are cryptographically strong and the full reachable object graph is verified (prefer Git SHA-256 object format for new repos).
   - Merge executed in hermetic sandbox with pinned gix/toolchain and normalized environment.
+  - If proposer serves inconsistent bundles to different peers, proposal is invalid and deposit is burned.
   - Non-deterministic outcome burns proposer deposit.
+  - Review sandbox launch is gated by deterministic precheck:
+    - if bundle/object checks or `gix` merge checks fail, do not start reviewer subagent and mark review as failed.
+  - Review execution model:
+    - proposal appears in validator inbox as review task metadata (not full freeform execution context).
+    - validator explicitly invokes `review_proposal` tool from main agent.
+    - runtime pauses main agent branch and starts isolated review subagent with:
+      - fresh context window,
+      - fixed system prompt for governance review only,
+      - single tool: `review(decision: approve|deny, reason)`.
+    - subagent timeout is `30 minutes`; on timeout, no vote is emitted for that validator.
+    - when `review(...)` is called, runtime emits `GovernanceVoteTx` and closes sandbox.
+    - main agent branch resumes after sandbox termination.
 
 - **Zero-fee anti-spam**
   - Mandatory PoW per transfer.
@@ -195,12 +216,33 @@ function validate_transfer(tx, state):
 
 function apply_governance_proposal(p, state):
     lock_deposit(p.proposer, proposal_deposit)
+    bundle = fetch_bundle_from_proposer(p.proposer_fetch_endpoints, p.bundle_manifest_hash)
+    require verify_bundle_manifest(bundle, p.bundle_manifest_hash)
+    require verify_commit_reachable(bundle, p.proposed_commit)
     outcome = hermetic_gix_merge_check(state.git_head, p.proposed_commit, pinned_env_hash)
     if outcome != DETERMINISTIC_VALID:
         burn_deposit(p.proposer)
         return REJECT
     open_vote_window(p, governance_window_blocks)
     return ACCEPT_PENDING_VOTE
+
+function execute_governance_review(agent, proposal):
+    if !deterministic_precheck_passed(proposal):
+        return FAIL_PRECHECK_NO_SANDBOX
+    pause_main_branch(agent)
+    review_agent = spawn_review_subagent(
+        fresh_context=true,
+        allowed_tools=["review"],
+        timeout_minutes=30
+    )
+    result = wait_for_review(review_agent)
+    if result.timeout:
+        record_review_timeout(agent, proposal.id)
+    else:
+        emit_vote_tx(agent, proposal.id, result.decision, result.reason)
+    terminate(review_agent)
+    resume_main_branch(agent)
+    return OK
 
 function can_vote_governance(v, snapshot_state):
     return snapshot_state.status(v) == active
@@ -281,6 +323,16 @@ function admit_network_action(actor, action, state):
 - Why it happens: environment-dependent git behavior or non-hermetic inputs.
 - Handling/failure mode: pinned runtime hash, sealed object bundles, reject on any deterministic mismatch.
 
+## Scenario: Proposer object withholding or equivocation
+- What happens: proposer hides required objects or serves different bundles to different validators.
+- Why it happens: attempt to stall voting or create split validation outcomes.
+- Handling/failure mode: proposal includes canonical manifest hash, validators require full manifest availability before voting, and equivocated/incomplete bundles cause rejection and deposit burn.
+
+## Scenario: Review subagent timeout or deadlock
+- What happens: validator starts proposal review but sandboxed reviewer fails to return a decision in time.
+- Why it happens: pathological proposal content, model stall, or runtime fault in isolated review process.
+- Handling/failure mode: hard 30-minute timeout, no-vote timeout outcome, sandbox termination, and main branch resume.
+
 ## Scenario: Quorum oscillation from liveness misclassification
 - What happens: active set flaps and safety margins erode.
 - Why it happens: aggressive inactivity timeouts and transient partitions.
@@ -337,7 +389,7 @@ function admit_network_action(actor, action, state):
 3. Implement committee selection module with stake-weighted sampling and operator caps.
 4. Integrate Malachite consensus for committee operation and epoch rotation.
 5. Implement admission controls (PoW retargeting, quotas, peer budgets).
-6. Implement deterministic governance sandbox and `git:head` transition checks.
+6. Implement deterministic governance sandbox, proposer bundle fetch protocol, precheck-gated review subagent flow, and `git:head` transition checks.
 7. Implement evidence pipeline for equivocation and liveness faults.
 8. Build adversarial simulation suite for committee capture, churn, spam, and governance divergence.
 9. Ship observability dashboards for decentralization metrics (committee diversity, operator concentration, relay/witness concentration).

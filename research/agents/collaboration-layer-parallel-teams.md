@@ -161,6 +161,9 @@ flowchart TD
 - **Typed network actions and boundary policy**
   - Network-mutating actions are allowlisted and schema-validated before execution.
   - Policy checks include role/stage, resource ACL, quota, and risk class.
+  - Network tool-call contract:
+    - each network-mutating tool call carries `action_plan` or `action_plan_id` + signature.
+    - calls without a valid bound plan are rejected.
   - Local machine actions are outside protocol policy scope (operator sandbox responsibility).
 
 ```mermaid

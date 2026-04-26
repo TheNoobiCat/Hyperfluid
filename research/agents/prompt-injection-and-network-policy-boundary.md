@@ -75,6 +75,11 @@ flowchart TD
     - `evidence_refs`
     - `idempotency_key`
   - Free text alone never executes tools.
+  - Tool-call binding rule:
+    - every network-mutating tool call must include either:
+      - `action_plan` (full typed plan payload), or
+      - `action_plan_id` + `plan_signature` (reference to previously approved plan).
+    - executor must verify tool intent matches plan `action_type`/`resource_id` before execution.
 
 - **Minimal network-only policy engine**
   - In-scope: actions that mutate shared network state.
@@ -125,6 +130,13 @@ function evaluate_network_action(agent, action, context):
         return REJECT_TAINT
 
     return APPROVE
+
+function execute_network_tool_call(call):
+    if call.mutates_network_state:
+        require call.action_plan or (call.action_plan_id and call.plan_signature)
+        plan = resolve_and_verify_plan(call)
+        require tool_matches_plan(call.tool_name, call.params, plan)
+    run_tool(call)
 ```
 
 # 6. Design Decisions & Tradeoffs
