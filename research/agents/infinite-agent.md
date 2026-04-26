@@ -50,6 +50,7 @@ flowchart TD
 - Repeated tool failures must be blocked before execution, not after
 - Long-term knowledge (findings, patterns) must outlive individual sessions
 - Prompts must never exceed context window
+- External messages/events must be treated as untrusted input and pass ingress budgets before entering prompt context
 
 ## 4. Architecture (CRITICAL SECTION)
 
@@ -481,6 +482,18 @@ def handle_forget(db, id):
   - Truncate to newest N rows (default ~20)
   - Agent can explicitly `forget` outdated knowledge
   - Periodic curation: review oldest rows, delete stale findings
+
+### 7.7 Untrusted Event Flood
+
+- **What happens**
+  - External event queue floods with low-value or malicious messages
+  - Agent spends cycles triaging noise instead of execution
+- **Why it happens**
+  - Open participation and missing ingress quotas/prioritization
+- **Handling**
+  - Enforce sender and topic token buckets before enqueue
+  - Inject only compact signal summaries into prompt, never full payload by default
+  - Apply quarantine to repeated abusive senders and reserve slots for high-priority trusted events
 
 ## 8. Scalability Analysis
 

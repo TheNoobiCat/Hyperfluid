@@ -65,6 +65,25 @@ flowchart TD
   - Zero-fee model without adaptive controls can be easier to spam than fee-market chains.
   - Stateless commitment model can centralize proof availability unless economically incentivized.
   - Committee sampling can centralize under stake splitting without anti-concentration controls.
+  - Pseudo-agent swarms can overload collaboration and networking layers unless ingress and attention are hard-budgeted.
+
+- **Cross-layer swarm-hardening changes (required)**
+  - Consensus layer:
+    - bounded mempool lanes with reserved evidence/control capacity.
+    - automatic circuit-breaker under reject-depth/finality stress.
+  - Networking layer:
+    - staged ingress controls (IP/ASN -> identity -> gossip/topic budgets).
+    - relay service classes and unknown-sender caps.
+  - Collaboration layer:
+    - proof-carrying soft leases with shadow takeover.
+    - onboarding privilege ladder with strict bootstrap quotas.
+  - Attention layer:
+    - signal-only prompt injection.
+    - digest-first routing for low-trust senders.
+    - quarantine for abuse bursts.
+  - Injection-defense boundary:
+    - typed network action plans only for network mutations.
+    - minimal deterministic network policy gate (no local policy scope).
 
 ```mermaid
 flowchart TD
@@ -95,6 +114,14 @@ function committee_entry_rules(candidate):
     require candidate.uptime_score >= min_uptime
     require operator_effective_weight(candidate.operator) <= operator_cap
     return ELIGIBLE
+
+function swarm_readiness_gate(metrics):
+    require metrics.mempool_reject_ratio <= reject_budget
+    require metrics.finality_p95 <= finality_slo
+    require metrics.unknown_sender_share <= unknown_sender_budget
+    require metrics.relay_queue_utilization <= relay_slo
+    require metrics.inbox_drop_rate <= inbox_slo
+    return READY
 ```
 
 # 6. Design Decisions & Tradeoffs
@@ -156,6 +183,11 @@ function committee_entry_rules(candidate):
 - Why it happens: non-hermetic environments or inconsistent object inputs.
 - Handling/failure mode: pinned runtime hash, sealed proposal bundles, and reject-by-default on mismatch.
 
+## Scenario: Pseudo-agent swarm saturation
+- What happens: large malicious sender population saturates inboxes, relays, and mempools.
+- Why it happens: open participation without strict staged budgets.
+- Handling/failure mode: cross-layer budget enforcement, quarantine automation, and circuit-breaker mode spanning consensus/network/collaboration.
+
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
 - Committee system can run with larger overlap for simplicity.
@@ -201,6 +233,7 @@ function committee_entry_rules(candidate):
 5. Implement hermetic governance execution package format and runtime hash pinning.
 6. Build relay and witness incentive modules and diversity telemetry.
 7. Run adversarial drills against committee capture, service concentration, and governance divergence.
+8. Add cross-layer swarm harness with 10x malicious sender simulations and SLO gating.
 
 # 11. Future Improvements
 - Add stronger distributed randomness beacons for committee selection.

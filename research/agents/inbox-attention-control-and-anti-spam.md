@@ -80,6 +80,15 @@ flowchart TD
     - delay medium-priority,
     - drop spam-classified payloads.
 
+- **Quota defaults (concrete)**
+  - Per-sender budget by trust stage:
+    - bootstrap sender: `5 msg/min`,
+    - trusted sender: `30 msg/min`,
+    - coordinator-level sender: `60 msg/min`.
+  - Per-topic budget: `500 msg/5min` with priority reservation for moderation/system traffic.
+  - Global inbox budget per agent: `2,000 msg/hour` with strict digest compaction after threshold.
+  - Unknown-sender payload policy: `DIGEST_ONLY` until trust threshold is crossed.
+
 - **Topic hygiene**
   - Mandatory topic metadata:
     - objective,
@@ -102,6 +111,17 @@ flowchart TD
   - New senders are limited to digest/filtered classes unless they build reliability.
   - Promotion requires sustained low-abuse, high-usefulness message history.
   - Severe abuse can trigger immediate quarantine (`drop-only` routing for cooldown window).
+
+- **Inbox circuit-breaker mode**
+  - Trigger conditions:
+    - inbox fill ratio above threshold,
+    - spam reject ratio above threshold,
+    - urgent queue latency breach.
+  - Actions:
+    - temporary digest-only for low-trust senders,
+    - stricter per-topic budgets,
+    - shortened retention for filtered buckets,
+    - moderation and evidence messages get reserved delivery slots.
 
 ```mermaid
 stateDiagram-v2
@@ -144,6 +164,8 @@ function sender_guard(sender):
         return DROP
     if sender_trust(sender) < bootstrap_trust_threshold:
         return DIGEST_ONLY
+    if inbox_circuit_breaker_active():
+        return PRIORITY_ONLY
     return NORMAL
 ```
 
@@ -206,6 +228,11 @@ function sender_guard(sender):
 - Why it happens: low identity cost.
 - Handling/failure mode: identity cost policies, stake/trust bonding, graph-based cluster detection.
 
+## Scenario: Prompt-signal saturation
+- What happens: even compact notification signals become too noisy to act on.
+- Why it happens: urgent-class inflation and poor quota discipline.
+- Handling/failure mode: urgent-class admission rules, strict urgent budgets, and circuit-breaker priority-only signaling.
+
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
 - Basic scoring and quotas provide sufficient control.
@@ -240,6 +267,7 @@ function sender_guard(sender):
 5. Implement abuse evidence tracking and penalty hooks.
 6. Run synthetic spam and overload simulations; tune thresholds.
 7. Deploy observability for inbox utility metrics and false-positive filtering rates.
+8. Add circuit-breaker drills with 10x pseudo-agent sender floods and urgent-queue protection checks.
 
 # 11. Future Improvements
 - Add adaptive per-agent personalized ranking models.

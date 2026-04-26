@@ -132,6 +132,33 @@ flowchart TD
   - Per-identity and per-peer sliding-window quotas.
   - Optional emergency micro-fee mode for attack periods.
 
+- **Swarm hardening profile (concrete defaults)**
+  - Mempool is split into bounded lanes:
+    - `evidence lane`: `15%` reserved capacity.
+    - `consensus-control lane`: `10%` reserved capacity.
+    - `governance lane`: `10%` reserved capacity.
+    - `transfer lane`: `65%` remaining capacity.
+  - Governance anti-flood controls:
+    - `max_open_governance_proposals`: `32` network-wide.
+    - `max_proposals_per_identity_per_epoch`: `1`.
+    - `proposal_cooldown_after_reject`: `3 epochs`.
+  - Sender anti-sybil controls:
+    - unknown identity tx budget starts at `5 tx/min`.
+    - budget scales with stake and clean history.
+    - repeated reject/spam ratio above threshold triggers temporary mempool quarantine.
+  - Circuit-breaker mode (automatic):
+    - triggers when reject ratio, queue depth, or finality latency breaches thresholds.
+    - raises PoW target, enables emergency micro-fee floor, and tightens unknown-sender quotas.
+
+- **Network policy boundary (minimal, deterministic)**
+  - All network-mutating calls must pass a network policy gate:
+    - typed action schema validation,
+    - role/stage permission checks,
+    - resource ACL checks,
+    - lane/quota checks.
+  - Governance and control-plane actions are high-risk class and require step-up certificates.
+  - Local non-network actions are intentionally out of protocol policy scope.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Candidate
@@ -177,6 +204,27 @@ function apply_governance_proposal(p, state):
 
 function can_vote_governance(v, snapshot_state):
     return snapshot_state.status(v) == active
+
+function admit_tx(tx, state):
+    lane = classify_lane(tx)
+    if lane_full(lane):
+        return REJECT_LANE_FULL
+    if is_unknown_sender(tx.sender) and over_unknown_budget(tx.sender):
+        return REJECT_BUDGET
+    if in_quarantine(tx.sender):
+        return REJECT_QUARANTINED
+    if swarm_circuit_breaker_active(state):
+        require stricter_pow_or_fee(tx)
+    return ACCEPT
+
+function admit_network_action(actor, action, state):
+    require valid_network_action_schema(action)
+    require role_allows(actor.stage, action.type)
+    require acl_allows(actor.id, action.resource, action.type)
+    require within_action_quota(actor.id, action.type)
+    if action.risk_class == HIGH:
+        require has_step_up_certificate(action)
+    return ALLOW
 ```
 
 # 6. Design Decisions & Tradeoffs
@@ -238,6 +286,16 @@ function can_vote_governance(v, snapshot_state):
 - Why it happens: aggressive inactivity timeouts and transient partitions.
 - Handling/failure mode: hysteresis windows, rolling participation scores, and delayed status transitions.
 
+## Scenario: Governance proposal flood
+- What happens: governance queue saturates and crowds out safety-critical transactions.
+- Why it happens: low-cost proposal spam from many pseudo-identities.
+- Handling/failure mode: open-proposal cap, proposer cooldown, lane reservation, and identity quarantine on spam ratio.
+
+## Scenario: Mempool lane starvation attack
+- What happens: attacker saturates one lane to indirectly delay finality-critical operations.
+- Why it happens: queue shaping not enforced per lane.
+- Handling/failure mode: strict lane reservations, per-lane eviction policy, and dynamic reallocation only toward evidence/control lanes.
+
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
 - Committee mode still useful for future-proofing and operational consistency.
@@ -283,6 +341,8 @@ function can_vote_governance(v, snapshot_state):
 7. Implement evidence pipeline for equivocation and liveness faults.
 8. Build adversarial simulation suite for committee capture, churn, spam, and governance divergence.
 9. Ship observability dashboards for decentralization metrics (committee diversity, operator concentration, relay/witness concentration).
+10. Add mempool lane controller and swarm circuit-breaker automation.
+11. Add attacker-swarm game days with 10x malicious sender ratio and governance flood scenarios.
 
 # 11. Future Improvements
 - Introduce mature aggregate/threshold PQ signatures when practical.

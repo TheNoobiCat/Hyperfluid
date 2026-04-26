@@ -81,6 +81,7 @@ flowchart TD
   - No raw stream injected into main working prompt.
   - Prompt receives compact summary (counts + priority classes + trusted sender hints).
   - Agent decides whether to pull message payloads.
+  - Any network mutation must be emitted as a typed network action plan and pass policy gate checks.
 
 - **Task lifecycle and parallel execution**
   - `open -> claimed -> in_progress -> blocked -> done`.
@@ -95,6 +96,17 @@ flowchart TD
   - Lease extension requires non-empty progress proof.
   - Repeated expiry without deliverables causes reputation/bond penalties.
   - Auto-takeover promotes best shadow claimant if primary lease stalls.
+
+- **Lease and task defaults (concrete)**
+  - `lease_ttl`: `20 minutes`.
+  - `heartbeat_interval`: `5 minutes`.
+  - `shadow_claim_grace`: `8 minutes` after primary claim.
+  - Active primary lease cap by stage:
+    - `untrusted_joiner`: `0` (cannot hold primary lease),
+    - `sandboxed_contributor`: `2`,
+    - `trusted_contributor`: `6`,
+    - `coordinator_eligible`: `12`.
+  - `max_consecutive_expired_leases_before_penalty`: `3`.
 
 - **Layered version control and approvals**
   - Task layer:
@@ -112,6 +124,18 @@ flowchart TD
   - Topic fast-path cannot mutate canonical main branch directly.
   - Changes remain topic-scoped until promoted through normal governance.
   - Promotion bundles include topic merge certificate and artifact provenance.
+  - Topic merge throughput controls:
+    - `max_fast_merges_per_topic_per_hour`: `20`.
+    - `max_fast_merges_per_identity_per_hour`: `5`.
+    - burst mode requires additional independent reviewer signatures.
+
+- **Swarm circuit-breaker mode**
+  - Triggered on lease-hoarding ratio, inbox overload, or merge-flood thresholds.
+  - Actions:
+    - freeze new low-trust claims temporarily,
+    - tighten merge quotas,
+    - force digest-only notifications for low-trust senders,
+    - prioritize task completion and evidence traffic over new task creation.
 
 - **Team formation**
   - Agents advertise capability vectors and recent reliability.
@@ -133,6 +157,11 @@ flowchart TD
     - `coordinator_eligible`: can lead teams, create high-visibility topics, and assign subtasks.
   - Regression:
     - abuse or repeated low-quality behavior drops stage and tightens quotas.
+
+- **Typed network actions and boundary policy**
+  - Network-mutating actions are allowlisted and schema-validated before execution.
+  - Policy checks include role/stage, resource ACL, quota, and risk class.
+  - Local machine actions are outside protocol policy scope (operator sandbox responsibility).
 
 ```mermaid
 stateDiagram-v2
@@ -224,6 +253,13 @@ function fast_path_topic_merge(proposal):
     require has_independent_reviewer(proposal.certificate)
     apply_topic_merge(proposal)
     return TOPIC_ACCEPTED
+
+function execute_network_action(agent, action):
+    require valid_network_action_schema(action)
+    decision = policy_gate(agent, action)
+    if decision != ALLOW:
+        return REJECT
+    return run_network_action(action)
 ```
 
 # 6. Design Decisions & Tradeoffs
@@ -290,6 +326,11 @@ function fast_path_topic_merge(proposal):
 - Why it happens: cheap claims and weak extension validation.
 - Handling/failure mode: per-agent lease caps, progress-proof heartbeats, and penalty-backed expiries with shadow takeover.
 
+## Scenario: Fast-path merge spam
+- What happens: topic branch is flooded with low-value merges, overwhelming reviewers/integrators.
+- Why it happens: merge quotas missing or too weak.
+- Handling/failure mode: per-topic/per-identity merge budgets, independent reviewer requirement, and circuit-breaker throttling.
+
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
 - Simple lease board and inbox summaries are sufficient.
@@ -328,6 +369,7 @@ function fast_path_topic_merge(proposal):
 6. Add trust scoring, topic decay, and abuse controls.
 7. Add seed idea indexing pipeline and auto-topic bootstrap.
 8. Run load simulations for inbox pressure, lease contention/hoarding, and topic spam.
+9. Add fast-path merge flood simulations and circuit-breaker policy validation.
 
 # 11. Future Improvements
 - Add intent-aware inbox ranking using agent goal embeddings.

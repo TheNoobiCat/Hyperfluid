@@ -115,6 +115,12 @@ flowchart TD
   - **Direct**: 1-hop route (`tcp_connection -> secure_channel_listener`).
   - **Relay**: multi-hop route (`tcp_connection -> relay_forwarder -> target_listener`).
   - **Broadcast/Gossip**: bounded fanout, message IDs, TTL, and duplicate suppression.
+- Swarm-resistant ingress controls:
+  - Stage 0 pre-auth gate: per-IP/per-ASN handshake budgets and SYN/handshake concurrency caps.
+  - Stage 1 identity gate: per-identity connection caps and join-rate token buckets.
+  - Stage 2 gossip gate: per-topic/per-peer gossip budgets with strict duplicate suppression windows.
+  - Relay service admission: stake/credential-weighted relay priority with hard unknown-sender quotas.
+  - Automatic ban decay: temporary blocks for abuse spikes, with gradual recovery after clean behavior.
 - Why this works:
   - Security is route-independent because secure channels are end-to-end above transport hops.
   - Liveness is topology-independent because relays preserve reachability when direct edges disappear.
@@ -152,6 +158,15 @@ function schedule_upgrade_probe(target_id):
                 set_state(target_id, DIRECT_ACTIVE)
             else:
                 set_state(target_id, RELAY_ACTIVE)
+
+function ingress_guard(peer):
+    if over_ip_or_asn_budget(peer.network_fingerprint):
+        return REJECT
+    if over_identity_connection_cap(peer.identifier):
+        return REJECT
+    if over_join_rate(peer.identifier):
+        return THROTTLE
+    return ACCEPT
 ```
 
 # 6. Design Decisions & Tradeoffs
@@ -213,6 +228,16 @@ function schedule_upgrade_probe(target_id):
 - Why it happens: software bugs, rolling deploy mistakes, regional outages.
 - Handling/failure mode: multi-bootstrap lists, N-way relay candidates per peer, fast failover route recomputation, and direct-path preference to reduce dependence.
 
+## Scenario: Malicious join swarm
+- What happens: huge number of fake peers attempt handshake and discovery enrollment.
+- Why it happens: low-cost identity creation and open edge exposure.
+- Handling/failure mode: pre-auth handshake budgets, per-ASN limits, staged admission, and temporary abuse quarantine.
+
+## Scenario: Relay queue flooding
+- What happens: relays saturate with low-value traffic, dropping legitimate coordination.
+- Why it happens: no strict service classes or sender quotas.
+- Handling/failure mode: relay service classes, reserved control-plane capacity, sender-rate ceilings, and priority for credentialed/staked identities.
+
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
 - Expected behavior:
@@ -271,8 +296,9 @@ function schedule_upgrade_probe(target_id):
 4. **Testing strategy**
    - Local deterministic testbed with containerized peers and traffic replay.
    - Scenario tests: direct reachable, symmetric NAT, strict firewall, relay outage, bootstrap loss, churn burst.
-   - Security tests: unauthorized identity rejection, credential revocation propagation, replay resistance, route tampering rejection.
-   - Performance tests: handshake throughput, relay bandwidth saturation, discovery convergence time.
+    - Security tests: unauthorized identity rejection, credential revocation propagation, replay resistance, route tampering rejection.
+    - Swarm tests: fake-peer join flood, relay queue flood, gossip amplification attempts, and budget-eviction correctness.
+    - Performance tests: handshake throughput, relay bandwidth saturation, discovery convergence time.
 5. **Scaling strategy**
    - Cap per-peer active connections; use adaptive neighbor selection.
    - Regionalize relays and bootstrap nodes; shard DHT keyspace.
