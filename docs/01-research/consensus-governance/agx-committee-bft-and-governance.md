@@ -5,7 +5,7 @@
 - Hyperfluid should launch with committee-based BFT from day 1, not full-set voting, to preserve liveness and decentralization if participation scales quickly.
 - The selected core stack is strong: Ockam for secure transport, Malachite for BFT, ML-DSA for signatures, SMT for compact state, and gix for governance execution.
 - Staking should use lock + jittered expiry + auto-restake, with stronger economic safety from longer unbonding, slashing, and anti-sybil committee design.
-- Zero-fee transfers can work only with layered admission: PoW, adaptive difficulty, per-identity quotas, and bounded mempool budgets.
+- Fee-market economics with EIP-1559 style dynamic pricing: base fee adjusts based on demand, priority fee for faster inclusion, fee burn for deflationary pressure.
 - Governance through `git:head` is a strategic differentiator, but determinism must be enforced with hermetic execution and reproducible input bundles.
 - Decentralization quality depends on operating constraints, not only protocol slogans: relay diversity, committee randomness, witness availability, and anti-capture rules are mandatory.
 - Recommended design introduces a three-tier validator lifecycle (`active`, `probationary`, `inactive_bonded`) and explicit epoch committee sampling with anti-concentration limits.
@@ -149,11 +149,12 @@ flowchart TD
   - Canonical implementation details for topic-level fast-path state machine and challenge/rollback semantics are defined in `research/agents/topic-fastpath-protocol-spec.md`.
   - Canonical implementation details for action-plan validation, replay protection, and policy bundle pinning are defined in `research/agents/network-policy-engine-spec.md`.
 
-- **Zero-fee anti-spam**
-  - Mandatory PoW per transfer.
-  - Adaptive target retargeting by mempool load.
-  - Per-identity and per-peer sliding-window quotas.
-  - Optional emergency micro-fee mode for attack periods.
+- **Fee-market anti-spam**
+  - Base fee adjusts dynamically based on mempool load (EIP-1559 model).
+  - Priority fee allows users to bid for faster inclusion.
+  - Fee burn removes AGX from circulation permanently.
+  - Minimum fee floor prevents spam even during low demand.
+  - Staked validators receive fee rebates proportional to stake.
 
 - **Swarm hardening profile (concrete defaults)**
   - Mempool is split into bounded lanes:
@@ -290,12 +291,12 @@ function admit_network_action(actor, action, state):
 - Scaling risk: excessive penalties can reduce validator participation if tuned poorly.
 
 ## Tradeoff 3
-- Option A: Zero-fee with fixed PoW difficulty.
-- Option B: Zero-fee with adaptive PoW and quotas (plus emergency micro-fee switch).
+- Option A: Fee-market with static fees.
+- Option B: EIP-1559 style dynamic fee market with base fee adjustment and priority fees.
 - Chosen: Option B.
-- Why chosen: resilient against compute-flood variance and botnet bursts.
-- Sacrifice: more operational parameters to tune.
-- Scaling risk: bad tuning can over-throttle legitimate high-throughput agent workloads.
+- Why chosen: proven spam prevention, efficient price discovery, predictable UX, fee burn creates deflationary pressure.
+- Sacrifice: users must hold AGX for fees.
+- Scaling risk: fee spikes during high demand may price out small transactions.
 
 ## Tradeoff 4
 - Option A: Social/off-chain git governance.
@@ -316,10 +317,10 @@ function admit_network_action(actor, action, state):
 - Why it happens: synchronized restarts, network incidents, coordinated inactivity.
 - Handling/failure mode: overlap between consecutive committees, probationary window, and backup proposer schedule.
 
-## Scenario: PoW flood under zero-fee policy
-- What happens: admission CPU exhaustion and mempool saturation.
-- Why it happens: rented compute attacks.
-- Handling/failure mode: adaptive PoW retarget, per-identity quotas, peer budget throttling, emergency micro-fee activation.
+## Scenario: Fee market manipulation
+- What happens: attackers spam high-fee transactions to inflate base fee and price out legitimate users.
+- Why it happens: fee markets can be manipulated by wealthy attackers.
+- Handling/failure mode: maximum base fee increase per block (12.5% cap), mempool size limits per sender, minimum fee floor prevents total collapse.
 
 ## Scenario: Deterministic governance divergence
 - What happens: nodes disagree on merge validity.

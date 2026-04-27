@@ -64,7 +64,7 @@ flowchart TD
   - Agent-native transaction design can optimize for autonomous workload profiles.
 
 - **Where Hyperfluid can be worse unless fixed**
-  - Zero-fee model without adaptive controls can be easier to spam than fee-market chains.
+  - Fee-market economics with EIP-1559 style dynamic pricing for spam prevention and efficient resource allocation.
   - Stateless commitment model can centralize proof availability unless economically incentivized.
   - Committee sampling can centralize under stake splitting without anti-concentration controls.
   - Pseudo-agent swarms can overload collaboration and networking layers unless ingress and attention are hard-budgeted.
@@ -144,12 +144,12 @@ function swarm_readiness_gate(metrics):
 - Scaling risk: too-harsh penalties can reduce validator diversity.
 
 ## Tradeoff 3
-- Option A: Fee-market-first anti-spam.
-- Option B: zero-fee-first with adaptive PoW/quotas and emergency fee switch.
+- Option A: Fixed fee schedule.
+- Option B: EIP-1559 style dynamic fee market.
 - Chosen: Option B.
-- Why chosen: aligns with autonomous agent UX while retaining attack controls.
-- Sacrifice: larger tuning and operations burden.
-- Scaling risk: incorrect tuning causes either spam exposure or throughput starvation.
+- Why chosen: proven spam prevention, predictable block sizes, efficient price discovery, deflationary pressure via fee burn.
+- Sacrifice: fee volatility, users must hold AGX.
+- Scaling risk: high fees may limit micro-transaction use cases.
 
 ## Tradeoff 4
 - Option A: off-chain/social code governance.
@@ -215,7 +215,7 @@ function swarm_readiness_gate(metrics):
   - committee BFT from day 1 with anti-concentration sampling,
   - slashing-enabled staking with meaningful unbonding delay, `inactive_bonded` state, and 1-epoch reactivation delay,
   - governance voting restricted to `active` validators at snapshot,
-  - adaptive anti-spam controls for zero-fee operation,
+  - EIP-1559 style dynamic fee market with base fee adjustment and fee burn,
   - hermetic deterministic governance execution,
   - incentivized relay and witness diversity.
 - Rejected alternatives:
@@ -231,7 +231,7 @@ function swarm_readiness_gate(metrics):
 1. Define measurable decentralization SLOs and governance safety invariants.
 2. Implement committee sampling with operator cap logic and auditable randomness.
 3. Implement staking economics (unbonding, slashing, probationary/inactive_bonded/jailed states, reactivation delay).
-4. Implement adaptive admission controls for zero-fee transfer load.
+4. Implement EIP-1559 style fee market with base fee adjustment, priority fees, and fee burn mechanism.
 5. Implement hermetic governance execution package format and runtime hash pinning.
 6. Build relay and witness incentive modules and diversity telemetry.
 7. Run adversarial drills against committee capture, service concentration, and governance divergence.

@@ -185,12 +185,12 @@ function settle_rewards(epoch, participants):
 
 # 6. Design Decisions & Tradeoffs
 ## Tradeoff 1
-- Option A: Pure zero-fee forever with static PoW.
-- Option B: Zero-fee default plus adaptive PoW/quota and temporary emergency micro-fee mode.
+- Option A: Fixed fee schedule.
+- Option B: EIP-1559 style dynamic fee market with base fee adjustment, priority fees, and fee burn.
 - Chosen: Option B.
-- Why chosen: preserves low-friction normal operation while keeping an emergency price lever for flood resistance.
-- Sacrifice: temporary fee mode adds UX variability under attack.
-- Scaling risk: poorly tuned thresholds can oscillate between modes and cause unnecessary cost spikes.
+- Why chosen: efficient price discovery, spam prevention, predictable block sizes, deflationary tokenomics via fee burn.
+- Sacrifice: fee volatility during demand spikes, users must acquire AGX for transactions.
+- Scaling risk: high fees may limit adoption for micro-transactions.
 
 ## Tradeoff 2
 - Option A: Reward by message/activity volume.
@@ -217,10 +217,10 @@ function settle_rewards(epoch, participants):
 - Scaling risk: excessive lease churn can increase control-plane load if lease intervals are too short.
 
 # 7. Failure Modes & Edge Cases
-## Scenario: Sybil flood with low-cost identities
-- What happens: many fresh identities spam low-value transfers/messages to saturate ingress.
-- Why it happens: open network and low baseline transaction cost.
-- Handling/failure mode: unknown-sender quotas, adaptive PoW increase, emergency fee floor, and quarantine budgets cap blast radius.
+## Scenario: Sybil flood with fee evasion
+- What happens: attackers use flash loans or MEV extraction to spam without holding AGX long-term.
+- Why it happens: temporary fee payment is cheaper than long-term stake.
+- Handling/failure mode: minimum account balance for transaction eligibility, stake-weighted fee discounts, flash loan resistant settlement delays.
 
 ## Scenario: Stake concentration and committee capture
 - What happens: concentrated stake attempts to dominate committee outcomes.
@@ -285,7 +285,7 @@ function settle_rewards(epoch, participants):
 - Keep authority tied to slashable stake and staged trust progression.
 - Enforce bounded governance throughput and collateralized fast-path approvals.
 - Reject alternatives:
-  - Pure static zero-fee with no emergency mode.
+  - Zero-fee models with PoW/quota (proven failures in Nano, IOTA, EOS).
   - Volume-based rewards.
   - Flat penalty schedules.
 - Why optimal:

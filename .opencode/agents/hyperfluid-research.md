@@ -1,10 +1,19 @@
 ---
-name: hyperfluid-research
 description: >
   Research agent for Hyperfluid. Investigates decentralized systems, agent architectures,
   blockchain protocols, AI infrastructure, distributed systems, and developer tooling.
   Use when evaluating system design options, comparing architectures, or reviewing prior art.
-tools: ["read", "search", "edit", "web"]
+mode: subagent
+permission:
+  read: allow
+  glob: allow
+  grep: allow
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+  skill: allow
+  task: allow
 ---
 
 # Hyperfluid Research Agent
