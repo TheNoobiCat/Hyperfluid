@@ -113,6 +113,10 @@ flowchart TD
     - validated review activity with low reversal rate,
     - sustained liveness and low fault rate in committee duties.
   - Message volume alone never yields reward.
+  - Quality evidence source of truth:
+    - each contribution references content-addressed artifacts and deterministic check records,
+    - reviewer votes are signature-bound and independently replayable from shared artifact hashes,
+    - reward settlement reads only finalized records after challenge close height.
 
 - **Lease economics for anti-hoarding**
   - Lease claim requires small collateral.

@@ -1,21 +1,20 @@
-# The Infinite Agent: Continuous Autonomy via Context Windowing
-
-## 1. Title
+# 1. Title
 
 **The Infinite Agent: One Loop, Fresh Messages, State in Database**
 
-## 2. Executive Summary
+# 2. Executive Summary
 
 - **Core principle:** An autonomous agent running forever does not need sophisticated memory—it needs a simple state machine enforced via prompt discipline.
 - **Single infinite loop:** `load_system_prompt() → call_llm() → execute_tools() → check_token_count() → handoff_if_needed() → repeat`
 - **State lives in database, not RAM:** Every todo, every finding, every failure is persisted. The agent always loads from disk.
 - **Fresh messages every context window:** No cumulative prompt bloat. Messages array is ephemeral; system prompt is the real memory.
-- **Four tools only:** `todo_write`, `todo_update`, `remember`, `forget`—context management. Everything else is domain-specific.
+- **Core memory tools in this runtime skeleton:** `todo_write`, `todo_update`, `remember`, `forget` keep long-running state synchronized; domain/network tools are additional and separate.
 - **Handoff at 70% tokens:** When context fills, inject a single reflection prompt, capture response, reset messages, continue.
 - **Failure guard before execution:** Hash-based detection blocks repeated tool failures; forces replan.
+- **Network safety boundary:** In Hyperfluid deployments, network-mutating tool calls still require typed `action_plan`/`action_plan_id` and policy-gate approval.
 - **No hidden complexity:** The entire runtime fits on one screen. All sophistication is in prompt language and database schema design.
 
-## 3. System Overview
+# 3. System Overview
 
 ### Problem
 
@@ -51,8 +50,9 @@ flowchart TD
 - Long-term knowledge (findings, patterns) must outlive individual sessions
 - Prompts must never exceed context window
 - External messages/events must be treated as untrusted input and pass ingress budgets before entering prompt context
+- SQLite state in this document is per-agent local runtime state, not shared protocol consensus state.
 
-## 4. Architecture (CRITICAL SECTION)
+# 4. Architecture (CRITICAL SECTION)
 
 ### 4.1 Runtime Loop (Pseudocode)
 
@@ -212,16 +212,17 @@ of concrete tasks before doing anything else.
 
 ---
 
-You have four tools for memory management:
+You have four core tools for memory management:
 - todo_write: Replace entire todo list when starting a new task group.
 - todo_update: Mark items in_progress, done, or blocked as you work.
 - remember: Store a permanent finding (pattern, constraint, decision).
 - forget: Delete outdated or wrong knowledge.
 
 Use them to keep your state synchronized with the database.
+Domain and network tools can also exist; network-mutating tools are gated separately by typed action plans and network policy checks.
 ```
 
-## 5. Core Mechanisms
+# 5. Core Mechanisms
 
 ### 5.1 Todo State Machine (Enforced by Prompt)
 
@@ -327,7 +328,7 @@ def handle_forget(db, id):
     db.execute("DELETE FROM project_knowledge WHERE id=?", (id,))
 ```
 
-## 6. Design Decisions & Tradeoffs
+# 6. Design Decisions & Tradeoffs
 
 ### Tradeoff 1: Stateful Loop vs Request-Response
 
@@ -415,7 +416,7 @@ def handle_forget(db, id):
   - Agent accumulates expertise over time
   - Crucial for long-running projects
 
-## 7. Failure Modes & Edge Cases
+# 7. Failure Modes & Edge Cases
 
 ### 7.1 Empty Todo List (No Work to Do)
 
@@ -495,7 +496,7 @@ def handle_forget(db, id):
   - Inject only compact signal summaries into prompt, never full payload by default
   - Apply quarantine to repeated abusive senders and reserve slots for high-priority trusted events
 
-## 8. Scalability Analysis
+# 8. Scalability Analysis
 
 ### Single Agent (One Process)
 
@@ -542,7 +543,7 @@ def handle_forget(db, id):
 
 - **This doc covers single agent only** (sufficient for most use cases)
 
-## 9. Recommended Architecture
+# 9. Recommended Architecture
 
 **Use exactly as described:**
 
@@ -585,7 +586,7 @@ def handle_forget(db, id):
 - Autonomy (agent experiences zero discontinuity across handoffs)
 - Resilience (crash recovery automatic, loops prevented)
 
-## 10. Implementation Plan
+# 10. Implementation Plan
 
 ### Phase 1: Basic Loop (Day 1)
 
@@ -632,7 +633,7 @@ def handle_forget(db, id):
 - Add config file: context limit, handoff threshold, retry logic
 - Test crash recovery and restart
 
-## 11. Future Improvements
+# 11. Future Improvements
 
 - **Confidence scoring on todo items** — agent marks confidence for each task; prioritize high-confidence work
 - **Adaptive handoff threshold** — adjust 70% based on tool execution patterns

@@ -114,8 +114,9 @@ flowchart TD
     - quick reviewer ack for correctness within task scope.
   - Topic layer:
     - fast-path team merge into `topic/<id>/main`.
-    - requires team quorum certificate (for example 2-of-3 or 3-of-5 maintainers).
+    - requires quorum certificate that satisfies fast-path threshold rules (`2f + 1` weighted approvals from the topic snapshot set; for small teams this maps to examples like 2-of-3 or 3-of-5).
     - at least one independent reviewer outside primary author cluster.
+    - economic reward and penalty settlement for accepted work follows the verification and challenge pipeline in `proof-of-work-quality-and-review-markets.md`.
   - Global layer:
     - canonical `git:head` governance for protocol/mainline changes.
     - slow, high-assurance, stake-backed voting path.
@@ -151,7 +152,7 @@ flowchart TD
   - Every new node starts as `untrusted_joiner` with strict limits.
   - Privileges increase only after useful work and clean behavior evidence.
   - Stage progression:
-    - `untrusted_joiner`: read-only discovery, very low send quotas, no high-visibility topic creation.
+    - `untrusted_joiner`: limited discovery and digest-priority messaging only, very low send quotas, no high-visibility topic creation.
     - `sandboxed_contributor`: can claim low-risk tasks with short leases.
     - `trusted_contributor`: higher quotas, team participation, broader task claim range.
     - `coordinator_eligible`: can lead teams, create high-visibility topics, and assign subtasks.
@@ -162,7 +163,7 @@ flowchart TD
   - Network-mutating actions are allowlisted and schema-validated before execution.
   - Policy checks include role/stage, resource ACL, quota, and risk class.
   - Network tool-call contract:
-    - each network-mutating tool call carries `action_plan` or `action_plan_id` + signature.
+    - each network-mutating tool call carries `action_plan` or `action_plan_id` + `plan_signature`.
     - calls without a valid bound plan are rejected.
   - Local machine actions are outside protocol policy scope (operator sandbox responsibility).
 

@@ -8,7 +8,7 @@
 - Zero-fee transfers can work only with layered admission: PoW, adaptive difficulty, per-identity quotas, and bounded mempool budgets.
 - Governance through `git:head` is a strategic differentiator, but determinism must be enforced with hermetic execution and reproducible input bundles.
 - Decentralization quality depends on operating constraints, not only protocol slogans: relay diversity, committee randomness, witness availability, and anti-capture rules are mandatory.
-- Recommended design introduces a three-tier validator lifecycle (`active`, `probationary`, `inactive`) and explicit epoch committee sampling with anti-concentration limits.
+- Recommended design introduces a three-tier validator lifecycle (`active`, `probationary`, `inactive_bonded`) and explicit epoch committee sampling with anti-concentration limits.
 - Transaction model should be explicit and minimal: transfer, stake bond/renew/unbond, governance propose/vote, and evidence transactions.
 - This architecture can remain lightweight while being resilient, but only if incentives, liveness logic, and committee selection are specified precisely at launch.
 
