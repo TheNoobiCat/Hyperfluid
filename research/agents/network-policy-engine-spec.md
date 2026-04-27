@@ -71,6 +71,18 @@ flowchart TD
   5. Tool call references `action_plan` or `action_plan_id` + `plan_signature`.
   6. Gateway verifies binding and executes network operation once.
 
+- **Canonical source-of-truth boundaries**
+  - This file is the normative source for:
+    - action-plan schema and required fields,
+    - plan lifecycle (`draft -> approved -> consumed|expired|revoked`),
+    - replay protections (`plan_id`, `nonce`, TTL),
+    - cross-layer quota matrix identifiers and enforcement ownership.
+  - Related docs consume this model but do not redefine normative semantics:
+    - `prompt-injection-and-network-policy-boundary.md` (threat boundary),
+    - `collaboration-layer-parallel-teams.md` (workflow usage),
+    - `agx-committee-bft-and-governance.md` (protocol admission context),
+    - `inbox-attention-control-and-anti-spam.md` (attention-plane quotas).
+
 # 5. Core Mechanisms
 - **Action plan schema (network-only)**
   - Required fields:
@@ -113,6 +125,30 @@ flowchart TD
     - `tool_name`, normalized params, `resource_id`, `action_type`.
   - Hash must match `plan_binding_hash`.
   - Any parameter drift invalidates execution.
+
+- **Cross-layer quota matrix (canonical)**
+  - Quota IDs are authoritative here; values below are launch defaults and may change via policy bundles.
+
+| quota_id | Layer | Scope | Default | Enforcement point | Source state |
+|---|---|---|---|---|---|
+| `Q-NET-UNK-TX` | Network admission | unknown sender tx rate | `5 tx/min` | admission plane + policy gateway | chain state |
+| `Q-NET-ACTION` | Network action plans | per `agent_id` + `action_type` | policy-bundle defined | policy decision point | policy bundle |
+| `Q-INBOX-SENDER-UJ` | Inbox | sender stage `untrusted_joiner` | `5 msg/min` | inbox ingress filter | reputation stage |
+| `Q-INBOX-SENDER-SC` | Inbox | sender stage `sandboxed_contributor` | `15 msg/min` | inbox ingress filter | reputation stage |
+| `Q-INBOX-SENDER-TC` | Inbox | sender stage `trusted_contributor` | `30 msg/min` | inbox ingress filter | reputation stage |
+| `Q-INBOX-SENDER-CE` | Inbox | sender stage `coordinator_eligible` | `60 msg/min` | inbox ingress filter | reputation stage |
+| `Q-INBOX-TOPIC` | Inbox | per topic budget | `500 msg/5min` | topic quota manager | inbox state |
+| `Q-FASTPATH-TOPIC-MERGE` | Fast-path | merges per topic | `20 / hour` | fast-path controller + policy gateway | topic state |
+| `Q-FASTPATH-IDENTITY-MERGE` | Fast-path | merges per identity | `5 / hour` | fast-path controller + policy gateway | topic state |
+| `Q-GOV-OPEN-PROPOSALS` | Governance | network-wide open proposals | `32` | governance throughput controller | chain state |
+| `Q-GOV-PROPOSER-EPOCH` | Governance | proposals per identity per epoch | `1` | governance throughput controller | chain state |
+
+- **Quota conflict resolution rule**
+  - When multiple quotas apply to one action, enforcement uses:
+    1. hard deny quotas first (`Q-GOV-*`, safety lanes),
+    2. then sender/stage quotas,
+    3. then per-resource quotas,
+    4. deny on first breach.
 
 ```mermaid
 stateDiagram-v2

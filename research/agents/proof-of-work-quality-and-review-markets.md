@@ -121,6 +121,17 @@ flowchart TD
   - Pair-frequency caps between reviewer and author identities.
   - Graph-correlation penalties for tightly connected vote blocs.
   - Delayed reviewer identity reveal in high-risk topics to reduce pre-coordination.
+  - Operational thresholds:
+    - `pair_repeat_ratio` warning `> 0.18`, critical `> 0.25`.
+    - `vote_correlation_z` warning `> 2.5`, critical `> 3.5`.
+    - `minority_overturn_rate` warning `> 0.12`, critical `> 0.20`.
+    - `self_loop_share` warning `> 0.22`, critical `> 0.30`.
+  - Escalation pathway:
+    1. `L0 Observe`: any warning threshold crossed; expand reviewer set and add mandatory challenger.
+    2. `L1 Restrict`: any critical threshold or >=2 warning thresholds; cap reviewer multiplier at `0.6x`, force 5-reviewer quorum, delay payout one epoch.
+    3. `L2 Quarantine`: critical condition sustained for 2 epochs; freeze pending rewards, deny new assignments, open governance slashing review.
+  - De-escalation rule:
+    - Drop one level only after 3 consecutive clean epochs (all metrics below warning thresholds).
 
 ```mermaid
 stateDiagram-v2
@@ -161,6 +172,27 @@ function settle(submission):
     else:
         finalize_payout(submission.author_id, provisional)
         reward_correct_reviewers(submission.id)
+
+function anti_collusion_level(metrics, critical_epochs):
+    warning_count = count_true([
+        metrics.pair_repeat_ratio > 0.18,
+        metrics.vote_correlation_z > 2.5,
+        metrics.minority_overturn_rate > 0.12,
+        metrics.self_loop_share > 0.22
+    ])
+    critical = (
+        metrics.pair_repeat_ratio > 0.25 or
+        metrics.vote_correlation_z > 3.5 or
+        metrics.minority_overturn_rate > 0.20 or
+        metrics.self_loop_share > 0.30
+    )
+    if critical and critical_epochs >= 2:
+        return "L2"
+    if critical or warning_count >= 2:
+        return "L1"
+    if warning_count >= 1:
+        return "L0"
+    return "NONE"
 ```
 
 # 6. Design Decisions & Tradeoffs

@@ -146,6 +146,8 @@ flowchart TD
     - subagent timeout is `30 minutes`; on timeout, no vote is emitted for that validator.
     - when `review(...)` is called, runtime emits `GovernanceVoteTx` and closes sandbox.
     - main agent branch resumes after sandbox termination.
+  - Canonical implementation details for topic-level fast-path state machine and challenge/rollback semantics are defined in `research/agents/topic-fastpath-protocol-spec.md`.
+  - Canonical implementation details for action-plan validation, replay protection, and policy bundle pinning are defined in `research/agents/network-policy-engine-spec.md`.
 
 - **Zero-fee anti-spam**
   - Mandatory PoW per transfer.
@@ -170,6 +172,7 @@ flowchart TD
   - Circuit-breaker mode (automatic):
     - triggers when reject ratio, queue depth, or finality latency breaches thresholds.
     - raises PoW target, enables emergency micro-fee floor, and tightens unknown-sender quotas.
+  - Canonical quota IDs and cross-layer precedence are defined in `research/agents/network-policy-engine-spec.md`.
 
 - **Network policy boundary (minimal, deterministic)**
   - All network-mutating calls must pass a network policy gate:

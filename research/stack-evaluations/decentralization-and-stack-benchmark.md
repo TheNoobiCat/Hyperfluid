@@ -48,6 +48,8 @@ flowchart TD
   - ML-DSA: identity integrity; requires domain-separated signatures and DoS-resistant admission.
   - SMT: compact state; requires witness market and proof availability commitments.
   - gix: deterministic governance execution; requires hermetic and reproducible merge runtime.
+  - Artifact availability implementation details (manifests, proofs-of-possession, repair) are defined in `research/networking/artifact-availability-and-retention.md`.
+  - Network action policy validation details are defined in `research/agents/network-policy-engine-spec.md`.
 
 # 5. Core Mechanisms
 - **Comparative decentralization patterns from major chains**

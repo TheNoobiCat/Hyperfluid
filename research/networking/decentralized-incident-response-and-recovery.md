@@ -110,6 +110,22 @@ flowchart TD
   3. Re-enable constrained collaboration actions.
   4. Return to baseline budgets after cooldown.
 
+- **Anti-oscillation tuning rules (normative)**
+  - Use asymmetric thresholds with hysteresis:
+    - enter `Elevated` when breach score `>= 1.0`,
+    - enter `Emergency` when breach score `>= 1.5`,
+    - exit `Emergency` only when score `<= 0.7` for `RECOVERY_WINDOW`,
+    - exit `Elevated` only when score `<= 0.5` for `COOLDOWN_WINDOW`.
+  - Enforce minimum dwell times:
+    - `Elevated` min dwell: 15 minutes,
+    - `Emergency` min dwell: 30 minutes.
+  - Enforce transition cooldown:
+    - after downgrade, block re-upgrade for 5 minutes unless a critical safety invariant is violated.
+  - Use bounded control-loop step size:
+    - PoW multiplier and quota multipliers may change by at most `20%` per window.
+  - Partition safeguard:
+    - mode changes require evidence quorum from at least 2 topology regions; otherwise remain in stricter current mode.
+
 - **Abuse resistance for incident controls**
   - Incident transitions and overrides require signed evidence bundles.
   - High-impact emergency overrides require step-up certificates.
@@ -156,6 +172,17 @@ function maybe_downgrade_mode(mode, metrics):
     if mode == ELEVATED and stable(metrics, COOLDOWN_WINDOW):
         return NORMAL
     return mode
+
+function transition_allowed(prev_mode, next_mode, timers, score, regional_quorum):
+    if not regional_quorum:
+        return false
+    if prev_mode == ELEVATED and next_mode == NORMAL and timers.elevated_dwell < 15m:
+        return false
+    if prev_mode == EMERGENCY and next_mode == ELEVATED and timers.emergency_dwell < 30m:
+        return false
+    if timers.post_downgrade_cooldown_active and next_mode in [ELEVATED, EMERGENCY]:
+        return critical_invariant_violated(score)
+    return true
 ```
 
 # 6. Design Decisions & Tradeoffs
@@ -251,6 +278,13 @@ function maybe_downgrade_mode(mode, metrics):
 5. Implement recovery coordinator with staged re-enable flow.
 6. Implement evidence archive and post-incident governance export.
 7. Run drills for stall/flood/bad-upgrade scenarios and tune thresholds.
+8. Add anti-oscillation verification matrix:
+   - noisy-threshold test (should not flap),
+   - burst-recovery-reburst test (cooldown respected),
+   - partitioned telemetry test (no unsafe downgrade),
+   - multiplier-step bound test (`<=20%` window delta),
+   - dwell-time gate test (no early exit),
+   - deterministic replay test (identical transitions from same evidence stream).
 
 # 11. Future Improvements
 - Add formal verification for mode transition safety/liveness.

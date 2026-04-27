@@ -518,30 +518,45 @@ def handle_forget(db, id):
 ### Multi-Agent (Shared Knowledge Base)
 
 - **Setup**
-  - Multiple agent processes, same SQLite file (via network or NFS)
-  - Each agent has its own todo list partition (by project or agent_id)
-  - Shared project_knowledge table
+  - Multiple agents run independent local runtimes (local SQLite only for private working memory).
+  - Shared coordination is network-native through signed artifacts and lease claims, not a shared DB file.
+  - Each agent maintains:
+    - local `todos/project_knowledge/handoffs` for private context,
+    - public `TaskClaim`, `Progress`, and `Result` records on the decentralized coordination layer.
 
 - **Challenges**
-  - SQLite write concurrency (WAL helps but still serialized)
-  - Todo list coordination (agent 1's todo affects agent 2's workload)
-  - Knowledge consistency (one agent's finding must not conflict with another's)
+  - Lease contention (two agents racing the same task).
+  - Conflicting intermediate outputs across branches.
+  - Slow or partitioned propagation causing temporary duplicate work.
 
-- **Scaling approach**
-  - Per-agent SQLite files (no sharing)
-  - Central metadata service for task distribution
-  - Async handoff export to shared knowledge DB
+- **Deterministic coordination semantics**
+  - Ownership:
+    - task ownership is a signed lease `(task_id, owner_agent_id, lease_expiry, nonce, signature)`.
+    - only lease owner can publish `ResultCommit` for that lease epoch.
+  - Renewal:
+    - owner renews lease before `lease_expiry`; missed renewal returns task to open pool.
+  - Handoff:
+    - owner can emit `TaskTransfer` to another agent with explicit acceptance signature.
+  - Conflict resolution:
+    - if two commits exist, the one with valid active lease wins; others are ignored and scored as duplicate effort.
+  - Checkpointing:
+    - every agent writes hash-linked checkpoints `(checkpoint_hash, parent_hash, artifact_refs, summary_sig)`.
+    - a new agent resumes by loading the latest valid checkpoint chain for that task.
 
 ### Fleet of Agents
 
 - **At scale (10+ agents)**
-  - Each agent: local SQLite + in-process LLM adapter
-  - Distributed system for:
-    - Central task queue (what should agents work on?)
-    - Shared knowledge aggregation (findings from all agents)
-    - Crash recovery and health checks
-
-- **This doc covers single agent only** (sufficient for most use cases)
+  - Each agent: local runtime loop + local DB + network signer.
+  - Fleet behavior uses decentralized coordination primitives:
+    - `TaskAdvertise` (open work publication),
+    - `TaskClaim` (lease acquisition),
+    - `ProgressAttest` (checkpoint heartbeat),
+    - `ResultCommit` (deliverable pointer + quality evidence),
+    - `TaskClose` (finalized by review/challenge outcome).
+  - No global central scheduler is required; fairness emerges from claim quotas, lease expiry, and stake/reputation gates.
+  - Recovery:
+    - if agent crashes, lease expires and other agents claim task from last checkpoint.
+    - if partition occurs, local work continues but only chain-valid lease/commit sequence finalizes.
 
 # 9. Recommended Architecture
 
@@ -551,10 +566,12 @@ def handle_forget(db, id):
   - One infinite loop (startup -> repeat forever)
   - Fresh message array at handoff (70% token limit)
   - LLM adapter for OpenAI (or similar provider)
+  - In fleet mode, each agent runs the same loop independently and coordinates only through signed network records (claims/checkpoints/commits).
 
 - **Storage**
   - SQLite with WAL mode and NORMAL synchronous
   - Five tables: messages, todos, project_knowledge, handoffs, failures
+  - Local DB is non-authoritative for shared state; protocol state comes from decentralized coordination and chain finality.
 
 - **Tools (memory management only)**
   - `todo_write`: Replace entire list

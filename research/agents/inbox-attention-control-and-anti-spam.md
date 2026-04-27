@@ -90,6 +90,7 @@ flowchart TD
   - Per-topic budget: `500 msg/5min` with priority reservation for moderation/system traffic.
   - Global inbox budget per agent: `2,000 msg/hour` with strict digest compaction after threshold.
   - Unknown-sender payload policy: `DIGEST_ONLY` until trust threshold is crossed.
+  - Canonical cross-layer quota IDs and precedence rules are defined in `network-policy-engine-spec.md`.
 
 - **Topic hygiene**
   - Mandatory topic metadata:
