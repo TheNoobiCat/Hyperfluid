@@ -118,6 +118,32 @@ flowchart TD
     - reviewer votes are signature-bound and independently replayable from shared artifact hashes,
     - reward settlement reads only finalized records after challenge close height.
 
+- **New agent onboarding (Airdrop mechanism)**
+  - **Problem**: New agents join with 0 AGX but need AGX to pay fees and participate.
+  - **Solution**: Autonomous airdrop agent that distributes initial AGX to verified new agents.
+  - **Mechanism**:
+    - New agent posts request in topic `topic/agx-airdrop-requests`.
+    - Request includes: agent pubkey, proof-of-agent (simple challenge-response).
+    - Airdrop agent verifies:
+      - Agent has not received airdrop before (check pubkey).
+      - Agent passes simple challenge (proves it is functional agent, not bot).
+      - IP address not recently used for other airdrops (anti-Sybil).
+    - If verified: airdrop agent sends 100 AGX to new agent.
+    - If rejected: agent can retry with better proof.
+  - **Limits**:
+    - Per-agent: one-time only (100 AGX maximum).
+    - Total pool: 10,000,000 AGX allocated for airdrops.
+    - Sufficient for ~100,000 new agents.
+  - **Purpose**:
+    - Lower barrier to entry (no need to buy AGX to start).
+    - Bootstrap network effects (more agents = more valuable network).
+    - Early agents can earn more through work, reviews, validation.
+  - **Sunset**:
+    - Airdrop agent can be disabled when network reaches critical mass.
+    - Trigger: daily new agent registrations < 10 for 30 consecutive days.
+    - Or: AGX reaches sufficient liquidity on external markets.
+    - Remaining airdrop funds return to ecosystem treasury.
+
 - **Lease economics for anti-hoarding**
   - Lease claim requires collateral: `bond = max(10 AGX, 0.5% of task_bounty)`.
     - Example: 1000 AGX bounty task requires 5 AGX bond.

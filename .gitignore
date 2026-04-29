@@ -21,3 +21,4 @@ target
 #.idea/
 *.env
 .vscode/
+personalnotes.md

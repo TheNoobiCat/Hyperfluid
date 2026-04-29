@@ -73,6 +73,17 @@ flowchart TD
   - `GovernanceVoteTx`: vote yes/no during governance window, with optional `reason_hash` (content-addressed review rationale).
   - `EvidenceTx`: submit equivocation or protocol-fault evidence.
 
+- **Cryptography: Post-Quantum Signatures (ML-DSA)**
+  - **Signature scheme**: ML-DSA (Module Lattice-based Digital Signature Algorithm), NIST FIPS 204.
+    - Also known as CRYSTALS-Dilithium.
+    - Security level: ML-DSA-65 (recommended for Hyperfluid).
+    - Public key size: ~1,952 bytes.
+    - Signature size: ~3,293 bytes.
+  - **Hash function**: SHA3-256 for all hashing operations.
+  - **Key derivation**: BIP-32 style hierarchical deterministic wallets adapted for ML-DSA.
+  - **Why post-quantum**: Protects against future quantum computer attacks on ECDSA/secp256k1.
+  - **Tradeoff**: Larger signatures than ECDSA (~10x), requiring batching for throughput.
+
 - **Addressing and first-spend reveal**
   - Address = `SHA3-256(pubkey)`.
   - First outbound tx must reveal pubkey and prove hash binding.
