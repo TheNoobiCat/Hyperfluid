@@ -90,6 +90,7 @@ flowchart TD
     - publish `ReviewRecord(submission_id, score, verdict, reason_hash, reviewer_sig)`.
   - Finality verification:
     - challenge window closes at deterministic height `h_close`,
+    - concrete duration: `144 blocks` (~24 hours at 10s block time), see `agx-economics-and-adversarial-incentives.md` Section 5 "Challenge and settlement timing",
     - settlement only accepts records with valid signatures, matching hashes, and finalized inclusion proofs,
     - payout uses only finalized records in canonical chain state.
 
@@ -117,21 +118,16 @@ flowchart TD
   - If challenge fails:
     - challenger collateral partially burned.
 
-- **Anti-collusion controls**
-  - Pair-frequency caps between reviewer and author identities.
-  - Graph-correlation penalties for tightly connected vote blocs.
-  - Delayed reviewer identity reveal in high-risk topics to reduce pre-coordination.
-  - Operational thresholds:
-    - `pair_repeat_ratio` warning `> 0.18`, critical `> 0.25`.
-    - `vote_correlation_z` warning `> 2.5`, critical `> 3.5`.
-    - `minority_overturn_rate` warning `> 0.12`, critical `> 0.20`.
-    - `self_loop_share` warning `> 0.22`, critical `> 0.30`.
-  - Escalation pathway:
-    1. `L0 Observe`: any warning threshold crossed; expand reviewer set and add mandatory challenger.
-    2. `L1 Restrict`: any critical threshold or >=2 warning thresholds; cap reviewer multiplier at `0.6x`, force 5-reviewer quorum, delay payout one epoch.
-    3. `L2 Quarantine`: critical condition sustained for 2 epochs; freeze pending rewards, deny new assignments, open governance slashing review.
-  - De-escalation rule:
-    - Drop one level only after 3 consecutive clean epochs (all metrics below warning thresholds).
+- **Anti-collusion controls (simplified)**
+  - Simple pair-frequency cap enforced deterministically at assignment:
+    - Same reviewer-author pair: maximum 1 review in every 10 tasks.
+    - Protocol tracks pair counts per rolling 10-task window.
+  - Manual governance escalation for suspected collusion:
+    - Anyone can submit `EvidenceTx` with collusion evidence.
+    - Validator set votes on slashing (standard governance process).
+  - Removed: Statistical correlation metrics (vote_correlation_z, minority_overturn_rate, self_loop_share).
+  - Removed: Automated L0/L1/L2 escalation machinery.
+  - Rationale: Simple deterministic rules are auditable and don't create false positives from statistical noise.
 
 ```mermaid
 stateDiagram-v2
@@ -173,26 +169,24 @@ function settle(submission):
         finalize_payout(submission.author_id, provisional)
         reward_correct_reviewers(submission.id)
 
-function anti_collusion_level(metrics, critical_epochs):
-    warning_count = count_true([
-        metrics.pair_repeat_ratio > 0.18,
-        metrics.vote_correlation_z > 2.5,
-        metrics.minority_overturn_rate > 0.12,
-        metrics.self_loop_share > 0.22
-    ])
-    critical = (
-        metrics.pair_repeat_ratio > 0.25 or
-        metrics.vote_correlation_z > 3.5 or
-        metrics.minority_overturn_rate > 0.20 or
-        metrics.self_loop_share > 0.30
+function anti_collusion_check(assignment, pair_history):
+    """Simple deterministic pair-cap check (replaces statistical metrics)"""
+    pair_count = count_recent_pairings(
+        reviewer=assignment.reviewer_id, 
+        author=assignment.author_id,
+        window=10  # rolling 10-task window
     )
-    if critical and critical_epochs >= 2:
-        return "L2"
-    if critical or warning_count >= 2:
-        return "L1"
-    if warning_count >= 1:
-        return "L0"
-    return "NONE"
+    require pair_count <= 1, "Pair frequency cap exceeded (max 1 per 10 tasks)"
+    return PASS
+
+function manual_governance_escalation(evidence):
+    """Manual escalation path for suspected collusion"""
+    require evidence.collusion_indicators.length > 0
+    submit_governance_proposal(
+        type="COLLUSION_EVIDENCE",
+        evidence_hash=hash(evidence),
+        recommended_action="SLASH_REVIEWERS"
+    )
 ```
 
 # 6. Design Decisions & Tradeoffs
@@ -269,6 +263,21 @@ function anti_collusion_level(metrics, critical_epochs):
 - Reviewer market must be sharded by topic/domain with cross-shard challenge proofs.
 - Settlement engine needs deterministic streaming aggregation to avoid global bottlenecks.
 - Hard constraints: bounded review fanout and bounded challenge execution per epoch.
+
+## Reviewer assignment parameters (concrete)
+- Default reviewer count per task: `3 reviewers`
+- High-value tasks (>10k AGX): `5 reviewers`
+- Niche domains (low reviewer pool): `2 reviewers` minimum, flag for manual review
+- Max reviewers per task: `7` (diminishing returns beyond this)
+- Reviewer assignment constraints:
+  - Geographic spread: `min 2 different regions`
+  - Temporal spread: `reviewers must have been active in last 7 days`
+  - Stake spread: `max 30% of reviewers from same stake tier`
+  - Pair frequency: `same reviewer-author pair max 1 in 10 tasks`
+- Reviewer pool minimum: `50 eligible reviewers` for auto-assignment; below this threshold, manual assignment required
+- Review timeout: `72 hours` for standard tasks, `24 hours` for urgent tasks
+  - Note: This is the protocol-level deadline for reviewer assignment. Distinct from review sandbox timeout (30 min) which is a local agent runtime limit defined in `agx-committee-bft-and-governance.md`.
+- Reviewer load cap: `max 5 concurrent review assignments` per reviewer
 
 # 9. Recommended Architecture
 - Adopt a three-phase pipeline: objective checks -> independent review market -> challenge finality.

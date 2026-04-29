@@ -93,52 +93,37 @@ flowchart TD
   - Example:
     - `consensus_stall` if `finality_p95 > SLO` for 3 windows and >= M independent reporters.
 
-- **Emergency mode actions**
-  - `Elevated`:
-    - increase PoW/quota strictness,
-    - tighten unknown-sender budgets,
-    - reserve evidence/control lanes.
-  - `Emergency`:
-    - temporarily freeze selected low-trust fast-path actions,
-    - enforce emergency micro-fee floor if configured,
-    - reduce non-critical traffic classes,
-    - activate prioritized repair for critical artifacts.
+- **Emergency mode (binary: Normal / Emergency)**
+  - `Normal`: Baseline parameters (standard PoW, quotas, lane allocation).
+  - `Emergency`: Fixed safe-mode parameters:
+    - PoW difficulty increased by fixed multiplier (e.g., 3x),
+    - Unknown-sender budgets reduced by fixed factor (e.g., 50%),
+    - Evidence and control lanes reserved (guaranteed capacity),
+    - Low-trust fast-path actions temporarily frozen,
+    - Emergency fee floor enabled (if configured).
+  - Removed: `Elevated` intermediate mode.
+
+- **Simple triggers (explicit metrics)**
+  - Enter Emergency if: `finality_lag > 60 seconds` for 3 consecutive blocks.
+  - Exit Emergency if: `finality_lag < 30 seconds` for 10 consecutive blocks.
+  - Removed: Composite "breach score" (hard to compute and reason about).
+  - Removed: Asymmetric thresholds and hysteresis windows.
+  - Removed: Minimum dwell times and cooldown timers.
 
 - **Recovery sequencing**
-  1. Stabilize consensus/control lanes.
-  2. Restore artifact availability and relay diversity.
-  3. Re-enable constrained collaboration actions.
-  4. Return to baseline budgets after cooldown.
-
-- **Anti-oscillation tuning rules (normative)**
-  - Use asymmetric thresholds with hysteresis:
-    - enter `Elevated` when breach score `>= 1.0`,
-    - enter `Emergency` when breach score `>= 1.5`,
-    - exit `Emergency` only when score `<= 0.7` for `RECOVERY_WINDOW`,
-    - exit `Elevated` only when score `<= 0.5` for `COOLDOWN_WINDOW`.
-  - Enforce minimum dwell times:
-    - `Elevated` min dwell: 15 minutes,
-    - `Emergency` min dwell: 30 minutes.
-  - Enforce transition cooldown:
-    - after downgrade, block re-upgrade for 5 minutes unless a critical safety invariant is violated.
-  - Use bounded control-loop step size:
-    - PoW multiplier and quota multipliers may change by at most `20%` per window.
-  - Partition safeguard:
-    - mode changes require evidence quorum from at least 2 topology regions; otherwise remain in stricter current mode.
+  1. Stabilize consensus/control lanes (in Emergency).
+  2. Monitor metrics; exit Emergency when conditions met.
+  3. Resume normal operations.
 
 - **Abuse resistance for incident controls**
-  - Incident transitions and overrides require signed evidence bundles.
-  - High-impact emergency overrides require step-up certificates.
+  - Emergency triggers require signed evidence from multiple independent validators.
   - False-alarm reporters can be penalized after adjudication.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Normal
-    Normal --> Elevated: Trigger thresholds and persistence met
-    Elevated --> Emergency: Escalation thresholds met
-    Emergency --> Elevated: Recovery metrics stable for recovery_window
-    Elevated --> Normal: Stable metrics for cooldown_window
-    Emergency --> Normal: Emergency clear and cooldown complete
+    Normal --> Emergency: Finality lag > 60s for 3 blocks
+    Emergency --> Normal: Finality lag < 30s for 10 blocks
 ```
 
 ## Pseudocode (for complex mechanisms)
@@ -156,32 +141,30 @@ function classify_incident(window_metrics, evidence_set):
     return NONE
 
 function apply_mode(mode, state):
-    if mode == ELEVATED:
-        state.pow_multiplier = ELEVATED_POW
-        state.unknown_sender_budget = tighten(state.unknown_sender_budget)
-        reserve_control_lanes(state)
+    if mode == NORMAL:
+        state.pow_multiplier = BASELINE_POW
+        state.unknown_sender_budget = BASELINE_BUDGET
+        state.lane_allocation = BASELINE_LANES
     if mode == EMERGENCY:
-        state.pow_multiplier = EMERGENCY_POW
+        state.pow_multiplier = EMERGENCY_POW  # e.g., 3x
+        state.unknown_sender_budget = EMERGENCY_BUDGET  # e.g., 50% of baseline
+        state.lane_allocation = RESERVE_CONTROL_LANES
         freeze_low_trust_fastpath(state)
         enable_emergency_fee_floor(state)
-        prioritize_artifact_repairs(state)
 
 function maybe_downgrade_mode(mode, metrics):
-    if mode == EMERGENCY and stable(metrics, RECOVERY_WINDOW):
-        return ELEVATED
-    if mode == ELEVATED and stable(metrics, COOLDOWN_WINDOW):
+    # Binary mode: only NORMAL -> EMERGENCY or EMERGENCY -> NORMAL
+    if mode == EMERGENCY and finality_lag(metrics) < RECOVERY_THRESHOLD:
         return NORMAL
+    if mode == NORMAL and finality_lag(metrics) > EMERGENCY_THRESHOLD:
+        return EMERGENCY
     return mode
 
-function transition_allowed(prev_mode, next_mode, timers, score, regional_quorum):
-    if not regional_quorum:
+function transition_allowed(prev_mode, next_mode, metrics, evidence_quorum):
+    # Simplified: just check evidence quorum for transitions
+    if not evidence_quorum:
         return false
-    if prev_mode == ELEVATED and next_mode == NORMAL and timers.elevated_dwell < 15m:
-        return false
-    if prev_mode == EMERGENCY and next_mode == ELEVATED and timers.emergency_dwell < 30m:
-        return false
-    if timers.post_downgrade_cooldown_active and next_mode in [ELEVATED, EMERGENCY]:
-        return critical_invariant_violated(score)
+    # No dwell times or cooldowns - direct transition based on metrics
     return true
 ```
 

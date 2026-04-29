@@ -98,27 +98,47 @@ flowchart TD
     - `expires_at_height`
     - `agent_signature`
 
-- **Policy evaluation order (deterministic)**
-  1. Parse and schema-validate plan.
-  2. Verify signature and key binding (`agent_id -> pubkey`).
-  3. Verify `policy_bundle_hash` is currently active.
-  4. Verify replay protections (`nonce`, `plan_id`, expiry window).
-  5. Verify stage/role authorization for `action_type`.
-  6. Verify resource ACL rights.
-  7. Verify quota and lane budget.
-  8. Verify risk-class step-up requirements.
-  9. Return `ALLOW` or deterministic deny code.
+- **Policy evaluation (deterministic)**
+  - Checks run in parallel with early exit on failure:
+    1. Schema validation + Signature verification (parallel)
+    2. Policy bundle validity (cached per block)
+    3. Replay protection: `plan_id` uniqueness + TTL check
+    4. Stage/role authorization + Resource ACL (parallel)
+    5. Quota check (probabilistic token bucket)
+    6. Risk-class step-up requirements
+  - Returns structured deny reason code on failure.
 
-- **Replay protection**
-  - `plan_id` uniqueness per `agent_id`.
-  - Monotonic nonce window per agent.
-  - TTL by chain height; expired plans are invalid.
-  - Consumed plan IDs cannot execute again.
+- **Policy bundle activation**
+  - Bundles activate at epoch boundaries (deterministic).
+  - A bundle signed by governance quorum is valid from the next epoch start.
+  - No grace periods or height-based activation windows.
+  - Validators cache bundle validity for the current epoch to avoid recomputation.
+
+- **Replay protection (simplified)**
+  - `plan_id` must be unique per `agent_id`.
+  - Strictly monotonic nonce per agent (`last_nonce + 1`).
+  - TTL enforced: `expires_at_height` must be `> current_height` and `< current_height + 10000`.
+  - Consumed plan IDs tracked in state.
+  - Removed: Maximum nonce gap limit (unnecessary with TTL).
 
 - **Step-up controls**
   - `medium`: secondary reviewer attestation for selected actions.
+    - Attestation must be signed by reviewer with `reviewer_eligible` role.
+    - Attestation binds to specific `plan_id` and expires after `100 blocks`.
   - `high`: quorum certificate or delay window plus attestation.
+    - Quorum: `2/3 + 1` of assigned review committee.
+    - Delay window: `minimum 6 blocks` (~1 minute) before execution.
+    - High-risk actions: governance proposals, parameter changes, emergency actions.
   - Risk-class mapping is bundled in signed policy bundle.
+  - **Step-up certificate schema:**
+    - `cert_id`: unique identifier
+    - `plan_id`: bound to specific plan
+    - `issuer_id`: reviewer/committee identity
+    - `issued_height`: block height of issuance
+    - `expiry_height`: `issued_height + 100`
+    - `signature`: issuer signature over cert fields
+    - Single-use: consumed after first use
+    - Non-transferable: bound to original plan_id
 
 - **Tool-call binding**
   - Gateway computes canonical hash of tool call:

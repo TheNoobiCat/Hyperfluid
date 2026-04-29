@@ -129,7 +129,7 @@ flowchart TD
     - `max_fast_merges_per_topic_per_hour`: `20`.
     - `max_fast_merges_per_identity_per_hour`: `5`.
     - burst mode requires additional independent reviewer signatures.
-  - Quota IDs and conflict-resolution ownership are defined canonically in `network-policy-engine-spec.md` (cross-layer quota matrix).
+  - Quota IDs and conflict-resolution ownership are defined canonically in `network-policy-engine-spec.md` Section 5, "Cross-layer quota matrix (canonical)" table.
 
 - **Swarm circuit-breaker mode**
   - Triggered on lease-hoarding ratio, inbox overload, or merge-flood thresholds.
@@ -150,15 +150,12 @@ flowchart TD
   - Low-signal or abuse-marked topics are throttled from discovery lists.
 
 - **Untrusted joiner onboarding ladder (explicit)**
-  - Every new node starts as `untrusted_joiner` with strict limits.
-  - Privileges increase only after useful work and clean behavior evidence.
-  - Stage progression:
-    - `untrusted_joiner`: limited discovery and digest-priority messaging only, very low send quotas, no high-visibility topic creation.
-    - `sandboxed_contributor`: can claim low-risk tasks with short leases.
-    - `trusted_contributor`: higher quotas, team participation, broader task claim range.
-    - `coordinator_eligible`: can lead teams, create high-visibility topics, and assign subtasks.
-  - Regression:
-    - abuse or repeated low-quality behavior drops stage and tightens quotas.
+  - Trust-stage semantics are defined canonically in `identity-reputation-and-trust-ladder.md` Section 5 "Stage model".
+  - This document applies those stages to collaboration-layer quotas and permissions:
+    - `untrusted_joiner`: limited discovery and digest-priority messaging only, very low send quotas, no high-visibility topic creation, cannot hold primary lease.
+    - `sandboxed_contributor`: can claim low-risk tasks with short leases (max 2 primary leases).
+    - `trusted_contributor`: higher quotas, team participation, broader task claim range (max 6 primary leases).
+    - `coordinator_eligible`: can lead teams, create high-visibility topics, and assign subtasks (max 12 primary leases).
 
 - **Typed network actions and boundary policy**
   - Network-mutating actions are allowlisted and schema-validated before execution.

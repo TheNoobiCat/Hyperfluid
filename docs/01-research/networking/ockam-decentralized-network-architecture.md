@@ -115,6 +115,30 @@ flowchart TD
   - **Direct**: 1-hop route (`tcp_connection -> secure_channel_listener`).
   - **Relay**: multi-hop route (`tcp_connection -> relay_forwarder -> target_listener`).
   - **Broadcast/Gossip**: bounded fanout, message IDs, TTL, and duplicate suppression.
+    - Fanout limit: `max 8 peers` per gossip round
+    - Message TTL: `max 16 hops`
+    - Duplicate suppression: Bloom filter with `100,000 entries`, `1% false positive rate`
+    - Gossip budget per sender: `max 100 messages per minute`
+- Discovery specifics:
+  - **Bootstrap nodes**: Dynamic bootstrap set, no hard minimum. Any validator or long-running node can serve as bootstrap.
+    - New nodes discover bootstrap endpoints through:
+      - Embedded seed list in client binary (small, ~10-20 well-known nodes)
+      - Community-maintained bootstrap registry
+      - DNS TXT records for bootstrap discovery
+    - No central bootstrap authority - fully decentralized.
+  - **DHT Kademlia buckets**:
+    - `k = 20` contacts per bucket
+    - Bucket diversity requirement: `min 3 different ASNs` per bucket
+    - Key format: `SHA3-256(identity_pubkey)`
+    - Refresh interval: `every 30 minutes` for stale buckets
+  - **NAT traversal**:
+    - STUN servers: `min 3` geographically distributed
+    - ICE candidate gathering timeout: `5 seconds`
+    - Direct probe interval: `every 60 seconds` with `±20% jitter`
+  - **Relay model**: Every node is a relay by default. Only nodes behind strict NAT/firewall use relay paths.
+    - No special relay rewards - relaying is standard peer behavior.
+    - Relay capacity proportional to stake (staked nodes expected to provide more relay bandwidth).
+    - Nodes can opt-out of relaying if bandwidth-constrained.
 - Swarm-resistant ingress controls:
   - Stage 0 pre-auth gate: per-IP/per-ASN handshake budgets and SYN/handshake concurrency caps.
   - Stage 1 identity gate: per-identity connection caps and join-rate token buckets.

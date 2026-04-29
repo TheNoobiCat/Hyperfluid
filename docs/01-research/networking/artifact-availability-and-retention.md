@@ -1,15 +1,14 @@
 # 1. Title
-- Hyperfluid Artifact Availability and Retention: Content-Addressed Replication, Proof-Carrying Retrieval, and Churn-Resilient Storage
+- Hyperfluid Artifact Availability: Git-Based Content-Addressed Storage for Agent Coordination
 
 # 2. Executive Summary
-- This document specifies how Hyperfluid stores and retrieves artifacts (diff bundles, proofs, research outputs) in a decentralized network.
-- All artifacts are content-addressed and referenced by immutable hashes.
-- Availability is enforced with replication leases, periodic proof-of-possession, and repair workflows.
-- Retrieval is deterministic: clients fetch by hash and verify every chunk before use.
-- Governance and fast-path flows depend on artifact availability; missing data is a protocol-level fault condition.
-- Retention is policy-driven by artifact class, legal/safety flags, and governance relevance.
-- Nodes can prune local storage while preserving global retrievability through repair markets.
-- The key design insight is separating artifact identity (hash) from storage location (dynamic provider set).
+- This document specifies how Hyperfluid handles artifacts (anything agents create: code, diffs, proofs, deliverables) for agent coordination.
+- **Artifacts are just git objects.** The network uses `gix` (Rust git implementation) for storage and retrieval.
+- New nodes sync artifacts via `gix fetch` from peers - no central server, fully distributed.
+- Content-addressing uses git's native object hashes.
+- Governance proposals reference specific git commits; validators verify by fetching and checking out the commit.
+- No complex storage market - standard git mirroring between peers is sufficient.
+- The key design insight: don't over-engineer storage. Use git/gix.
 
 # 3. System Overview
 - Problem solved:
@@ -25,52 +24,52 @@
   - Need low-latency retrieval for consensus-adjacent flows.
 
 # 4. Architecture (CRITICAL SECTION)
-- Components:
-  - **Artifact Manifest Registry**: maps artifact root hash to metadata and class.
-  - **Chunker and Merkle Indexer**: splits artifacts into chunks and builds chunk Merkle root.
-  - **Provider Set Manager**: tracks active providers and replication lease assignments.
-  - **Proof-of-Possession Verifier**: validates periodic chunk challenge responses.
-  - **Repair Coordinator**: re-replicates missing artifacts/chunks when availability drops.
-  - **Retrieval Gateway**: fetches chunks from multiple peers and verifies hash chain locally.
-  - **Retention Controller**: applies class-based retention and pin policies.
+
+**What are artifacts?** Anything agents create and share:
+- Code changes (git commits, diffs)
+- Task deliverables (files, reports)
+- Proof bundles (evidence of work done)
+- Governance proposals (git commits referencing protocol changes)
+- Research outputs (markdown docs, data)
+
+**Storage: Distributed via gix (Rust git implementation)**
+
+Peers host artifacts and serve them to other peers. No central repo. Standard git fetch/clone between nodes.
+
+## How It Works
+
+### New Node Joining
+1. New node joins network, gets peer list
+2. Finds peer that has the artifacts
+3. Fetches via gix: `gix fetch <peer_endpoint>`
+4. Verifies latest commit matches on-chain `git:head`
+5. Now has all artifacts
+
+### Governance Proposals  
+1. Proposer creates git commit with changes
+2. Proposal on-chain references: `proposed_commit_hash`
+3. Validators fetch from proposer's node: `gix fetch <proposer_endpoint> <commit_hash>`
+4. Validators verify hash matches proposal
+5. Proceed with review
+
+### Task Deliverables
+1. Worker agent completes task, creates git commit
+2. Pushes to their local gix repo
+3. Reviewers fetch: `gix fetch <worker_endpoint> <commit_hash>`
+4. Reviewers inspect changes
 
 ```mermaid
 flowchart TD
-    Producer["Artifact Producer"]
-    Chunker["Chunker and Merkle Indexer"]
-    Registry["Artifact Manifest Registry"]
-    Providers["Provider Set Manager"]
-    Proofs["Proof-of-Possession Verifier"]
-    Repair["Repair Coordinator"]
-    Client["Retrieval Gateway"]
-    Retention["Retention Controller"]
-
-    Producer --> Chunker --> Registry
-    Registry --> Providers --> Proofs
-    Proofs --> Repair --> Providers
-    Registry --> Client
-    Providers --> Client
-    Registry --> Retention
+    Node["New Node"]
+    Peer["Peer Validator / Agent"]
+    Artifact["Git Objects"]
+    Chain["On-Chain git:head"]
+    
+    Node -->|gix fetch| Peer
+    Peer -->|serves| Artifact
+    Artifact -->|commit hash| Chain
+    Chain -->|verify| Node
 ```
-
-- Component responsibilities:
-  - Manifest Registry:
-    - Stores `artifact_root_hash`, `chunk_root_hash`, class, size, retention tier, min replicas.
-    - Anchors governance/review references to immutable content.
-  - Provider Set Manager:
-    - Assigns replication leases and tracks liveness/score.
-    - Enforces minimum provider diversity.
-  - Retrieval Gateway:
-    - Parallel-fetches chunks from providers.
-    - Verifies chunk hashes and Merkle inclusion proofs before assembly.
-
-- Step-by-step data flow:
-  1. Producer uploads artifact; chunker computes chunk hashes and Merkle roots.
-  2. Manifest is published and referenced in network transactions.
-  3. Provider set receives replication leases for target replica count.
-  4. Providers answer periodic possession challenges.
-  5. Failed/missing proofs trigger repair replication.
-  6. Clients fetch by root hash and verify full hash chain locally.
 
 # 5. Core Mechanisms
 - **Artifact model**

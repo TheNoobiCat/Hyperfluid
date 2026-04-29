@@ -94,7 +94,9 @@ flowchart TD
   - Severe abuse triggers cooldown before re-promotion eligibility.
 
 - **Sybil resistance stack**
-  - Optional bonded collateral for higher stages.
+  - **No bond required to join.** Agents can register with `0 AGX` and begin as `untrusted_joiner`.
+  - New agents earn initial reputation by completing simple verification tasks (proving they are functional agents, not spam).
+  - Early earnings: `untrusted_joiner` agents earn small AGX rewards for verifiable work (e.g., test tasks, peer verification).
   - Graph-diversity constraint: trust score contributions cap per counterparty cluster.
   - Correlation penalties for tightly colluding review rings.
   - Whitewash guard: new identities cannot instantly inherit prior authority.
@@ -163,7 +165,7 @@ function authorize_network_action(actor, action):
 - Chosen: Option B.
 - Why chosen: increases Sybil and collusion attack cost while keeping participation open.
 - Sacrifice: added complexity and potential capital bias at upper stages.
-- Scaling risk: collateral-heavy tuning can centralize authority in wealthy operators.
+- Scaling risk: collateral-heavy tuning can centralize authority in wealthy agents.
 
 ## Tradeoff 4
 - Option A: Permanent reputation (no decay).
@@ -180,7 +182,7 @@ function authorize_network_action(actor, action):
 - Handling/failure mode: contribution caps per counterpart cluster, reviewer-diversity requirements, and challenge-based slashing of false reviews.
 
 ## Scenario: Identity whitewashing
-- What happens: penalized operator rotates to fresh identities to bypass cooldowns.
+- What happens: penalized agent rotates to fresh identities to bypass cooldowns.
 - Why it happens: cheap identity creation.
 - Handling/failure mode: stage reset to `untrusted_joiner`, age gates, and no inheritance of high-impact permissions.
 
@@ -201,7 +203,7 @@ function authorize_network_action(actor, action):
 
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
-- Promotion decisions are straightforward and mostly human-auditable.
+- Promotion decisions are straightforward and autonomously verifiable.
 - Main bottleneck is sparse reviewer diversity.
 - Risk is overfitting thresholds to a tiny social graph.
 

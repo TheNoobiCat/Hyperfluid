@@ -104,7 +104,7 @@ flowchart TD
 - **Stake lifecycle as economic commitment**
   - Bonding delay prevents instant influence buys.
   - Unbonding delay keeps stake slashable after exit intent.
-  - Inactive-bonded state prevents free reset after poor behavior.
+  - Paused state prevents free reset after poor behavior; stake remains bonded and slashable.
   - Re-entry cooldown and staged trust regain reduce repeat-abuse loops.
 
 - **Useful work rewards without volume farming**
@@ -119,10 +119,26 @@ flowchart TD
     - reward settlement reads only finalized records after challenge close height.
 
 - **Lease economics for anti-hoarding**
-  - Lease claim requires small collateral.
+  - Lease claim requires collateral: `bond = max(10 AGX, 0.5% of task_bounty)`.
+    - Example: 1000 AGX bounty task requires 5 AGX bond.
+    - Example: 50 AGX bounty task requires 10 AGX bond (minimum).
   - Lease renewal requires heartbeat plus evidence of incremental progress.
   - Repeated lease timeout or challenge losses reduce future lease budget.
+    - 1 timeout: warning
+    - 2 timeouts: 50% lease budget reduction
+    - 3 timeouts: 90% lease budget reduction + reputation penalty
   - Shadow claim mechanism enables takeover without global stalls.
+    - Shadow claim grace: `8 minutes` after primary claim.
+    - Auto-takeover if primary lease expires without valid heartbeat.
+
+- **Challenge and settlement timing (concrete)**
+  - Challenge window duration: `144 blocks` (~24 hours at 10s block time).
+  - Provisional settlement: immediate upon review completion.
+  - Final settlement: after challenge window closes.
+  - Challenge bond: `20% of provisional reward` (refunded if challenge succeeds, burned if challenge fails).
+  - Flash loan resistance: stake weighting uses `snapshot at challenge_window_start` (time-delayed).
+  - Front-running protection: challenges use commit-reveal (commit hash, reveal after 6 blocks).
+  - Settlement ordering: FIFO by `submission_id` to prevent MEV extraction.
 
 - **Parameterization strategy**
   - Keep few global constants, tune only bounded multipliers in attack mode.
@@ -131,6 +147,11 @@ flowchart TD
     - proposal deposits and cooldowns,
     - quota refill rates,
     - attack-mode multipliers.
+  - Parameter bounds (v1):
+    - slash_pct: `0.1%` to `100%`
+    - fee_burn_ratio: `50%` to `100%`
+    - challenge_window: `72` to `288` blocks
+    - lease_bond_multiplier: `0.1%` to `2%` of task value
 
 ```mermaid
 stateDiagram-v2
@@ -163,9 +184,10 @@ function apply_penalties(event, actor, state):
     if event.type == EQUIVOCATION:
         slash(actor, state.equivocation_slash_pct)
         jail(actor, state.equivocation_jail_blocks)
+        set_paused(actor)
     if event.type == DOWNTIME_REPEATED:
         slash(actor, state.downtime_slash_pct)
-        set_inactive_bonded(actor)
+        set_paused(actor)
     if event.type == INVALID_GOV_PROPOSAL:
         burn_deposit(actor, state.gov_deposit)
         set_proposal_cooldown(actor, state.gov_cooldown_epochs)

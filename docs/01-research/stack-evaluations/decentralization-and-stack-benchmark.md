@@ -62,6 +62,14 @@ flowchart TD
   - Day-1 committee BFT avoids painful migration from full-set consensus.
   - On-chain `git:head` with deterministic sandbox creates a clearer upgrade authority trail than social-layer repo control.
   - Agent-native transaction design can optimize for autonomous workload profiles.
+  
+- **Production targets**
+  - Consensus throughput: `100 tx/s` sustained, `500 tx/s` burst (with mempool buffering)
+  - Block time: `10 seconds` target
+  - Finality: `instant` (BFT single-block finality)
+  - Committee size: `100 validators` (allows 33 Byzantine tolerance)
+  - State size growth: `< 1GB per month` with pruning
+  - This is designed as production-grade from genesis. No "testnet phase" - all components are built to production standards.
 
 - **Where Hyperfluid can be worse unless fixed**
   - Fee-market economics with EIP-1559 style dynamic pricing for spam prevention and efficient resource allocation.
@@ -213,7 +221,7 @@ function swarm_readiness_gate(metrics):
 # 9. Recommended Architecture
 - Keep the selected library set, but enforce these launch requirements:
   - committee BFT from day 1 with anti-concentration sampling,
-  - slashing-enabled staking with meaningful unbonding delay, `inactive_bonded` state, and 1-epoch reactivation delay,
+  - slashing-enabled staking with meaningful unbonding delay, `paused` state, and 1-epoch resume delay,
   - governance voting restricted to `active` validators at snapshot,
   - EIP-1559 style dynamic fee market with base fee adjustment and fee burn,
   - hermetic deterministic governance execution,
@@ -230,7 +238,7 @@ function swarm_readiness_gate(metrics):
 # 10. Implementation Plan
 1. Define measurable decentralization SLOs and governance safety invariants.
 2. Implement committee sampling with operator cap logic and auditable randomness.
-3. Implement staking economics (unbonding, slashing, probationary/inactive_bonded/jailed states, reactivation delay).
+3. Implement staking economics (unbonding, slashing, paused/active transitions, resume delay).
 4. Implement EIP-1559 style fee market with base fee adjustment, priority fees, and fee burn mechanism.
 5. Implement hermetic governance execution package format and runtime hash pinning.
 6. Build relay and witness incentive modules and diversity telemetry.

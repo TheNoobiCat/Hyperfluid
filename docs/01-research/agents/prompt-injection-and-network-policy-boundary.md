@@ -142,8 +142,32 @@ function execute_network_tool_call(call):
         require call.action_plan or (call.action_plan_id and call.plan_signature)
         plan = resolve_and_verify_plan(call)
         require tool_matches_plan(call.tool_name, call.params, plan)
-    run_tool(call)
+    result = run_tool(call)
+    return sanitize_tool_output(result)
+
+function sanitize_tool_output(output):
+    # Mandatory sanitization pipeline
+    if len(output) > 100000:
+        output = output[:100000] + "...[TRUNCATED]"
+    output = strip_html_scripts(output)
+    output = normalize_unicode(output, form="NFC")
+    output = block_injection_patterns(output)
+    if output.source_tier == "untrusted":
+        output = escape_markdown(output)
+    return output
 ```
+
+- **Tool output sanitization (mandatory)**
+  - All tool outputs treated as untrusted by default.
+  - Sanitization pipeline:
+    1. **Size limit**: `max 100KB` per tool output (truncated if exceeded)
+    2. **Content-type validation**: verify declared type matches actual content
+    3. **HTML/JS stripping**: remove `<script>`, `javascript:`, event handlers
+    4. **Unicode normalization**: NFC form, reject suspicious characters (bidi, homoglyphs)
+    5. **Pattern filtering**: block known injection prefixes ("ignore previous instructions", "system:", etc.)
+    6. **Markdown escape**: code blocks escaped if from untrusted sources
+  - High-risk tools (web_fetch, file_read_external) require additional taint flag.
+  - Taint flag propagates: any action plan derived from tainted output requires additional review.
 
 # 6. Design Decisions & Tradeoffs
 ## Tradeoff 1

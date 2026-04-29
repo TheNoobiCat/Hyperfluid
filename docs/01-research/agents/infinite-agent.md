@@ -54,6 +54,16 @@ flowchart TD
 
 # 4. Architecture (CRITICAL SECTION)
 
+### 4.0 Resource Limits (Enforced)
+- **Memory:** `max 4GB RAM` (enforced via cgroup or process limit)
+- **CPU:** `max 2 CPU cores` (throttle at 80% sustained usage)
+- **Disk:** `max 10GB` for SQLite + logs (rotate at 90%)
+- **File descriptors:** `max 1024` open files
+- **Network:** `max 100 concurrent connections`
+- **Token context:** `max 8192 tokens` for message array + system prompt
+- **Tool timeout:** `max 120 seconds` per tool call
+- **Loop frequency:** `max 1 iteration per 5 seconds` (prevents tight loops)
+
 ### 4.1 Runtime Loop (Pseudocode)
 
 ```python
@@ -242,7 +252,27 @@ The system prompt enforces this cycle. No code checks needed—the agent is told
 
 ### 5.2 Handoff Mechanism (Context Window Boundary)
 
-At 70% token utilization:
+**Trigger:** When `token_count >= 0.70 * max_tokens` (conservative threshold).
+**Alternative trigger:** After `max 50 messages` in current context window (prevents overflow even with counting errors).
+
+**Handoff summary schema (mandatory fields):**
+```json
+{
+  "session_id": "uuid",
+  "timestamp": "ISO8601",
+  "accomplished": ["list of completed tasks with IDs"],
+  "in_progress": ["list of active tasks with IDs and status"],
+  "findings": ["key discoveries or decisions"],
+  "next_actions": ["specific files, line numbers, or changes needed"],
+  "blockers": ["any blocking issues"],
+  "context_window_count": 47
+}
+```
+
+**Validation rules:**
+- `accomplished` + `in_progress` must include all non-done todo items
+- `next_actions` must include at least one concrete next step
+- Missing fields trigger regeneration prompt
 
 1. **Inject reflection prompt** (one user message):
    ```text
@@ -263,29 +293,49 @@ At 70% token utilization:
 
 5. **Continue** → agent has zero discontinuity; it wrote its own memory in its own words
 
-### 5.3 Failure Guard (Pre-Execution Check)
+### 5.3 Failure Guard (Pre-Execution Check, Simplified)
+
+**Scope:** Only applies to network-mutating tools. Local tools fail fast and retry without guard.
+
+**Strict schema enforcement:**
+- Tool calls must match API schema exactly (field order, types, validation).
+- Non-conforming calls rejected at API layer before failure guard.
+- Rationale: Enforce one representation at entry point, no normalization needed.
+
+**Simple exact-match deduplication:**
+- Hash the raw serialized tool call bytes (no normalization).
+- If exact same bytes seen within 1 hour, block with "Duplicate call detected".
+- Block after `3 failures in 1 hour` for any unique call.
+
+**Removed (simplification):**
+- Complex normalization rules (lowercase, sort keys, remove fields, etc.)
+- 6 decimal place truncation (precision loss risk)
+- Strict mode variants
+- Permanent block after 5 attempts
 
 ```python
 def should_block_tool(db, tool_call):
-    """Check if this action has failed recently"""
-    normalized_params = normalize_params(tool_call.params)
-    action_hash = hash(tool_call.name + normalized_params)
+    """Check if this action has failed recently or is duplicate"""
+    # Hash raw serialized call
+    action_hash = sha3_256(tool_call.serialized_bytes)
     
+    # Check for duplicate in last hour
+    if db.scalar("SELECT COUNT(*) FROM recent_calls WHERE hash=?", action_hash) > 0:
+        return True, "duplicate"
+    
+    # Check failure count
     recent_count = db.scalar(
-        """SELECT COUNT(*) FROM failures 
-           WHERE action_hash=? AND ts>?""",
-        action_hash, now() - 3600  # Last hour window
+        "SELECT COUNT(*) FROM failures WHERE hash=? AND ts>?",
+        action_hash, now() - 3600
     )
     
-    return recent_count >= 3  # Block after 3 failures
+    return recent_count >= 3, "too_many_failures"
 
 def execute_with_guard(db, tool_call):
-    if should_block_tool(db, tool_call):
-        # Don't execute; inject into messages
-        error = (
-            f"Tool '{tool_call.name}' has failed 3+ times with these params "
-            f"in the last hour. Replan: try a different approach."
-        )
+    should_block, reason = should_block_tool(db, tool_call)
+    
+    if should_block:
+        error = f"Tool '{tool_call.name}' blocked: {reason}. Replan."
         return {"error": error, "blocked": True}
     
     try:
@@ -293,13 +343,21 @@ def execute_with_guard(db, tool_call):
         return {"success": True, "result": result}
     except Exception as e:
         db.execute(
-            "INSERT INTO failures (ts, action_hash, error_msg) VALUES (?, ?, ?)",
-            (now(), hash(tool_call.name + ...), str(e))
+            "INSERT INTO failures (ts, hash, error_msg) VALUES (?, ?, ?)",
+            (now(), sha3_256(tool_call.serialized_bytes), str(e))
         )
         return {"success": False, "error": str(e)}
 ```
 
 ### 5.4 Project Knowledge Accumulation (remember/forget)
+
+**Knowledge freshness rules:**
+- Default TTL: `30 days` from creation
+- Auto-refresh on read: TTL extended by `+30 days` each time knowledge is referenced
+- Stale knowledge (TTL expired): moved to `stale_knowledge` table, excluded from prompts
+- Conflict detection: if new knowledge contradicts existing (same topic, opposite conclusion), flag for review
+- Knowledge audit: every `100 handoffs`, agent runs `audit_knowledge()` to detect contradictions and stale entries
+- Max knowledge size: `100 active entries` (oldest auto-archived when limit reached)
 
 **remember tool call:**
 ```python

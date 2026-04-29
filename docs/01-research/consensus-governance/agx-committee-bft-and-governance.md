@@ -8,7 +8,7 @@
 - Fee-market economics with EIP-1559 style dynamic pricing: base fee adjusts based on demand, priority fee for faster inclusion, fee burn for deflationary pressure.
 - Governance through `git:head` is a strategic differentiator, but determinism must be enforced with hermetic execution and reproducible input bundles.
 - Decentralization quality depends on operating constraints, not only protocol slogans: relay diversity, committee randomness, witness availability, and anti-capture rules are mandatory.
-- Recommended design introduces a three-tier validator lifecycle (`active`, `probationary`, `inactive_bonded`) and explicit epoch committee sampling with anti-concentration limits.
+- Recommended design introduces a simplified validator lifecycle (`active`, `paused`, `unbonding`, `withdrawn`) and explicit epoch committee sampling with anti-concentration limits.
 - Transaction model should be explicit and minimal: transfer, stake bond/renew/unbond, governance propose/vote, and evidence transactions.
 - This architecture can remain lightweight while being resilient, but only if incentives, liveness logic, and committee selection are specified precisely at launch.
 
@@ -66,7 +66,7 @@ flowchart TD
 - **Transaction types**
   - `TransferTx`: AGX transfer; first outbound transfer must include pubkey reveal.
   - `StakeBondTx`: lock AGX to enter validator candidate pool.
-  - `StakeRenewTx`: extend active stake before/at expiry, or reactivate `inactive_bonded` stake after reactivation delay.
+  - `StakeRenewTx`: extend active stake before/at expiry, or reactivate `paused` stake after 1-epoch wait.
   - `UnbondRequestTx`: begin unbonding timer (funds still slashable during window).
   - `WithdrawUnbondedTx`: withdraw after unbonding delay.
   - `GovernanceProposeTx`: propose candidate `git:head` + deposit.
@@ -78,17 +78,25 @@ flowchart TD
   - First outbound tx must reveal pubkey and prove hash binding.
   - All txs use strict account nonce sequencing and chain-domain separation.
 
-- **Staking and validator lifecycle (recommended)**
+- **Staking and validator lifecycle (simplified to 4 states)**
   - Keep minimum stake threshold but add anti-split logic in committee sampling.
   - 48h lock alone is insufficient; use longer unbonding delay for stronger economic accountability.
   - Add slashing:
     - strong slash for equivocation,
     - smaller slash for repeated downtime.
-  - Use lifecycle states:
-    - `active`,
-    - `probationary` (temporary misses),
-    - `inactive_bonded` (persistent misses or expired-not-renewed, still bonded).
-  - Auto-restake remains useful but must include randomized backoff.
+  - Use simplified lifecycle states:
+    - `active`: Currently validating and eligible for committees.
+    - `paused`: Not validating (missed >20% of blocks in epoch), stake still bonded. Can resume after 1-epoch wait.
+    - `unbonding`: User requested exit, 14-day timer running, funds slashable.
+    - `withdrawn`: Fully exited, funds released.
+  - Removed: `probationary` state (complex recovery logic, hard to test).
+  - Removed: `inactive_bonded` state (merged into `paused`).
+  - State transitions:
+    - Active → Paused: Miss >20% blocks in epoch.
+    - Paused → Active: Submit ResumeTx, wait 1 epoch.
+    - Active/Paused → Unbonding: Submit UnbondRequestTx.
+    - Unbonding → Withdrawn: After 14-day unbonding delay.
+  - Slashing: Deduct stake from any state, continue from same state (not a separate state).
   - Governance voting eligibility: only `active` validators at governance snapshot block can submit `GovernanceVoteTx`.
 
 - **Default protocol parameters (recommended launch values)**
@@ -100,26 +108,48 @@ flowchart TD
   - `equivocation_jail`: `30 days` minimum before re-entry eligibility.
   - `governance_proposal_deposit`: `500 AGX` (burn on invalid/non-deterministic proposal).
   - `committee_overlap`: `33%` retained members between consecutive epochs.
-  - `reactivation_delay`: `1 epoch` before `inactive_bonded` validators become committee-eligible after `StakeRenewTx`.
+  - `resume_delay`: `1 epoch` before `paused` validators can resume to `active`.
 
 - **Plain-language definitions**
   - **Bonding delay**: waiting period after staking before validator can be selected into committees.
   - **Unbonding timer**: cooldown period after requesting exit; stake is locked and can still be slashed until timer ends.
-  - **Probationary**: warning state for validators with short-term misses; recover in grace window to return active.
-  - **Inactive-bonded**: not validating and cannot vote, but stake remains locked and slashable until unbond withdrawal.
+  - **Paused**: validator missed too many blocks, not currently validating, but can resume after wait. Stake remains bonded and slashable.
   - **Equivocation**: validator signs two conflicting votes for the same height/round (double-signing).
   - **EvidenceTx**: transaction that submits cryptographic proof of validator fault (for example, equivocation or severe liveness failure) so the chain can slash/jail automatically.
 
-- **Penalty matrix (recommended defaults)**
-  - Missed committee duties in one liveness window: move to `probationary` and slash `0.1%`.
-  - Repeated misses in rolling windows: move to `inactive_bonded` and slash `1%`.
-  - Proven equivocation: immediate `10%` slash + `30 days` jail + state set to `inactive_bonded`.
+  - **Penalty matrix (recommended defaults)**
+  - Missed committee duties in one liveness window: move to `paused` and slash `0.1%`.
+    - Liveness window: `8192 blocks` (~1 day at 10s block time).
+    - Threshold: `miss_rate > 20%` within window triggers paused.
+  - To resume from paused: submit `ResumeTx`, wait `1 epoch`, return to `active`.
+  - Proven equivocation: immediate `10%` slash + `30 days` jail + move to `paused`.
+    - Evidence validity window: `equivocation_proof must be included within 24 hours` (8640 blocks) of the equivocation event.
+    - If evidence submitted after window: slash cancelled, but validator marked for review.
+  - **No-vote timeout semantics (unified across all subsystems)**
+    - Timeout in any review/governance context = `no vote` (not deny, not abstain).
+    - No-vote does not count toward quorum threshold.
+    - No-vote does not penalize validator (distinguish from active deny).
+    - Height-based timeouts preferred over wall-clock where possible.
+    - Wall-clock timeout (e.g., 30 min review) maps to approximate block height with `±2 block` tolerance.
 
-- **Committee BFT from day 1**
-  - Epoch seed derived from prior finalized randomness beacon.
+  - **Committee BFT from day 1**
+  - Epoch seed derived from drand randomness beacon.
+    - Randomness source: drand network (e.g., drand.cloudflare.com or custom Hyperfluid drand).
+    - Implementation: Use `drand` Rust crate for verification and retrieval.
+    - Each epoch fetches the drand round corresponding to epoch start height.
+    - Seed = `SHA3-256(drand_round_signature + epoch_number + previous_block_hash)`.
+    - drand signatures are publicly verifiable and unpredictable, eliminating commit-reveal complexity.
+    - Fallback: If drand unavailable, use `SHA3-256(previous_seed + block_hash_chain + epoch_number)`.
   - Sample committee by stake-weighted VRF-like draw with per-operator cap.
+    - Committee size: `100 validators` at genesis.
+    - Operator cap: `max 15% of committee` per operator identity.
+    - Anti-split: detect correlated validator keys via stake graph analysis, apply cap to clusters.
   - Committee size chosen for target safety probability and latency budget.
+    - Target: `99.9%` safety against `f < 33%` Byzantine.
+    - Latency budget: `< 3 seconds` finality at median.
   - Rotate committees each epoch with partial overlap to avoid abrupt liveness loss.
+    - Epoch length: `8192 blocks` (~1 day).
+    - Overlap: `33%` retained, `67%` rotated maximum.
 
 - **Governance determinism**
   - Proposal must be fast-forward or deterministic clean merge.
@@ -143,9 +173,11 @@ flowchart TD
       - fresh context window,
       - fixed system prompt for governance review only,
       - single tool: `review(decision: approve|deny, reason)`.
-    - subagent timeout is `30 minutes`; on timeout, no vote is emitted for that validator.
+    - **subagent timeout is `30 minutes`** - this is a local agent timeout to prevent the review subagent from getting stuck or wasting time. It is NOT a consensus timeout.
+    - on timeout: review subagent terminates, no vote is emitted. The validator can retry the review later.
     - when `review(...)` is called, runtime emits `GovernanceVoteTx` and closes sandbox.
     - main agent branch resumes after sandbox termination.
+    - Note: There is no network-level timeout for voting. Validators have the full governance window to submit votes.
   - Canonical implementation details for topic-level fast-path state machine and challenge/rollback semantics are defined in `research/agents/topic-fastpath-protocol-spec.md`.
   - Canonical implementation details for action-plan validation, replay protection, and policy bundle pinning are defined in `research/agents/network-policy-engine-spec.md`.
 
@@ -170,6 +202,17 @@ flowchart TD
     - unknown identity tx budget starts at `5 tx/min`.
     - budget scales with stake and clean history.
     - repeated reject/spam ratio above threshold triggers temporary mempool quarantine.
+  - **Rate limiting (tiered flat rates)**
+    - Per-IP connection limit: `max 10 concurrent connections` per IP.
+    - Per-identity tx burst: `max 20 txs in 60 seconds`.
+    - Tiered flat rate limits by trust stage:
+      - `untrusted_joiner`: `5 tx/min`
+      - `sandboxed_contributor`: `15 tx/min`
+      - `trusted_contributor`: `30 tx/min`
+      - `coordinator_eligible`: `60 tx/min`
+    - Stake affects trust ladder progression, not direct rate scaling.
+    - Rationale: Simpler, predictable, no perverse incentives to split stake.
+    - Removed: Logarithmic stake-weighted formula (complex and gameable).
   - Circuit-breaker mode (automatic):
     - triggers when reject ratio, queue depth, or finality latency breaches thresholds.
     - raises PoW target, enables emergency micro-fee floor, and tightens unknown-sender quotas.
@@ -186,18 +229,14 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Candidate
-    Candidate --> Active: StakeBond and selected in committee set
-    Active --> Probationary: Missed participation window
-    Probationary --> Active: Recovery in grace window
-    Probationary --> InactiveBonded: Grace exceeded
-    Active --> InactiveBonded: Stake expiry without renew
-    InactiveBonded --> Active: StakeRenew plus 1 epoch reactivation delay
+    [*] --> Active: StakeBond and selected
+    Active --> Paused: Miss >20% blocks in epoch
+    Paused --> Active: ResumeTx + 1 epoch wait
     Active --> Unbonding: UnbondRequest
-    InactiveBonded --> Unbonding: UnbondRequest
-    Unbonding --> Withdrawn: WithdrawUnbonded after delay
-    Active --> Slashed: Equivocation or severe fault
-    Probationary --> Slashed: Repeated faults
+    Paused --> Unbonding: UnbondRequest
+    Unbonding --> Withdrawn: After 14-day delay
+    Active --> Active: Slash (deduct stake)
+    Paused --> Paused: Slash (deduct stake)
 ```
 
 ## Pseudocode (for complex mechanisms)
@@ -270,6 +309,9 @@ function admit_network_action(actor, action, state):
     require within_action_quota(actor.id, action.type)
     if action.risk_class == HIGH:
         require has_step_up_certificate(action)
+        require step_up_cert.single_use == true
+        require step_up_cert.bound_plan_id == action.plan_id
+        require step_up_cert.issued_height + 100 >= current_height  # valid for 100 blocks
     return ALLOW
 ```
 
@@ -284,7 +326,7 @@ function admit_network_action(actor, action, state):
 
 ## Tradeoff 2
 - Option A: 48h lock and no slashing.
-- Option B: lock + longer unbonding + slashing + probationary liveness.
+- Option B: lock + longer unbonding + slashing + paused state for liveness failures.
 - Chosen: Option B.
 - Why chosen: materially stronger economic security and better Byzantine deterrence.
 - Sacrifice: higher operator capital friction and slower stake mobility.
@@ -315,7 +357,7 @@ function admit_network_action(actor, action, state):
 ## Scenario: Mass validator churn
 - What happens: committee quality degrades and block production stalls.
 - Why it happens: synchronized restarts, network incidents, coordinated inactivity.
-- Handling/failure mode: overlap between consecutive committees, probationary window, and backup proposer schedule.
+- Handling/failure mode: overlap between consecutive committees, paused validator handling, and backup proposer schedule.
 
 ## Scenario: Fee market manipulation
 - What happens: attackers spam high-fee transactions to inflate base fee and price out legitimate users.
@@ -373,7 +415,7 @@ function admit_network_action(actor, action, state):
 # 9. Recommended Architecture
 - Launch architecture:
   - committee BFT from genesis,
-  - staking with unbonding + slashing + probationary status,
+  - staking with unbonding + slashing + paused state for liveness failures,
   - adaptive anti-spam admission,
   - deterministic `git:head` governance sandboxing,
   - lightweight state commitments with incentivized witness distribution.
@@ -389,7 +431,7 @@ function admit_network_action(actor, action, state):
 
 # 10. Implementation Plan
 1. Specify transaction schemas and canonical signing domains.
-2. Implement staking state machine with unbonding, slashing, and probationary transitions.
+2. Implement simplified staking state machine with unbonding, slashing, and paused/active transitions (4 states).
 3. Implement committee selection module with stake-weighted sampling and operator caps.
 4. Integrate Malachite consensus for committee operation and epoch rotation.
 5. Implement admission controls (PoW retargeting, quotas, peer budgets).
