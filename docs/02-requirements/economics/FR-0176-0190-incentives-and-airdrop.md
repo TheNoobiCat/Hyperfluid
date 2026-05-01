@@ -326,5 +326,5 @@
 - [ ] Pass criteria are defined before simulation runs.
 - [ ] Results inform parameter tuning and mechanism adjustments.
 
-**Dependencies:** FR-0190
+**Dependencies:** FR-0154, FR-0155
 **Tags:** must-have
