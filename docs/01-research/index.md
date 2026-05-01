@@ -22,7 +22,7 @@ All research documents follow the template defined in `_template.md`:
 ## Canonical Terminology
 
 Use these exact forms across all documents:
-- `inactive_bonded` - Validator lifecycle state (underscore)
+- `active` / `paused` / `unbonding` / `withdrawn` - Validator lifecycle states (4-state model; `inactive_bonded` merged into `paused`)
 - `untrusted_joiner` - Initial trust stage (underscore)
 - `sandboxed_contributor` - Trust stage after initial work (underscore)
 - `trusted_contributor` - Established contributor (underscore)
@@ -43,6 +43,8 @@ Use these exact forms across all documents:
 | `agents/collaboration-layer-parallel-teams.md` | Parallel task execution and team formation | trust-ladder, policy-engine, proof-of-work |
 | `agents/inbox-attention-control-and-anti-spam.md` | Inbox prioritization and anti-spam | trust-ladder, policy-engine |
 | `agents/topic-fastpath-protocol-spec.md` | Fast-path topic coordination protocol | agx-committee, policy-engine |
+| `agents/automatic-vs-agent-controlled.md` | Boundary between automatic node ops and agent decisions | agx-committee, infinite-agent |
+| `agents/agent-tools-spec.md` | Agent tool schemas and CLI specification | infinite-agent, automatic-vs-agent-controlled |
 
 ### Policy and Security
 
@@ -51,6 +53,7 @@ Use these exact forms across all documents:
 | `agents/network-policy-engine-spec.md` | Action plan validation and policy engine | **Canonical for quotas and action plans** |
 | `agents/prompt-injection-and-network-policy-boundary.md` | Prompt injection defense architecture | policy-engine |
 | `agents/prompt-injection-redteam-and-evals.md` | Red team evaluation framework | policy-engine, prompt-injection-boundary |
+| `security/telemetry-threat-model.md` | Threat model for compromised telemetry and metric manipulation | incident-response, agx-committee |
 
 ### Quality and Review
 
@@ -73,11 +76,27 @@ Use these exact forms across all documents:
 | `networking/artifact-availability-and-retention.md` | Content-addressed artifact storage | None |
 | `networking/decentralized-incident-response-and-recovery.md` | Incident response and recovery | agx-committee, policy-engine |
 
-### Stack Evaluation
+### Stack Evaluation and Resource Models
 
 | Document | Description | Key Cross-References |
 |----------|-------------|---------------------|
 | `stack-evaluations/decentralization-and-stack-benchmark.md` | Decentralization analysis and benchmarks | artifact-availability, policy-engine |
+| `agents/token-budget-resource-model.md` | Formal token budget resource model for agent context | token-efficiency, infinite-agent, network-policy-engine |
+
+## Canonical Source Map
+
+The following canonical sources of truth **must not be redefined** in other documents. Reference them rather than duplicating.
+
+| Concept | Canonical Document | Section | Do Not Redefine In |
+|---------|-------------------|---------|-------------------|
+| Trust stages | `agents/identity-reputation-and-trust-ladder.md` | Section 5 | Any other document |
+| Validator states | `consensus-governance/agx-committee-bft-and-governance.md` | Section 5 | Any other document |
+| Action plan schema | `agents/network-policy-engine-spec.md` | Section 5 | prompt-injection-boundary, agx-committee |
+| Quota IDs and values | `agents/network-policy-engine-spec.md` | Section 5 table | inbox-anti-spam, collaboration-layer, agx-economics |
+| Challenge window duration | `consensus-governance/agx-economics-and-adversarial-incentives.md` | Section 5 | proof-of-work-quality |
+| No-vote timeout semantics | `consensus-governance/agx-committee-bft-and-governance.md` | Section 5 lines 139-144 | topic-fastpath-protocol-spec |
+| Fast-path state machine | `agents/topic-fastpath-protocol-spec.md` | Section 5 | agx-committee-bft-and-governance |
+| Token budget model | `agents/token-budget-resource-model.md` | Section 5 | token-efficiency |
 
 ## Key Cross-Reference Map
 
@@ -95,8 +114,8 @@ Use these exact forms across all documents:
 - **Used by**: prompt-injection-boundary, agx-committee
 
 ### Quota Matrix
-- **Canonical definition**: `agents/network-policy-engine-spec.md` Section 5, table
-- **Used by**: inbox-anti-spam, collaboration-layer
+- **Canonical definition**: `agents/network-policy-engine-spec.md` Section 5, "Cross-layer quota matrix (canonical)" table
+- **Used by**: inbox-anti-spam, collaboration-layer, agx-economics
 
 ### Challenge Window Duration
 - **Canonical value**: `144 blocks` (~24 hours)
@@ -108,6 +127,11 @@ Use these exact forms across all documents:
 - **Semantics**: Timeout = no vote (not deny), doesn't count toward quorum, no penalty
 - **Used by**: topic-fastpath-protocol-spec
 
+### Review Timeout Semantics
+- **Review assignment deadline**: 72 hours (standard), 24 hours (urgent) - defined in `proof-of-work-quality-and-review-markets.md`
+- **Review sandbox timeout**: 30 minutes (local agent runtime limit) - defined in `agx-committee-bft-and-governance.md` lines 187-191
+- These are distinct timeouts and must not be conflated.
+
 ## Research-to-Specification Mapping
 
 Per BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md, research documents map to specifications as follows:
@@ -115,6 +139,7 @@ Per BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md, research documents map to specificat
 | Research Document | Target Specifications |
 |-------------------|----------------------|
 | infinite-agent.md | runtime/agent-runtime-spec.md |
+| token-budget-resource-model.md | runtime/agent-runtime-spec.md |
 | network-policy-engine-spec.md | runtime/policy-engine-spec.md |
 | proof-of-work-quality-and-review-markets.md | runtime/review-engine-spec.md |
 | topic-fastpath-protocol-spec.md | protocol/fastpath-spec.md |
@@ -122,13 +147,14 @@ Per BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md, research documents map to specificat
 | agx-committee-bft-and-governance.md | protocol/consensus-spec.md, governance-spec.md, staking-spec.md |
 | ockam-decentralized-network-architecture.md | protocol/p2p-wire-spec.md |
 | artifact-availability-and-retention.md | storage/artifact-availability-spec.md |
+| telemetry-threat-model.md | security/telemetry-spec.md, evals/prompt-injection-eval-plan.md |
 
 ## Implicit Knowledge Gaps
 
-The following areas need research documents before Layer 4 (Specifications):
+The following areas still need research documents before Layer 4 (Specifications):
 
-1. **Token budget resource model** - Formalize token limits as protocol resource
-2. **Telemetry threat model** - Threat model for compromised telemetry
+1. ~~**Token budget resource model** - Formalize token limits as protocol resource~~ **RESOLVED** - See `agents/token-budget-resource-model.md`
+2. ~~**Telemetry threat model** - Threat model for compromised telemetry~~ **RESOLVED** - See `security/telemetry-threat-model.md`
 3. **Sandbox escape analysis** - Security analysis of execution sandboxing
 4. **Content-addressing SLA** - Availability guarantees for artifacts
 5. **Review independence metrics** - Quantitative independence measures
@@ -147,4 +173,4 @@ Maintain bidirectional links as the build system progresses.
 
 ---
 
-*Last updated: 2026-04-29*
+*Last updated: 2026-05-01*

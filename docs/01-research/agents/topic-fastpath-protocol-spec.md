@@ -97,7 +97,7 @@ flowchart TD
   - Deny threshold:
     - `f + 1` cryptographically valid denies can short-circuit proposal.
   - Timeout behavior:
-    - non-responders emit no vote (timeout = no vote, not deny; see `agx-committee-bft-and-governance.md` Section 5 "No-vote timeout semantics").
+    - non-responders emit no vote (timeout = no vote, not deny; canonical semantics in `../consensus-governance/agx-committee-bft-and-governance.md` lines 139-144, "No-vote timeout semantics").
 
 - **Deterministic review runtime**
   - Main agent branch pauses while review sandbox runs.

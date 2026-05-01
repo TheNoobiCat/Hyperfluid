@@ -84,14 +84,15 @@ flowchart TD
     - pull artifact chunks by hash and recompute `artifact_root_hash`,
     - execute deterministic checker set for task class (`checker_bundle_hash` pinned per epoch),
     - emit `ObjectiveCheckRecord` with `(checker_bundle_hash, pass_fail_vector, metrics_hash, verifier_sig)`.
-  - Reviewer verification:
-    - assigned reviewers independently fetch artifacts by hash,
-    - run reproducibility replay against the same `execution_profile_hash`,
-    - publish `ReviewRecord(submission_id, score, verdict, reason_hash, reviewer_sig)`.
-  - Finality verification:
-    - challenge window closes at deterministic height `h_close`,
-    - concrete duration: `144 blocks` (~24 hours at 10s block time), see `agx-economics-and-adversarial-incentives.md` Section 5 "Challenge and settlement timing",
-    - settlement only accepts records with valid signatures, matching hashes, and finalized inclusion proofs,
+    - Reviewer verification:
+      - assigned reviewers independently fetch artifacts by hash,
+      - run reproducibility replay against the same `execution_profile_hash`,
+      - publish `ReviewRecord(submission_id, score, verdict, reason_hash, reviewer_sig)`.
+    - Finality verification:
+      - challenge window closes at deterministic height `h_close`,
+      - concrete duration: `144 blocks` (~24 hours at 10s block time),
+      - canonical definition: `agx-economics-and-adversarial-incentives.md` Section 5 "Challenge and settlement timing" (lines 160-167),
+      - settlement only accepts records with valid signatures, matching hashes, and finalized inclusion proofs,
     - payout uses only finalized records in canonical chain state.
 
 - **Scoring model**
@@ -269,14 +270,15 @@ function manual_governance_escalation(evidence):
 - High-value tasks (>10k AGX): `5 reviewers`
 - Niche domains (low reviewer pool): `2 reviewers` minimum, flag for manual review
 - Max reviewers per task: `7` (diminishing returns beyond this)
-- Reviewer assignment constraints:
-  - Geographic spread: `min 2 different regions`
+  - Reviewer assignment constraints:
+    - Geographic spread: `min 2 different regions` (regions: Americas, EMEA, APAC)
   - Temporal spread: `reviewers must have been active in last 7 days`
   - Stake spread: `max 30% of reviewers from same stake tier`
   - Pair frequency: `same reviewer-author pair max 1 in 10 tasks`
 - Reviewer pool minimum: `50 eligible reviewers` for auto-assignment; below this threshold, manual assignment required
-- Review timeout: `72 hours` for standard tasks, `24 hours` for urgent tasks
-  - Note: This is the protocol-level deadline for reviewer assignment. Distinct from review sandbox timeout (30 min) which is a local agent runtime limit defined in `agx-committee-bft-and-governance.md`.
+  - Review assignment deadline: `72 hours` for standard tasks, `24 hours` for urgent tasks
+    - This is the time window within which assigned reviewers must submit their review verdict.
+    - Distinct from the **review sandbox timeout** (`30 minutes`), which is a local agent runtime limit for executing a single review within a sandboxed subagent. See `agx-committee-bft-and-governance.md` lines 187-191 for sandbox timeout semantics.
 - Reviewer load cap: `max 5 concurrent review assignments` per reviewer
 
 # 9. Recommended Architecture

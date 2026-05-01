@@ -136,6 +136,7 @@ flowchart TD
   - Proven equivocation: immediate `10%` slash + `30 days` jail + move to `paused`.
     - Evidence validity window: `equivocation_proof must be included within 24 hours` (8640 blocks) of the equivocation event.
     - If evidence submitted after window: slash cancelled, but validator marked for review.
+    - After jail period expires: validator may submit `ResumeTx`, wait `1 epoch`, then return to `active`.
   - **No-vote timeout semantics (unified across all subsystems)**
     - Timeout in any review/governance context = `no vote` (not deny, not abstain).
     - No-vote does not count toward quorum threshold.
@@ -189,8 +190,8 @@ flowchart TD
     - when `review(...)` is called, runtime emits `GovernanceVoteTx` and closes sandbox.
     - main agent branch resumes after sandbox termination.
     - Note: There is no network-level timeout for voting. Validators have the full governance window to submit votes.
-  - Canonical implementation details for topic-level fast-path state machine and challenge/rollback semantics are defined in `research/agents/topic-fastpath-protocol-spec.md`.
-  - Canonical implementation details for action-plan validation, replay protection, and policy bundle pinning are defined in `research/agents/network-policy-engine-spec.md`.
+  - Canonical implementation details for topic-level fast-path state machine and challenge/rollback semantics are defined in `../agents/topic-fastpath-protocol-spec.md`.
+  - Canonical implementation details for action-plan validation, replay protection, and policy bundle pinning are defined in `../agents/network-policy-engine-spec.md`.
 
 - **Fee-market anti-spam**
   - Base fee adjusts dynamically based on mempool load (EIP-1559 model).
@@ -227,7 +228,7 @@ flowchart TD
   - Circuit-breaker mode (automatic):
     - triggers when reject ratio, queue depth, or finality latency breaches thresholds.
     - raises PoW target, enables emergency micro-fee floor, and tightens unknown-sender quotas.
-  - Canonical quota IDs and cross-layer precedence are defined in `research/agents/network-policy-engine-spec.md`.
+  - Canonical quota IDs and cross-layer precedence are defined in `../agents/network-policy-engine-spec.md` Section 5, "Cross-layer quota matrix (canonical)".
 
 - **Network policy boundary (minimal, deterministic)**
   - All network-mutating calls must pass a network policy gate:

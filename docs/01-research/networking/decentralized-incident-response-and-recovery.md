@@ -180,10 +180,10 @@ function transition_allowed(prev_mode, next_mode, metrics, evidence_quorum):
 ## Tradeoff 2
 - Option A: Single emergency mode.
 - Option B: multi-level (`Normal`, `Elevated`, `Emergency`) modes.
-- Chosen: Option B.
-- Why chosen: enables proportional response and smoother recovery.
-- Sacrifice: increased policy complexity.
-- Scaling risk: mode-transition bugs can create oscillation under noisy metrics.
+- Chosen: Option A (binary `Normal`/`Emergency` only).
+- Why chosen: `Elevated` intermediate mode was removed to simplify implementation, reduce oscillation risk, and eliminate composite "breach score" computation. See Section 5 for the simplified binary trigger logic.
+- Sacrifice: less granular response than a 3-level system.
+- Scaling risk: flips directly from Normal to Emergency may feel abrupt; mitigated by persistence windows and independent reporter quorum.
 
 ## Tradeoff 3
 - Option A: Immediate full rollback on bad-upgrade suspicion.
@@ -195,11 +195,11 @@ function transition_allowed(prev_mode, next_mode, metrics, evidence_quorum):
 
 ## Tradeoff 4
 - Option A: Keep all traffic classes active during incident.
-- Option B: prioritize control/evidence lanes and throttle low-value traffic.
+- Option B: Prioritize control/evidence lanes and throttle low-value traffic.
 - Chosen: Option B.
-- Why chosen: preserves safety/liveness-critical operations during stress.
-- Sacrifice: temporary collaboration throughput degradation.
-- Scaling risk: prolonged throttling can create backlog shock after recovery.
+- Why chosen: Preserves safety/liveness-critical operations during stress.
+- Sacrifice: Temporary collaboration throughput degradation.
+- Scaling risk: Prolonged throttling can create backlog shock after recovery.
 
 # 7. Failure Modes & Edge Cases
 ## Scenario: False positive emergency trigger

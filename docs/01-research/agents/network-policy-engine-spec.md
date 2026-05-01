@@ -118,13 +118,14 @@ flowchart TD
   - `plan_id` must be unique per `agent_id`.
   - Strictly monotonic nonce per agent (`last_nonce + 1`).
   - TTL enforced: `expires_at_height` must be `> current_height` and `< current_height + 10000`.
+  - Recommended default TTL: `1000-5000 blocks` (approx 2.8-14 hours at 10s block time).
   - Consumed plan IDs tracked in state.
   - Removed: Maximum nonce gap limit (unnecessary with TTL).
 
 - **Step-up controls**
   - `medium`: secondary reviewer attestation for selected actions.
     - Attestation must be signed by reviewer with `reviewer_eligible` role.
-    - Attestation binds to specific `plan_id` and expires after `100 blocks`.
+    - Attestation binds to specific `plan_id` and expires after `100 blocks` from issuance height (`issued_height + 100`).
   - `high`: quorum certificate or delay window plus attestation.
     - Quorum: `2/3 + 1` of assigned review committee.
     - Delay window: `minimum 6 blocks` (~1 minute) before execution.

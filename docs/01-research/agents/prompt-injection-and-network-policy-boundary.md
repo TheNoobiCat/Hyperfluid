@@ -78,7 +78,7 @@ flowchart TD
     - `nonce`
     - `expires_at_height`
     - `agent_signature`
-  - Normative serialization, replay semantics, and execution binding are defined in `research/agents/network-policy-engine-spec.md`.
+  - Normative serialization, replay semantics, and execution binding are defined in `network-policy-engine-spec.md` (same directory).
   - Free text alone never executes tools.
   - Tool-call binding rule:
     - every network-mutating tool call must include either:
@@ -163,7 +163,7 @@ function sanitize_tool_output(output):
     1. **Size limit**: `max 100KB` per tool output (truncated if exceeded)
     2. **Content-type validation**: verify declared type matches actual content
     3. **HTML/JS stripping**: remove `<script>`, `javascript:`, event handlers
-    4. **Unicode normalization**: NFC form, reject suspicious characters (bidi, homoglyphs)
+    4. **Unicode normalization**: NFC (Normalization Form Canonical Composition) ensures composed characters have a single consistent representation; reject suspicious characters (bidi, homoglyphs)
     5. **Pattern filtering**: block known injection prefixes ("ignore previous instructions", "system:", etc.)
     6. **Markdown escape**: code blocks escaped if from untrusted sources
   - High-risk tools (web_fetch, file_read_external) require additional taint flag.

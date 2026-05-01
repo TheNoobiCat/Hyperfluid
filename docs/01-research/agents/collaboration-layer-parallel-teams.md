@@ -129,7 +129,7 @@ flowchart TD
     - `max_fast_merges_per_topic_per_hour`: `20`.
     - `max_fast_merges_per_identity_per_hour`: `5`.
     - burst mode requires additional independent reviewer signatures.
-  - Quota IDs and conflict-resolution ownership are defined canonically in `network-policy-engine-spec.md` Section 5, "Cross-layer quota matrix (canonical)" table.
+  - Quota IDs and conflict-resolution ownership are defined canonically in `network-policy-engine-spec.md` Section 5, "Cross-layer quota matrix (canonical)".
 
 - **Swarm circuit-breaker mode**
   - Triggered on lease-hoarding ratio, inbox overload, or merge-flood thresholds.

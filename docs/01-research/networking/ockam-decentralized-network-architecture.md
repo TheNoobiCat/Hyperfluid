@@ -115,7 +115,7 @@ flowchart TD
   - **Direct**: 1-hop route (`tcp_connection -> secure_channel_listener`).
   - **Relay**: multi-hop route (`tcp_connection -> relay_forwarder -> target_listener`).
   - **Broadcast/Gossip**: bounded fanout, message IDs, TTL, and duplicate suppression.
-    - Fanout limit: `max 8 peers` per gossip round
+    - Fanout limit: `max 8 peers` per gossip round (values chosen for 100k+ node scalability target with <1% amplification factor)
     - Message TTL: `max 16 hops`
     - Duplicate suppression: Bloom filter with `100,000 entries`, `1% false positive rate`
     - Gossip budget per sender: `max 100 messages per minute`

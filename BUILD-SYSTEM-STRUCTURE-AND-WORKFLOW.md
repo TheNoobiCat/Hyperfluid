@@ -457,6 +457,7 @@ Map research documents to their primary target specification layers:
 | Research Document | Primary Layer | Target Specs |
 |-------------------|---------------|--------------|
 | `research/agents/infinite-agent.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
+| `research/agents/token-budget-resource-model.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
 | `research/agents/network-policy-engine-spec.md` | Layer 4 | `runtime/policy-engine-spec.md` |
 | `research/agents/proof-of-work-quality-and-review-markets.md` | Layer 4 | `runtime/review-engine-spec.md` |
 | `research/agents/topic-fastpath-protocol-spec.md` | Layer 4 | `protocol/fastpath-spec.md` |
@@ -469,6 +470,7 @@ Map research documents to their primary target specification layers:
 | `research/networking/ockam-decentralized-network-architecture.md` | Layer 4 | `protocol/p2p-wire-spec.md` |
 | `research/networking/artifact-availability-and-retention.md` | Layer 4 | `storage/artifact-availability-spec.md` |
 | `research/networking/decentralized-incident-response-and-recovery.md` | Layers 4, 7 | `security/incident-response-spec.md`, `07-operations/runbooks/` |
+| `research/security/telemetry-threat-model.md` | Layers 2, 6 | `security/telemetry-spec.md`, `evals/prompt-injection-eval-plan.md` |
 | `research/stack-evaluations/decentralization-and-stack-benchmark.md` | Layer 1 | Informs all specs |
 
 ---
@@ -476,7 +478,7 @@ Map research documents to their primary target specification layers:
 ## Terminology
 
 **Canonical terms** (use consistently across all layers):
-- `inactive_bonded` - Validator lifecycle state
+- `active` / `paused` / `unbonding` / `withdrawn` - Validator lifecycle states (4-state model; `inactive_bonded` has been merged into `paused`)
 - `untrusted_joiner` - Initial trust stage
 - `sandboxed_contributor` - Trust stage after initial work
 - `trusted_contributor` - Established contributor
@@ -598,10 +600,10 @@ The following assumptions, constraints, and contextual knowledge exist but are n
 
 | Implicit Knowledge | Should Live In | Current State |
 |--------------------|----------------|---------------|
-| Token budget resource model | `runtime/agent-runtime-spec.md` | Unwritten |
+| Token budget resource model | `runtime/agent-runtime-spec.md` | Written: `research/agents/token-budget-resource-model.md` |
 | No-vote timeout fairness proof | `protocol/governance-spec.md` | Implied only |
 | Plan replay protection E2E | `runtime/policy-engine-spec.md` + storage specs | Partial |
-| Telemetry threat model | `security/` research → specs | Unwritten |
+| Telemetry threat model | `security/` research → specs | Written: `research/security/telemetry-threat-model.md` |
 | Sandbox escape analysis | `security/` research → specs | Unwritten |
 | Content-addressing SLA | `storage/artifact-availability-spec.md` | Assumed |
 | Review independence metrics | `runtime/review-engine-spec.md` | Implied only |

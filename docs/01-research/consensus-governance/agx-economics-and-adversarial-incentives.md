@@ -182,10 +182,8 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> NormalMode
-    NormalMode --> ElevatedMode: reject_ratio high or queue_depth high
-    ElevatedMode --> EmergencyMode: finality_lag sustained or lane_starvation detected
-    EmergencyMode --> ElevatedMode: metrics recover for recovery_window
-    ElevatedMode --> NormalMode: stable metrics for cooldown_window
+    NormalMode --> EmergencyMode: reject_ratio high or queue_depth high
+    EmergencyMode --> NormalMode: finality_lag sustained or lane_starvation detected
 
     state EmergencyMode {
         [*] --> TightAdmission
