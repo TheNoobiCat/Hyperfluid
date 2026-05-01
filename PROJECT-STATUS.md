@@ -10,7 +10,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 |-------|--------|
 | Phase 0: Research Audit | COMPLETE |
 | Phase 0: Decentralisation Audit | COMPLETE (issues in `docs/01-research/_overengineered.md`, fixes applied) |
-| Phase 1: Requirements | NOT STARTED |
+| Phase 1: Requirements | COMPLETE (190 requirements: 160 FR + 30 NFR) |
 | Phase 2: Architecture | NOT STARTED |
 | Phase 3: Specifications | NOT STARTED |
 | Phase 4: Planning | NOT STARTED |
@@ -18,21 +18,21 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 
 ---
 
-## Research Gaps (to resolve before Layer 2)
+## Research Gaps (RESOLVED - converted to Layer 2 requirements)
 
-Per `BUILD-SYSTEM.md`, every gap must be either **resolved in research** or **converted to an explicit requirement** before Layer 2. Gaps marked "Explicit Requirement" will be captured as FR/NFR items rather than additional research documents.
+All gaps were either resolved in research or converted to explicit FR/NFR items. See `docs/02-requirements/index.md` "Gaps Addressed" for mapping.
 
-| Gap | Should Live In | Current State | Layer 2 Action |
-|-----|----------------|---------------|----------------|
-| Token budget resource model (LOCAL runtime only) | `runtime/agent-runtime-spec.md` | Written: `docs/01-research/agents/token-budget-resource-model.md` | Extract to FR-token-budget-* |
-| VDF-based committee randomness | `protocol/consensus-spec.md` | Partial in research (`agx-committee-bft-and-governance.md` lines 147-161); needs formal difficulty parameters | Extract to FR-consensus-vdf-* with parameter placeholders for spec |
-| Reviewer independence / operator-cluster diversity | `runtime/review-engine-spec.md` | Written in research (`proof-of-work-quality-and-review-markets.md` lines 273-277); needs formal clustering algorithm | Extract to FR-review-independence-* with algorithm placeholder for spec |
-| No-vote timeout fairness proof | `protocol/governance-spec.md` | Implied only (`agx-committee-bft-and-governance.md` lines 140-144) | **Explicit Requirement**: FR-governance-no-vote-fairness with assumption note that systematic exclusion analysis is deferred to validation |
-| Plan replay protection E2E | `runtime/policy-engine-spec.md` + storage specs | Partial in research (`network-policy-engine-spec.md` Section 5) | Extract to FR-policy-replay-*; E2E trace deferred to Layer 6 (Validation) |
-| Telemetry threat model | `security/` research → specs | Written: `docs/01-research/security/telemetry-threat-model.md` | Extract to NFR-telemetry-integrity-* |
-| Sandbox escape analysis | `security/` research → specs | Unwritten | **Explicit Requirement**: FR-security-sandbox-escape-prevention with reference to `infinite-agent.md` resource limits and `prompt-injection-and-network-policy-boundary.md` taint tracking. Short research note optional. |
-| Content-addressing SLA | `storage/artifact-availability-spec.md` | Assumed (`artifact-availability-and-retention.md` defines tiers but no SLA values) | **Explicit Requirement**: NFR-storage-availability-* with concrete min-replica and repair-latency targets |
-| Economic timing parameters | `protocol/` specs | Partial in research (challenge window, lease TTL, heartbeat, review deadlines are all concrete) | Extract to FR-economics-timing-* |
+| Gap | Should Live In | Status | Resolved In |
+|-----|----------------|--------|-------------|
+| Token budget resource model (LOCAL runtime only) | `runtime/agent-runtime-spec.md` | **RESOLVED** | FR-0073, FR-0074, FR-0075 |
+| VDF-based committee randomness | `protocol/consensus-spec.md` | **RESOLVED** | FR-0003 |
+| Reviewer independence / operator-cluster diversity | `runtime/review-engine-spec.md` | **RESOLVED** | FR-0099, FR-0033 |
+| No-vote timeout fairness proof | `protocol/governance-spec.md` | **RESOLVED** | FR-0029 (with validation deferred note) |
+| Plan replay protection E2E | `runtime/policy-engine-spec.md` + storage specs | **RESOLVED** | FR-0108 (E2E trace deferred to Layer 6) |
+| Telemetry threat model | `security/` research → specs | **RESOLVED** | NFR-0020, NFR-0021 |
+| Sandbox escape analysis | `security/` research → specs | **RESOLVED** | FR-0137 (full threat model still needed before Layer 4) |
+| Content-addressing SLA | `storage/artifact-availability-spec.md` | **RESOLVED** | FR-0057 |
+| Economic timing parameters | `protocol/` specs | **RESOLVED** | FR-0148, FR-0149, FR-0150, FR-0169 |
 
 ---
 
@@ -63,9 +63,14 @@ None.
 
 ## Next Actions
 
-1. Create Layer 2 (Requirements) from current research
-2. Update traceability matrix as requirements are extracted
+1. Begin Layer 3 (Architecture): component boundaries, trust boundaries, ADRs
+2. Map each FR to an architecture component; identify orphans
+3. Update traceability matrix: Research -> Requirement -> ADR links
+4. Begin Layer 4 (Specifications) for highest-priority components:
+   - `protocol/consensus-spec.md` (FR-0001 through FR-0020)
+   - `runtime/agent-runtime-spec.md` (FR-0061 through FR-0075)
+   - `runtime/policy-engine-spec.md` (FR-0106 through FR-0120)
 
 ---
 
-*Last updated: 2026-05-01*
+*Last updated: 2026-05-01 (Phase 1 complete)*
