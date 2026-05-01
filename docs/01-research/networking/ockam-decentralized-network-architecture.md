@@ -140,7 +140,7 @@ flowchart TD
     - Relay capacity proportional to stake (staked nodes expected to provide more relay bandwidth).
     - Nodes can opt-out of relaying if bandwidth-constrained.
 - Swarm-resistant ingress controls:
-  - Stage 0 pre-auth gate: per-IP/per-ASN handshake budgets and SYN/handshake concurrency caps.
+  - Stage 0 pre-auth gate: local socket-level concurrency limits (implementation hardening only, not protocol policy) plus SYN/handshake budgets per identity fingerprint.
   - Stage 1 identity gate: per-identity connection caps and join-rate token buckets.
   - Stage 2 gossip gate: per-topic/per-peer gossip budgets with strict duplicate suppression windows.
   - Relay service admission: stake/credential-weighted relay priority with hard unknown-sender quotas.

@@ -2,43 +2,40 @@
 
 Step-by-step prompts to build the system. Use this in a fresh chat.
 
-## Overview
+---
 
-This document contains executable prompts for building Hyperfluid. It works alongside `BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md` which defines the 8-layer documentation structure:
+## Where to read first
 
-- Layer 1: Research (exploratory documents)
-- Layer 2: Requirements (testable FR-XXXX/NFR-XXXX)
-- Layer 3: Architecture (components, interfaces, data model)
-- Layer 4: Specifications (normative technical specs)
-- Layer 5: Planning (build stages with week-by-week breakdown)
-- Layer 6: Validation (test strategy, conformance)
-- Layer 7: Operations (runbooks, SLOs)
-- Layer 8: Handoff (status files, checkpoints)
+Before executing any phase:
+1. Read `BUILD-SYSTEM.md` for layer definitions, gates, and traceability rules.
+2. Read `TEMPLATES.md` for all artifact formats (research, FR-XXXX, spec, stage, checkpoint).
+3. Read `GLOSSARY.md` for canonical terminology.
+4. Read `PROJECT-STATUS.md` for current project state and blockers.
 
-Each phase in this Prompt Book maps to creating one or more layers. Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md for detailed structure definitions before executing prompts.
+This document contains only what is *unique to each phase*. Do not redefine formats that already live in `TEMPLATES.md`.
 
 ---
 
 ## Phase 0: Research Audit
 
-Use this prompt when starting fresh or before creating requirements.
+Use this prompt when starting fresh or before promoting research to requirements.
 
 ### Prompt:
 
-Audit all research documents. Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md "Layer 1: Research" for format context, then read every file in `research/` recursively and check for:
+Audit all research documents. Read `BUILD-SYSTEM.md` (Decentralisation Audit Gate) and `GLOSSARY.md` for context, then read every file in `docs/01-research/` recursively and check for:
 
-1. Contradictions between documents (especially around validator states, action plans, trust stages, slashing conditions)
-2. Terminology inconsistencies (is it inactive_bonded or inactive-bonded? action_plan or actionPlan?)
-3. Missing cross-references (documents claiming to cite others but links broken)
+1. Contradictions between documents (validator states, action plans, trust stages, slashing conditions)
+2. Terminology inconsistencies (check against `GLOSSARY.md`)
+3. Missing or broken cross-references
 4. Unresolved TODOs or obvious gaps
+5. **Decentralisation audit:** Run the checklist defined in `BUILD-SYSTEM.md`. Do not re-state the checklist here — execute it. If issues are found, create `docs/01-research/_overengineered.md` with source file, issue summary, explanation, and proposed fix. Do not create this file if no issues are found.
 
 Create `research-audit-report.md` with:
-- Summary of issues found (categorized by severity: blocking, warning, minor)
-- Specific file locations and line references for each issue
+- Summary of issues found (severity: blocking, warning, minor)
+- Specific file locations and line references
 - Recommended fixes
+- Decentralisation audit findings (reference `_overengineered.md` if created)
 - GO/NO-GO recommendation for proceeding to Phase 1
-
-If blocking issues exist, list them clearly. If minor only, note them but recommend proceeding.
 
 ---
 
@@ -48,35 +45,24 @@ Use this prompt to create all requirements from research.
 
 ### Prompt:
 
-Create Layer 2 (Requirements). Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md "Layer 2: Requirements" for format, then read all files in `research/` and extract requirements:
-1. Identify every "shall", "must", "should", or implied requirement
-2. Convert to numbered functional requirements (FR-XXXX) or non-functional (NFR-XXXX)
-3. Tag with source research file and section
-4. Define 1-3 acceptance criteria per requirement (measurable/testable)
+Create Layer 2 (Requirements). Read `BUILD-SYSTEM.md` (Layer 2) and `TEMPLATES.md` (FR-XXXX format), then read all files in `docs/01-research/` and extract requirements:
+
+1. Identify every "shall", "must", "should", or implied requirement.
+2. Convert to numbered FR-XXXX or NFR-XXXX. Follow the format in `TEMPLATES.md` exactly.
+3. Tag with source research file and section.
+4. Define 1-3 acceptance criteria per requirement (measurable/testable).
+5. **Decentralisation review:** Scan every requirement for language that introduces centralised coordination, external trust, or unverifiable economic enforcement. Flag as `[DECENTRALISATION-RISK]` and require a trust-minimised rewrite before spec creation.
 
 Create directory structure:
-- docs/02-requirements/index.md (master list with links to all requirements)
-- docs/02-requirements/protocol/FR-XXXX-*.md (consensus, staking, networking, policy)
-- docs/02-requirements/runtime/FR-XXXX-*.md (agent runtime, review engine)
-- docs/02-requirements/security/FR-XXXX-*.md (injection protection, key management)
-- docs/02-requirements/economics/FR-XXXX-*.md (tokenomics, incentives)
+- `docs/02-requirements/index.md` (master list with links)
+- `docs/02-requirements/protocol/FR-XXXX-*.md`
+- `docs/02-requirements/runtime/FR-XXXX-*.md`
+- `docs/02-requirements/security/FR-XXXX-*.md`
+- `docs/02-requirements/economics/FR-XXXX-*.md`
 
-Each requirement file should follow this structure:
+Create 40-60 total requirements covering all domains. Group related requirements into single files where logical.
 
-FR-XXXX: [Short descriptive title]
-Category: [Consensus | Runtime | Networking | Security | Economics]
-Statement: The system shall [specific testable behavior]
-Rationale: [Why this exists, with link to source research]
-Source Research: [file.md#section]
-Acceptance Criteria:
-  - [Criterion 1 - measurable]
-  - [Criterion 2 - measurable]
-Dependencies: [FR-YYYY or "none"]
-Tags: [must-have | should-have | nice-to-have]
-
-Create 40-60 total requirements covering all domains. Group related requirements into single files where logical (e.g., all validator lifecycle requirements in one file).
-
-When complete, update docs/08-handoff/latest/phase-01-status.md with count of requirements created and any gaps identified.
+When complete, update `docs/08-handoff/latest/phase-01-status.md` with count and gaps.
 
 ---
 
@@ -86,44 +72,22 @@ Use this prompt to create architecture from requirements.
 
 ### Prompt:
 
-Create Layer 3 (Architecture). Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md "Layer 3: Architecture" for structure, then read all files in docs/02-requirements/ and create architecture documents:
+Create Layer 3 (Architecture). Read `BUILD-SYSTEM.md` (Layer 3) and `TEMPLATES.md` (ADR format), then read all files in `docs/02-requirements/` and create architecture documents:
 
 Create these files:
 
-1. docs/03-architecture/index.md
-   - Overview of architecture approach
-   - List of all components with one-line descriptions
-   - Navigation to detailed docs
-
-2. docs/03-architecture/component-model/components.md
-   - Define each major component (Consensus, Staking, Agent Runtime, Policy Engine, P2P Networking, Storage)
-   - For each: responsibilities, owned state, interfaces (inputs/outputs), dependencies on other components
-   - Include Mermaid diagram showing component interactions
-
-3. docs/03-architecture/component-model/interfaces.md
-   - Define contracts between components
-   - Message formats, error handling, versioning strategy
-
-4. docs/03-architecture/data-model/state-model.md
-   - Core state entities (Validator, ActionPlan, Identity, Topic, Block, etc.)
-   - Fields and types for each entity
-   - Relationships between entities
-   - Include entity relationship diagram
-
-5. docs/03-architecture/trust-boundaries.md
-   - Security zones and boundaries
-   - What's in-protocol vs local-only
-   - Sandboxed vs unsandboxed execution
-   - Network-mutating vs read-only operations
-
-6. docs/03-architecture/failure-model.md
-   - System-level failure scenarios
-   - How components handle failures
-   - Cascading failure prevention
+1. `docs/03-architecture/index.md` — Overview, component list, navigation.
+2. `docs/03-architecture/component-model/components.md` — Component definitions, responsibilities, owned state, interfaces, dependencies. Include Mermaid diagram.
+3. `docs/03-architecture/component-model/interfaces.md` — Inter-component contracts, message formats, error handling, versioning.
+4. `docs/03-architecture/data-model/state-model.md` — Core entities, fields, types, relationships. Include entity relationship diagram.
+5. `docs/03-architecture/trust-boundaries.md` — Security zones, in-protocol vs local-only, sandboxed vs unsandboxed.
+6. `docs/03-architecture/failure-model.md` — System-level failure scenarios and cascading failure prevention.
 
 Map every requirement to a component. If a requirement doesn't fit, flag it for requirement revision.
 
-When complete, update docs/08-handoff/latest/phase-02-status.md with component list and any architecture decisions that need documentation.
+Record every significant decision as an ADR in `docs/03-architecture/decisions/ADR-XXXX-*.md`.
+
+When complete, update `docs/08-handoff/latest/phase-02-status.md`.
 
 ---
 
@@ -133,68 +97,25 @@ Use this prompt to create detailed technical specifications.
 
 ### Prompt:
 
-Create Layer 4 (Specifications). Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md "Layer 4: Specifications" for format, then read docs/03-architecture/ and docs/02-requirements/ and write all specs:
+Create Layer 4 (Specifications). Read `BUILD-SYSTEM.md` (Layer 4), `TEMPLATES.md` (Specification Section format), and `GLOSSARY.md`, then read `docs/03-architecture/` and `docs/02-requirements/` and write all specs.
 
-Create these specification files:
+Target specs (read `docs/01-research/index.md` for the research-to-spec mapping):
+- `protocol/consensus-spec.md`
+- `protocol/staking-spec.md`
+- `protocol/governance-spec.md`
+- `protocol/p2p-wire-spec.md`
+- `protocol/fastpath-spec.md`
+- `runtime/agent-runtime-spec.md`
+- `runtime/policy-engine-spec.md`
+- `runtime/review-engine-spec.md`
+- `storage/artifact-availability-spec.md`
+- `storage/state-sync-spec.md`
+- `security/key-management-spec.md`
+- `security/incident-response-spec.md`
 
-1. docs/04-specifications/protocol/consensus-spec.md
-   From: research/consensus-governance/agx-committee-bft-and-governance.md + consensus requirements
-   Include: validator lifecycle, committee selection, block finalization, epoch transitions, BFT rules
-   Define all parameters (timeouts, thresholds, percentages) with specific values
+Every spec **must** include a trust-assumption inventory (section X.8 per `TEMPLATES.md`). Use exact numbers, not placeholders. Uncertain parameters: mark `[TUNE]` with a reasonable default.
 
-2. docs/04-specifications/protocol/staking-spec.md
-   From: staking requirements + governance research
-   Include: bonding/unbonding, slashing conditions, reward distribution, stake delegation
-
-3. docs/04-specifications/protocol/governance-spec.md
-   From: governance requirements
-   Include: proposal flow, voting rules, git:head transitions, deterministic merge policy
-
-4. docs/04-specifications/protocol/p2p-wire-spec.md
-   From: networking research + networking requirements
-   Include: message serialization, handshake protocol, message types, encryption
-
-5. docs/04-specifications/protocol/fastpath-spec.md
-   From: research/agents/topic-fastpath-protocol-spec.md
-   Include: topic coordination, quorum rules, challenge windows, rollback
-
-6. docs/04-specifications/runtime/agent-runtime-spec.md
-   From: research/agents/infinite-agent.md + runtime requirements
-   Include: infinite loop, handoff mechanism, memory tools, token budget management
-
-7. docs/04-specifications/runtime/policy-engine-spec.md
-   From: research/agents/network-policy-engine-spec.md + policy requirements
-   Include: action plan validation, quota enforcement, ACLs, replay protection
-
-8. docs/04-specifications/runtime/review-engine-spec.md
-   From: research/agents/proof-of-work-quality-and-review-markets.md
-   Include: quality scoring, reviewer selection, challenge mechanism
-
-9. docs/04-specifications/storage/artifact-availability-spec.md
-   From: research/networking/artifact-availability-and-retention.md
-   Include: content addressing, replication, retention guarantees, retrieval under churn
-
-10. docs/04-specifications/storage/state-sync-spec.md
-    Include: state synchronization between nodes, catch-up protocol
-
-11. docs/04-specifications/security/key-management-spec.md
-    Include: key derivation, signing, rotation, HD wallet support
-
-12. docs/04-specifications/security/incident-response-spec.md
-    Include: emergency procedures, circuit breakers, recovery flows
-
-Each specification must have:
-- Purpose section
-- Normative behavior (MUST/SHOULD/MAY statements)
-- Data structures with types
-- State transition diagrams where applicable
-- Failure behavior definitions
-- Versioning and compatibility rules
-- Conformance test hooks (how to verify implementation)
-
-Use exact numbers, not placeholders. If a parameter is uncertain, mark it [TUNE] but provide a reasonable default.
-
-When complete, update docs/08-handoff/latest/phase-03-status.md with spec inventory and any [TUNE] parameters identified.
+When complete, update `docs/08-handoff/latest/phase-03-status.md` with spec inventory and any `[TUNE]` parameters.
 
 ---
 
@@ -204,65 +125,20 @@ Use this prompt to create the implementation roadmap.
 
 ### Prompt:
 
-Create Layer 5 (Planning). Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md "Layer 5: Planning" for stage format, then read docs/04-specifications/ and create week-by-week build stages:
+Create Layer 5 (Planning). Read `BUILD-SYSTEM.md` (Layer 5) and `TEMPLATES.md` (Stage format), then read `docs/04-specifications/` and create week-by-week build stages:
 
 Create these files:
 
-1. docs/05-planning/index.md
-   - Overview of build approach
-   - Stage summary table
-   - Current status tracker
-
-2. docs/05-planning/stages/stage-00-foundation.md
-   Pre-coding stage. 1-2 weeks.
-   - Week 1: Requirements review and finalization
-   - Week 2: Architecture review and spec prioritization
-   - Exit criteria: All blockers resolved, ready to code
-
-3. docs/05-planning/stages/stage-01-protocol-core.md
-   First coding stage. 6-8 weeks.
-   Break down by week with:
-   - Which spec sections to implement
-   - Specific deliverables
-   - Tests to write
-   - Checkpoint at end of each week
-   
-   Cover: wire protocol, state model, consensus core, staking, governance
-
-4. docs/05-planning/stages/stage-02-agent-runtime.md
-   Second coding stage. 6-8 weeks.
-   Week-by-week breakdown for:
-   - Runtime core (infinite loop, handoff)
-   - Policy engine (validation, quotas)
-   - Review engine (scoring, selection)
-   - Integration with protocol
-
-5. docs/05-planning/stages/stage-03-validation.md
-   4-6 weeks.
-   - Conformance testing
-   - Adversarial scenarios
-   - Load testing
-   - Security audits
-
-6. docs/05-planning/stages/stage-04-mainnet-prep.md
-   4-6 weeks.
-   - Operations runbooks
-   - Monitoring setup
-   - Incident response procedures
-   - Mainnet deployment plan
-
-Each stage file must include:
-- Duration estimate
-- Week-by-week task breakdown
-- Inputs (what's needed from previous stage)
-- Outputs (what this stage produces)
-- Exit criteria (when is this stage done)
-- Dependencies (what must complete first)
-- Risk areas and mitigations
+1. `docs/05-planning/index.md` — Overview, stage summary table, status tracker.
+2. `docs/05-planning/stages/stage-00-foundation.md` — Pre-coding, 1-2 weeks.
+3. `docs/05-planning/stages/stage-01-protocol-core.md` — 6-8 weeks. Consensus, staking, wire, storage.
+4. `docs/05-planning/stages/stage-02-agent-runtime.md` — 6-8 weeks. Runtime, policy, review.
+5. `docs/05-planning/stages/stage-03-validation.md` — 4-6 weeks. Conformance, adversarial, load, security.
+6. `docs/05-planning/stages/stage-04-mainnet-prep.md` — 4-6 weeks. Operations, monitoring, incident response.
 
 Be realistic about timelines. If uncertain, estimate on the longer side.
 
-When complete, update docs/08-handoff/latest/phase-04-status.md with stage summaries and total estimated timeline.
+When complete, update `docs/08-handoff/latest/phase-04-status.md`.
 
 ---
 
@@ -272,26 +148,48 @@ Use these prompts when actually implementing.
 
 ### Prompt Template for Implementation:
 
-Execute current build task. Read BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md "Layer 5: Planning" and "Layer 8: Handoff" for checkpoint format, then read docs/05-planning/stages/ to find current week and implement:
+Execute current build task. Read `BUILD-SYSTEM.md` (Layer 5, Layer 8), `TEMPLATES.md` (Checkpoint contract), then read `docs/05-planning/stages/` to find current week.
 
 Read:
-1. docs/05-planning/stages/stage-XX-[current-stage].md (find the current week)
-2. The specification referenced for that week
-3. docs/08-handoff/latest/build-status.md (to see what's already done)
+1. Current week's stage file.
+2. The specification referenced for that week.
+3. `docs/08-handoff/latest/build-status.md` (to see what's already done).
 
-Implement the specified functionality in the appropriate crate/directory.
+Implement in the appropriate crate/directory. Follow the spec exactly.
 
-Follow the specification exactly. If the spec is unclear or contradictory:
-- Make a reasonable decision
-- Document the deviation in a code comment
-- Flag it in docs/08-handoff/latest/open-questions.md
+**When a spec is ambiguous or contradictory:**
+1. Do not guess. Check `docs/08-handoff/latest/open-questions.md` — if a ruling exists, follow it.
+2. If no ruling exists, make a decision, document it as an ADR in `docs/03-architecture/decisions/`, and file a spec change request.
+3. Implement the decision with a `// SPEC_DEVIATION: [reason]` comment.
 
-Write tests alongside implementation. Aim for test coverage of the specified behavior.
+**When a requirement gap is discovered mid-implementation:**
+1. STOP. Do not paper over the gap.
+2. File the gap in `docs/08-handoff/latest/open-questions.md` with:
+   - The spec section that is underspecified
+   - What is missing
+   - Whether it blocks the current task or can be deferred
+3. If it blocks the current task, escalate to a spec revision. Track in `PROJECT-STATUS.md`.
+
+**Stop rule (trust assumptions):**
+If you discover a trust assumption or centralised dependency not listed in the spec's trust-assumption inventory:
+1. STOP implementation of that component.
+2. File in `open-questions.md`.
+3. Escalate to spec revision before continuing.
+
+**Testing:**
+- Write tests alongside implementation.
+- Target test coverage of the specified behavior.
+- Add conformance test entries under `docs/06-validation/conformance/`.
+
+**Checkpoint cadence:**
+- Create a checkpoint after every completed task, not just at week boundaries.
+- A checkpoint is a one-paragraph summary: what works, what's next, blockers.
+- File it as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
 
 When the week's tasks are complete:
-1. Update docs/05-planning/stages/stage-XX-[current-stage].md (mark week complete)
-2. Update docs/08-handoff/latest/build-status.md (add completed work)
-3. Create brief checkpoint: docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md (what works, what's next)
+1. Update stage file (mark week complete).
+2. Update `build-status.md`.
+3. Update `PROJECT-STATUS.md`.
 
 Then stop and wait for next prompt.
 
@@ -301,53 +199,26 @@ Then stop and wait for next prompt.
 
 In a fresh chat, determine current state:
 
-1. Does research-audit-report.md exist?
+1. Does `research-audit-report.md` exist?
    NO -> Run Phase 0
    YES -> Continue
 
-2. Does docs/02-requirements/ have FR-*.md files?
+2. Has the decentralisation audit passed (`_overengineered.md` reviewed and fixed if it exists)?
+   NO -> Run Phase 0 decentralisation audit
+   YES -> Continue
+
+3. Does `docs/02-requirements/` have FR-*.md files?
    NO -> Run Phase 1
    YES -> Continue
 
-3. Does docs/03-architecture/ have component docs?
+4. Does `docs/03-architecture/` have component docs?
    NO -> Run Phase 2
    YES -> Continue
 
-4. Does docs/04-specifications/ have spec files?
+5. Does `docs/04-specifications/` have spec files?
    NO -> Run Phase 3
    YES -> Continue
 
-5. Does docs/05-planning/stages/ have stage files?
+6. Does `docs/05-planning/stages/` have stage files?
    NO -> Run Phase 4
    YES -> Run Phase 5 (Implementation)
-
----
-
-## Status Tracking
-
-Keep these files updated in docs/08-handoff/latest/:
-
-- phase-0X-status.md - What's complete in each phase
-- build-status.md - What's currently implemented (code)
-- next-tasks.md - What to do next
-- open-questions.md - Uncertainties or blockers
-- checkpoint-YYYY-MM-DD.md - Snapshot after each major chunk
-
-Update these after every significant work session.
-
----
-
-## Current State (Update After Each Session)
-
-Last Updated: [DATE]
-
-Phase 0 Research Audit: [NOT STARTED | IN PROGRESS | COMPLETE]
-Phase 1 Requirements: [NOT STARTED | IN PROGRESS | COMPLETE]
-Phase 2 Architecture: [NOT STARTED | IN PROGRESS | COMPLETE]
-Phase 3 Specifications: [NOT STARTED | IN PROGRESS | COMPLETE]
-Phase 4 Planning: [NOT STARTED | IN PROGRESS | COMPLETE]
-Phase 5+ Building: [NOT STARTED | IN PROGRESS | COMPLETE]
-
-Current Stage: [If in Phase 5+, which stage and week]
-Blockers: [Any blockers]
-Notes: [Any notes for next agent]

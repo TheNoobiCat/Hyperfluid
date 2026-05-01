@@ -1,6 +1,6 @@
 <!-- RESEARCH DOCUMENT TEMPLATE -->
 <!-- Replace all [bracketed] placeholders with actual content -->
-<!-- See BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md for format requirements -->
+<!-- See BUILD-SYSTEM.md and TEMPLATES.md for format requirements -->
 
 # 1. Title
 - [Insert clear, technical title describing the system or topic]

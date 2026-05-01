@@ -13,10 +13,10 @@
 # 3. System Overview
 - Problem solved:
   - LLM context windows are finite; unbounded inbound traffic causes agents to drop tasks, miss reviews, or issue truncated responses.
-  - Current research documents token efficiency but lacks a formal resource model linking token burn to protocol economics.
+  - Current research documents token efficiency but lacks a formal resource model linking token burn to agent runtime coordination and prompt assembly.
 - Core design philosophy:
   - Every token consumed has an opportunity cost in terms of work, review, or governance output.
-  - Token budgets should be enforceable, observable, and economically accountable.
+  - Token budgets should be enforceable, observable, and accountable to the agent operator.
 - Key constraints:
   - Model context limits vary by provider/model but must be abstracted to a common protocol unit.
   - Deterministic budgeting must work across heterogeneous agent configurations.
@@ -28,7 +28,7 @@
   - **Context Window Assembler**: builds prompt context from bounded blocks (identity, goals, inbox, deltas, tools).
   - **Handoff Trigger Engine**: fires context reset at deterministic thresholds.
   - **Burn Telemetry Pipeline**: emits token usage per task, per review, per governance action.
-  - **Token Cost Oracle**: translates token burn to economic cost for quota and reward calculations.
+  - **Token Cost Oracle**: local runtime estimator that translates token burn to operator cost for budgeting and capacity planning (not a protocol reward mechanism).
 
 ```mermaid
 flowchart TD
@@ -95,11 +95,10 @@ flowchart TD
   - Handoff cost is accounted as overhead and deducted from the agent's epoch budget.
   - Agents with excessive handoff counts (> 10 per hour) are throttled to prevent churn.
 
-- **Token burn economic model**
-  - Useful work rewards are weighted by `(output_quality / token_burn_ratio)`.
-  - Agents that produce high-quality outputs with low token burn receive bonus multipliers.
-  - Excessive token burn without verified output can trigger reputation penalties.
-  - Token burn telemetry is signed and auditable for reward calculations.
+- **Token burn observability model**
+  - Token burn telemetry is signed and auditable for local operator diagnostics.
+  - The protocol does not weight rewards by token burn ratio or penalise excessive burn — token consumption is a local runtime concern, not a consensus-enforceable economic signal.
+  - Agents are free to use their own token budgets; the protocol rewards only observable outputs (accepted deliverables, validated reviews, governance votes that survive challenge windows).
 
 ```mermaid
 stateDiagram-v2
@@ -157,9 +156,9 @@ function maybe_trigger_handoff(agent_state, budget):
 # 6. Design Decisions & Tradeoffs
 ## Tradeoff 1
 - Option A: Treat token limits as purely runtime/operator concern.
-- Option B: Formalize tokens as protocol resource with economic accountability.
+- Option B: Formalize tokens as a protocol-visible resource for coordination and budgeting, but not for consensus rewards.
 - Chosen: Option B.
-- Why chosen: enables measurable efficiency incentives and prevents context-exhaustion attacks.
+- Why chosen: enables measurable runtime budgeting and prevents context-exhaustion attacks without creating unverifiable economic incentives.
 - Sacrifice: adds accounting overhead and requires model abstraction layer.
 - Scaling risk: ptok abstraction may drift from actual model costs if not periodically recalibrated.
 
@@ -174,10 +173,10 @@ function maybe_trigger_handoff(agent_state, budget):
 ## Tradeoff 3
 - Option A: No token burn impact on rewards.
 - Option B: Reward quality-per-token-work ratio.
-- Chosen: Option B.
-- Why chosen: incentivizes concise, high-signal outputs over verbose low-value generation.
-- Sacrifice: agents may under-communicate to optimize the ratio.
-- Scaling risk: needs careful calibration to avoid penalizing necessary thoroughness.
+- Chosen: Option A.
+- Why chosen: token burn is locally unverifiable; tying protocol rewards to self-reported metrics creates an immediate incentive to under-report.
+- Sacrifice: no direct on-chain incentive for token efficiency.
+- Scaling risk: agents may still over-consume context, but this is an operator-level optimisation, not a protocol failure mode.
 
 # 7. Failure Modes & Edge Cases
 ## Scenario: Token burn denial of service
@@ -196,9 +195,9 @@ function maybe_trigger_handoff(agent_state, budget):
 - Handling/failure mode: minimum handoff interval (e.g., 5 minutes); task splitting for oversized work units.
 
 ## Scenario: Telemetry gaming
-- What happens: agent under-reports token burn to receive efficiency bonuses.
-- Why it happens: local telemetry is self-reported.
-- Handling/failure mode: signed telemetry with deterministic verification; cross-check via output length and task complexity heuristics.
+- What happens: agent under-reports token burn in local telemetry.
+- Why it happens: local telemetry is self-reported and operators may want to hide inefficiency.
+- Handling/failure mode: signed telemetry with deterministic verification; cross-check via output length and task complexity heuristics. Note: because the protocol no longer weights rewards by token burn, under-reporting does not yield an on-chain advantage; it only affects local diagnostics.
 
 ## Scenario: Ingress budget starvation
 - What happens: honest agent cannot receive critical coordination messages because budget exhausted by spam.
@@ -213,7 +212,7 @@ function maybe_trigger_handoff(agent_state, budget):
 ## Medium scale (1k–10k nodes)
 - Need aggregated telemetry pipelines and per-epoch burn accounting.
 - Ingress budget enforcement becomes a network-layer concern, not just local.
-- Token cost oracle must be decentralized to prevent manipulation.
+- Token cost estimates remain local operator tooling, not protocol consensus data.
 
 ## Large scale (100k+ nodes)
 - Hierarchical token budgets: per-topic, per-team, per-agent nesting.
@@ -223,23 +222,21 @@ function maybe_trigger_handoff(agent_state, budget):
 # 9. Recommended Architecture
 - Adopt a normalized token unit (`ptok`) with deterministic context envelope allocation.
 - Enforce ingress token budgets by sender trust stage before messages enter agent context.
-- Account handoff overhead as explicit protocol cost.
-- Weight rewards by quality-per-token-burn to incentivize efficiency.
+- Account handoff overhead as explicit local runtime cost.
+- Do not weight protocol rewards by token burn; reward only observable outputs.
 - Reject:
   - unlimited context accumulation,
   - model-specific budgeting without abstraction,
   - purely local token accounting without network visibility.
-- This architecture is optimal because it makes token consumption observable, bounded, and economically accountable across the network.
+- This architecture is optimal because it makes token consumption observable and bounded for agent operators without creating unverifiable protocol incentives.
 
 # 10. Implementation Plan
 1. Define `ptok` normalization formula and model profile registry.
 2. Implement ingress token budget allocator per sender stage.
 3. Implement deterministic context envelope assembler with per-block caps.
-4. Implement handoff trigger with cost accounting and minimum interval.
-5. Implement signed burn telemetry pipeline.
-6. Implement token cost oracle with periodic recalibration.
-7. Integrate token efficiency metrics into reward/penalty engine.
-8. Add adversarial tests for token exhaustion and handoff cascade scenarios.
+4. Implement handoff trigger with local cost accounting and minimum interval.
+5. Implement signed burn telemetry pipeline for local observability.
+6. Add adversarial tests for token exhaustion and handoff cascade scenarios.
 
 # 11. Future Improvements
 - Add adaptive envelope tuning based on observed task success rates.

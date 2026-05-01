@@ -268,14 +268,14 @@ function manual_governance_escalation(evidence):
 ## Reviewer assignment parameters (concrete)
 - Default reviewer count per task: `3 reviewers`
 - High-value tasks (>10k AGX): `5 reviewers`
-- Niche domains (low reviewer pool): `2 reviewers` minimum, flag for manual review
+- Niche domains (low reviewer pool): `3 reviewers` minimum (never below this floor; if the pool is insufficient, the task returns to the open queue). Reward cap is proportionally reduced when the reviewer count is below the default.
 - Max reviewers per task: `7` (diminishing returns beyond this)
   - Reviewer assignment constraints:
-    - Geographic spread: `min 2 different regions` (regions: Americas, EMEA, APAC)
+    - Operator-cluster spread: `min 2 distinct operator identity clusters` detected via stake-graph analysis and key correlation heuristics. If cluster diversity cannot be satisfied, fall back to requiring an independent validator endorsement for each reviewer in the set.
   - Temporal spread: `reviewers must have been active in last 7 days`
   - Stake spread: `max 30% of reviewers from same stake tier`
   - Pair frequency: `same reviewer-author pair max 1 in 10 tasks`
-- Reviewer pool minimum: `50 eligible reviewers` for auto-assignment; below this threshold, manual assignment required
+- Reviewer pool minimum: `50 eligible reviewers` is the preferred auto-assignment threshold. If the eligible pool falls below this, the protocol applies deterministic fallbacks in order: (1) relax the pool floor to the current available size, (2) extend the assignment deadline, (3) reduce the required reviewer count with a proportional reward-cap downgrade. If the pool drops below `3 eligible reviewers`, the task is returned to the open queue rather than reviewed by a captive minority.
   - Review assignment deadline: `72 hours` for standard tasks, `24 hours` for urgent tasks
     - This is the time window within which assigned reviewers must submit their review verdict.
     - Distinct from the **review sandbox timeout** (`30 minutes`), which is a local agent runtime limit for executing a single review within a sandboxed subagent. See `agx-committee-bft-and-governance.md` lines 187-191 for sandbox timeout semantics.

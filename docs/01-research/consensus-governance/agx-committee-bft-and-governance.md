@@ -145,13 +145,19 @@ flowchart TD
     - Wall-clock timeout (e.g., 30 min review) maps to approximate block height with `±2 block` tolerance.
 
   - **Committee BFT from day 1**
-  - Epoch seed derived from drand randomness beacon.
-    - Randomness source: drand network (e.g., drand.cloudflare.com or custom Hyperfluid drand).
-    - Implementation: Use `drand` Rust crate for verification and retrieval.
-    - Each epoch fetches the drand round corresponding to epoch start height.
-    - Seed = `SHA3-256(drand_round_signature + epoch_number + previous_block_hash)`.
-    - drand signatures are publicly verifiable and unpredictable, eliminating commit-reveal complexity.
-    - Fallback: If drand unavailable, use `SHA3-256(previous_seed + block_hash_chain + epoch_number)`.
+  - Epoch seed derived from an on-chain verifiable-delay function (VDF) with validator commitment-reveal inputs.
+    - At the start of each epoch, validators submit a `commitment = SHA3-256(preimage)` in block `N`.
+    - In block `N+k` (reveal window), validators publish the preimage.
+    - The hash of all valid reveals becomes the VDF **input**.
+    - A VDF (e.g., Wesolowski or Pietrzak) is evaluated over this input with a difficulty parameter calibrated so that sequential evaluation takes longer than the reveal window.
+    - The VDF **output** is the epoch seed used for committee sampling.
+    - Reveals are invalid if they do not match the prior commitment; invalid reveals are excluded from the VDF input.
+    - Grinding is infeasible because computing the VDF output sequentially takes longer than the reveal window; no validator can evaluate enough candidate inputs to search for a favourable committee.
+    - Fallback: if insufficient valid reveals are available, use `SHA3-256(previous_seed + block_hash_chain + epoch_number)` as the VDF input.
+    - VDF parameters:
+      - Difficulty target: sequential evaluation time `> 2x reveal_window`.
+      - Proof verification: `O(1)` per epoch using Wesolowski evaluation.
+      - Any validator can submit a VDF proof; the first valid proof accepted by the committee becomes the canonical seed.
   - Sample committee by stake-weighted VRF-like draw with per-operator cap.
     - Committee size: `100 validators` at genesis.
     - Operator cap: `max 15% of committee` per operator identity.
@@ -215,7 +221,6 @@ flowchart TD
     - budget scales with stake and clean history.
     - repeated reject/spam ratio above threshold triggers temporary mempool quarantine.
   - **Rate limiting (tiered flat rates)**
-    - Per-IP connection limit: `max 10 concurrent connections` per IP.
     - Per-identity tx burst: `max 20 txs in 60 seconds`.
     - Tiered flat rate limits by trust stage:
       - `untrusted_joiner`: `5 tx/min`
@@ -225,6 +230,7 @@ flowchart TD
     - Stake affects trust ladder progression, not direct rate scaling.
     - Rationale: Simpler, predictable, no perverse incentives to split stake.
     - Removed: Logarithmic stake-weighted formula (complex and gameable).
+    - Removed: Per-IP connection limits — these are local DoS hardening details, not protocol policy, because one IP does not equal one identity in a permissionless network.
   - Circuit-breaker mode (automatic):
     - triggers when reject ratio, queue depth, or finality latency breaches thresholds.
     - raises PoW target, enables emergency micro-fee floor, and tightens unknown-sender quotas.
@@ -456,7 +462,7 @@ function admit_network_action(actor, action, state):
 
 # 11. Future Improvements
 - Introduce mature aggregate/threshold PQ signatures when practical.
-- Add verifiable randomness improvements for committee sampling.
+- Add on-chain verifiable-delay function (VDF) for committee sampling to eliminate last-revealer bias.
 - Add open relay and witness incentive markets with anti-cartel monitoring.
 - Add formal verification for committee sampling and liveness transition logic.
 - Add zk/light-client proof acceleration for low-resource agent nodes.

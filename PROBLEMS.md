@@ -1140,7 +1140,7 @@ After analyzing all research documents, **47 distinct issues** have been identif
 | G1 | decentralization-and-stack-benchmark.md | agx-committee-bft-and-governance.md |
 | G2 | infinite-agent.md | artifact-availability-and-retention.md |
 | G3 | proof-of-work-quality-and-review-markets.md | - |
-| H1 | BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md | All documents |
+| H1 | BUILD-SYSTEM.md | All documents |
 | H2 | decentralization-and-stack-benchmark.md | agx-committee-bft-and-governance.md |
 
 ---

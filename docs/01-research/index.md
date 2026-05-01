@@ -134,20 +134,30 @@ The following canonical sources of truth **must not be redefined** in other docu
 
 ## Research-to-Specification Mapping
 
-Per BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md, research documents map to specifications as follows:
+Per `BUILD-SYSTEM.md`, research documents map to specifications as follows:
 
-| Research Document | Target Specifications |
-|-------------------|----------------------|
-| infinite-agent.md | runtime/agent-runtime-spec.md |
-| token-budget-resource-model.md | runtime/agent-runtime-spec.md |
-| network-policy-engine-spec.md | runtime/policy-engine-spec.md |
-| proof-of-work-quality-and-review-markets.md | runtime/review-engine-spec.md |
-| topic-fastpath-protocol-spec.md | protocol/fastpath-spec.md |
-| identity-reputation-and-trust-ladder.md | requirements/protocol/FR-identity-*.md |
-| agx-committee-bft-and-governance.md | protocol/consensus-spec.md, governance-spec.md, staking-spec.md |
-| ockam-decentralized-network-architecture.md | protocol/p2p-wire-spec.md |
-| artifact-availability-and-retention.md | storage/artifact-availability-spec.md |
-| telemetry-threat-model.md | security/telemetry-spec.md, evals/prompt-injection-eval-plan.md |
+| Research Document | Primary Layer | Target Specs |
+|-------------------|---------------|--------------|
+| `agents/infinite-agent.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
+| `agents/token-budget-resource-model.md` | Layer 4 | `runtime/agent-runtime-spec.md` (local runtime budgeting only; no protocol economics) |
+| `agents/network-policy-engine-spec.md` | Layer 4 | `runtime/policy-engine-spec.md` |
+| `agents/proof-of-work-quality-and-review-markets.md` | Layer 4 | `runtime/review-engine-spec.md` |
+| `agents/topic-fastpath-protocol-spec.md` | Layer 4 | `protocol/fastpath-spec.md` |
+| `agents/identity-reputation-and-trust-ladder.md` | Layers 2-3 | `requirements/protocol/FR-identity-*.md`, `trust-boundaries.md` |
+| `agents/collaboration-layer-parallel-teams.md` | Layers 2-3 | `requirements/protocol/FR-collaboration-*.md` |
+| `agents/inbox-attention-control-and-anti-spam.md` | Layers 2-4 | `protocol/p2p-wire-spec.md`, `runtime/policy-engine-spec.md` |
+| `agents/prompt-injection-and-network-policy-boundary.md` | Layers 2, 6 | `requirements/security/`, `evals/prompt-injection-eval-plan.md` |
+| `agents/prompt-injection-redteam-and-evals.md` | Layers 2, 6 | `evals/prompt-injection-eval-plan.md` |
+| `agents/token-efficiency-under-high-interaction.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
+| `agents/automatic-vs-agent-controlled.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
+| `agents/agent-tools-spec.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
+| `consensus-governance/agx-committee-bft-and-governance.md` | Layer 4 | `protocol/consensus-spec.md`, `protocol/governance-spec.md`, `protocol/staking-spec.md` |
+| `consensus-governance/agx-economics-and-adversarial-incentives.md` | Layers 2-3 | `requirements/protocol/FR-economics-*.md`, `data-model/state-model.md` |
+| `networking/ockam-decentralized-network-architecture.md` | Layer 4 | `protocol/p2p-wire-spec.md` |
+| `networking/artifact-availability-and-retention.md` | Layer 4 | `storage/artifact-availability-spec.md` |
+| `networking/decentralized-incident-response-and-recovery.md` | Layers 4, 7 | `security/incident-response-spec.md`, `07-operations/runbooks/` |
+| `security/telemetry-threat-model.md` | Layers 2, 6 | `security/telemetry-spec.md`, `evals/prompt-injection-eval-plan.md` |
+| `stack-evaluations/decentralization-and-stack-benchmark.md` | Layer 1 | Informs all specs |
 
 ## Implicit Knowledge Gaps
 
@@ -159,7 +169,7 @@ The following areas still need research documents before Layer 4 (Specifications
 4. **Content-addressing SLA** - Availability guarantees for artifacts
 5. **Review independence metrics** - Quantitative independence measures
 
-See BUILD-SYSTEM-STRUCTURE-AND-WORKFLOW.md Section "Unwritten / Implicit Knowledge" for full details.
+For current project gaps and status, see `PROJECT-STATUS.md`.
 
 ## Traceability
 

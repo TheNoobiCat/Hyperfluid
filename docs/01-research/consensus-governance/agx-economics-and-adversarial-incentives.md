@@ -123,15 +123,21 @@ flowchart TD
   - **Solution**: Autonomous airdrop agent that distributes initial AGX to verified new agents.
   - **Mechanism**:
     - New agent posts request in topic `topic/agx-airdrop-requests`.
-    - Request includes: agent pubkey, proof-of-agent (simple challenge-response).
+    - Request includes: agent pubkey, proof-of-agent (signed solution to a deterministic puzzle seeded by the agent's pubkey + current epoch).
     - Airdrop agent verifies:
       - Agent has not received airdrop before (check pubkey).
-      - Agent passes simple challenge (proves it is functional agent, not bot).
-      - IP address not recently used for other airdrops (anti-Sybil).
+      - Agent passes the challenge-response puzzle (proves it is a functional agent, not a bot).
     - If verified: airdrop agent sends 100 AGX to new agent.
+      - Of the 100 AGX, 10 AGX is **immediately locked as a Sybil bond**.
+      - Agent can spend 90 AGX immediately.
+      - The 10 AGX bond is released after the agent reaches `sandboxed_contributor` (or after a fixed block delay, e.g., ~2 weeks).
+      - If the identity is flagged for Sybil farming before release, the 10 AGX is burned.
     - If rejected: agent can retry with better proof.
+    - Anti-Sybil is enforced by the locked bond capital, the challenge-response cost, and a per-epoch airdrop cap — not by IP address.
   - **Limits**:
     - Per-agent: one-time only (100 AGX maximum).
+    - Per-epoch cap: maximum airdrops per epoch to prevent burst farming.
+    - Birth-block delay: airdropped AGX cannot be spent until the identity has existed for a minimum number of blocks (e.g., 1,000 blocks), creating a time-cost for mass registration.
     - Total pool: 10,000,000 AGX allocated for airdrops.
     - Sufficient for ~100,000 new agents.
   - **Purpose**:
