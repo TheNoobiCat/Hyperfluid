@@ -11,6 +11,7 @@ Before executing any phase:
 2. Read `TEMPLATES.md` for all artifact formats (research, FR-XXXX, spec, stage, checkpoint).
 3. Read `GLOSSARY.md` for canonical terminology.
 4. Read `PROJECT-STATUS.md` for current project state and blockers.
+5. **Read the latest handoff** (`docs/08-handoff/latest/checkpoint-*.md` and `docs/08-handoff/latest/build-status.md` if they exist). If the previous agent left unfinished work, complete it before starting the current phase. Handoff files are the canonical state of what has been done and what is next.
 
 This document contains only what is *unique to each phase*. Do not redefine formats that already live in `TEMPLATES.md`.
 
@@ -22,7 +23,7 @@ Use this prompt when starting fresh or before promoting research to requirements
 
 ### Prompt:
 
-Audit all research documents. Read `BUILD-SYSTEM.md` (Decentralisation Audit Gate) and `GLOSSARY.md` for context, then read every file in `docs/01-research/` recursively and check for:
+Audit all research documents. Read `BUILD-SYSTEM.md` (Decentralisation Audit Gate) and `GLOSSARY.md` for context, then read the latest handoff (`docs/08-handoff/latest/`) if it exists, then read every file in `docs/01-research/` recursively and check for:
 
 1. Contradictions between documents (validator states, action plans, trust stages, slashing conditions)
 2. Terminology inconsistencies (check against `GLOSSARY.md`)
@@ -45,7 +46,7 @@ Use this prompt to create all requirements from research.
 
 ### Prompt:
 
-Create Layer 2 (Requirements). Read `BUILD-SYSTEM.md` (Layer 2) and `TEMPLATES.md` (FR-XXXX format), then read all files in `docs/01-research/` and extract requirements:
+Create Layer 2 (Requirements). Read `BUILD-SYSTEM.md` (Layer 2), `TEMPLATES.md` (FR-XXXX format), and the latest handoff (`docs/08-handoff/latest/`) if it exists, then read all files in `docs/01-research/` and extract requirements:
 
 1. Identify every "shall", "must", "should", or implied requirement.
 2. Convert to numbered FR-XXXX or NFR-XXXX. Follow the format in `TEMPLATES.md` exactly.
@@ -60,7 +61,7 @@ Create directory structure:
 - `docs/02-requirements/security/FR-XXXX-*.md`
 - `docs/02-requirements/economics/FR-XXXX-*.md`
 
-Create 40-60 total requirements covering all domains. Group related requirements into single files where logical.
+Create 60-200 total requirements covering all domains. Group related requirements into single files where logical.
 
 When complete, update `docs/08-handoff/latest/phase-01-status.md` with count and gaps.
 
@@ -72,7 +73,7 @@ Use this prompt to create architecture from requirements.
 
 ### Prompt:
 
-Create Layer 3 (Architecture). Read `BUILD-SYSTEM.md` (Layer 3) and `TEMPLATES.md` (ADR format), then read all files in `docs/02-requirements/` and create architecture documents:
+Create Layer 3 (Architecture). Read `BUILD-SYSTEM.md` (Layer 3), `TEMPLATES.md` (ADR format), and the latest handoff (`docs/08-handoff/latest/`) if it exists, then read all files in `docs/02-requirements/` and create architecture documents:
 
 Create these files:
 
@@ -97,7 +98,7 @@ Use this prompt to create detailed technical specifications.
 
 ### Prompt:
 
-Create Layer 4 (Specifications). Read `BUILD-SYSTEM.md` (Layer 4), `TEMPLATES.md` (Specification Section format), and `GLOSSARY.md`, then read `docs/03-architecture/` and `docs/02-requirements/` and write all specs.
+Create Layer 4 (Specifications). Read `BUILD-SYSTEM.md` (Layer 4), `TEMPLATES.md` (Specification Section format), `GLOSSARY.md`, and the latest handoff (`docs/08-handoff/latest/`) if it exists, then read `docs/03-architecture/` and `docs/02-requirements/` and write all specs.
 
 Target specs (read `docs/01-research/index.md` for the research-to-spec mapping):
 - `protocol/consensus-spec.md`
@@ -125,7 +126,7 @@ Use this prompt to create the implementation roadmap.
 
 ### Prompt:
 
-Create Layer 5 (Planning). Read `BUILD-SYSTEM.md` (Layer 5) and `TEMPLATES.md` (Stage format), then read `docs/04-specifications/` and create week-by-week build stages:
+Create Layer 5 (Planning). Read `BUILD-SYSTEM.md` (Layer 5), `TEMPLATES.md` (Stage format), and the latest handoff (`docs/08-handoff/latest/`) if it exists, then read `docs/04-specifications/` and create week-by-week build stages:
 
 Create these files:
 
@@ -148,7 +149,7 @@ Use these prompts when actually implementing.
 
 ### Prompt Template for Implementation:
 
-Execute current build task. Read `BUILD-SYSTEM.md` (Layer 5, Layer 8), `TEMPLATES.md` (Checkpoint contract), then read `docs/05-planning/stages/` to find current week.
+Execute current build task. Read `BUILD-SYSTEM.md` (Layer 5, Layer 8), `TEMPLATES.md` (Checkpoint contract), then read the latest handoff (`docs/08-handoff/latest/`, prioritising the most recent `checkpoint-*.md` and `build-status.md`). If the previous agent left unfinished work, complete it first.
 
 Read:
 1. Current week's stage file.

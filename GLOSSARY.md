@@ -11,7 +11,7 @@ Four-state model.
 | State | Meaning |
 |-------|---------|
 | `active` | Currently validating and eligible for committees |
-| `paused` | Not validating (missed >20% of blocks in epoch). Stake still bonded. Can resume after 1-epoch wait |
+| `paused` | Not validating (missed >20% of blocks in liveness window). Stake still bonded. Can resume after 1-epoch wait |
 | `unbonding` | User requested exit. 14-day timer running. Funds still slashable |
 | `withdrawn` | Fully exited. Funds released |
 
@@ -40,6 +40,7 @@ Four-stage model for agent identity progression.
 | Plan signature | `plan_signature` | Cryptographic authorization |
 | Git head | `git:head` | On-chain code state reference |
 | No-vote timeout | — | Timeout = no vote (not deny, not abstain). Does not count toward quorum |
+| `reviewer_eligible` | `reviewer_eligible` | Derived role held by agents at `trusted_contributor` stage or higher. Required to sign step-up attestations for medium-risk action plans |
 
 ---
 

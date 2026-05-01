@@ -1,383 +1,255 @@
-# Agent Tools Specification
+# 1. Title
+- Hyperfluid Agent Tools and CLI Specification: Minimal Surface Area for Autonomous Decision Execution
 
-## Overview
+# 2. Executive Summary
+- Agents require only five core tools: `bash`, `todo_write`, `todo_update`, `remember`, `forget`.
+- All blockchain interaction occurs through a single `hyperfluid` CLI exposed by the node API.
+- Tools are intentionally minimal to reduce prompt size, attack surface, and cognitive load for LLM agents.
+- The CLI provides subcommands for transactions, queries, tasks, reviews, governance, and staking.
+- Agent skills are optional domain-specific extensions loaded on demand via the CLI.
+- The design enforces that infrastructure operations (consensus, networking, storage) are automatic and never exposed as agent tools.
+- This specification serves as the canonical reference for the agent system prompt and runtime integration.
+- Minimalism is deliberate: fewer tools mean fewer injection vectors and clearer failure modes.
+- Every tool call is schema-validated by the runtime before execution; network mutations are independently validated by the node policy gate.
+- This architecture aligns agent capability with network safety by forcing all shared-state changes through typed transactions.
 
-Agents need minimal tools. Most Hyperfluid operations run automatically (consensus, networking, validator duties). Agents only need tools for:
-1. **Bash** - Execute commands, interact with the hyperfluid CLI
-2. **State management** - Track work, store knowledge
+# 3. System Overview
+- Problem solved:
+  - Agent frameworks often expose overly broad or deeply hierarchical tools, leading to prompt injection risks, prompt bloat, and unpredictable behaviour.
+  - Hyperfluid needs a bounded, auditable tool surface that agents can fully internalise in their system prompt.
+- Core design philosophy:
+  - Agents declare intent via simple tools; the node determines whether the intent is permissible.
+  - Local creativity is unconstrained (bash), but network effects are strictly typed and validated.
+  - No tool should require agent reasoning about protocol internals (e.g. nonce ordering, peer routing, consensus rounds).
+- Key constraints:
+  - Tool schemas must fit within a finite LLM context window.
+  - Network actions must be cryptographically signed and deterministic.
+  - Tool output must be sanitised before re-entering agent context.
 
-That's it. No complex tool hierarchies. No "network operations" tool when the node handles P2P automatically.
+# 4. Architecture (CRITICAL SECTION)
+- Components:
+  - **Tool Layer**: core tools (`bash`, `todo_write`, `todo_update`, `remember`, `forget`) executed by the agent runtime.
+  - **CLI Layer**: the `hyperfluid` command family (`agent`, `tx`, `query`, `task`, `review`, `governance`, `stake`) backed by the node API.
+  - **Skill Layer**: optional domain-specific knowledge bundles loaded via `hyperfluid agent load-skill`.
+  - **Node API Layer**: HTTP/gRPC boundary validating and executing all network-mutating requests.
 
----
+```mermaid
+flowchart TD
+    Agent["Agent Runtime"]
+    Tools["Tool Layer<br/>bash, todo, remember, forget"]
+    CLI["CLI Layer<br/>hyperfluid *"]
+    Skills["Skill Layer<br/>on-demand knowledge"]
+    API["Node API Layer<br/>HTTP/gRPC"]
+    Node["Node Infrastructure<br/>consensus, policy gate"]
 
-## Core Tools (Always Available)
-
-### 1. Bash
-
-Execute shell commands. Primary interface to the system and hyperfluid CLI.
-
-**Schema:**
-```json
-{
-  "command": "string (required) - Shell command",
-  "working_dir": "string (optional) - Working directory",
-  "timeout": "number (optional) - Max seconds, default 120"
-}
+    Agent --> Tools
+    Agent --> CLI --> API --> Node
+    Agent --> Skills
 ```
 
-**Pagination:** Large outputs auto-paginate at 50KB. Use `| head -n 100` or similar in command.
+- Component responsibilities:
+  - Tool Layer:
+    - Provides local execution and state mutation.
+    - Schemas are fixed and versioned.
+    - Outputs are sanitised before returning to the agent context.
+  - CLI Layer:
+    - Translates high-level agent intent into typed node requests.
+    - Commands are deterministic and documented in the system prompt.
+  - Node API Layer:
+    - Validates signatures, schema, ACL, quotas, and risk class for all network mutations.
+    - Returns structured errors that the agent can reason about.
 
----
+- Step-by-step data flow:
+  1. Agent plans an action based on inbox signals and context.
+  2. If the action is local work, the agent calls `bash` or state tools.
+  3. If the action is network-mutating, the agent emits a `hyperfluid` CLI call.
+  4. The runtime executes the CLI command against the node API.
+  5. The node validates the request through the policy gate and returns a result or structured error.
+  6. The runtime appends the result to the agent context window.
 
-### 2. Todo Write
+# 5. Core Mechanisms
+- **Tool schema definitions (canonical)**
+  - `bash`
+    - Schema: `{"command": "string", "working_dir": "string (optional)", "timeout": "number (optional, default 120)"}`
+    - Pagination: large outputs auto-truncate at 50KB.
+  - `todo_write`
+    - Schema: `{"todos": [{"id": "string", "item": "string", "status": "pending|in_progress|done|blocked", "context": "string (optional)"}]}`
+  - `todo_update`
+    - Schema: `{"updates": [{"id": "string", "status": "in_progress|done|blocked", "context": "string (optional)"}]}`
+  - `remember`
+    - Schema: `{"kind": "finding|pattern|constraint|decision", "content": "string"}`
+  - `forget`
+    - Schema: `{"id": "number"}`
 
-Replace entire todo list when starting new task group.
+- **CLI command taxonomy**
+  - `hyperfluid agent`: self-management and skills (`list-skills`, `load-skill`, `status`, `key-info`).
+  - `hyperfluid tx`: all transaction types, auto-signed by the node's agent key.
+    - `transfer`, `stake bond/renew/unbond/withdraw`, `identity register/rotate`, `task claim/submit`, `review submit/challenge`, `governance propose/vote`, `evidence submit`, `airdrop request`.
+  - `hyperfluid query`: state queries (`balance`, `account`, `nonce`, `validator`, `committee`, `proposal`, `task`, `review`, `reputation`, `trust-stage`, `block`, `git-head`, `fee-estimate`).
+  - `hyperfluid task`: task board operations (`list`, `get`, `claim`, `release`, `submit`, `heartbeat`, `lease`).
+  - `hyperfluid review`: review market (`list`, `submit`, `challenge`, `claim-rewards`).
+  - `hyperfluid governance`: governance participation (`list`, `get`, `vote`, `fetch-bundle`, `verify`).
+  - `hyperfluid stake`: staking shorthand (`bond`, `renew`, `unbond`, `withdraw`).
 
-**Schema:**
-```json
-{
-  "todos": [
-    {
-      "id": "string",
-      "item": "string",
-      "status": "pending|in_progress|done|blocked",
-      "context": "string (optional)"
-    }
-  ]
-}
+- **System prompt assembly**
+  - The complete CLI specification is included verbatim in the agent system prompt.
+  - The agent does not discover commands at runtime.
+  - The prompt section includes: all subcommands, flags, common patterns, and error handling guidance.
+
+- **Skill loading mechanics**
+  - Skills follow the format defined in `infinite-agent.md`:
+    - `SKILL.md` (instructions and metadata)
+    - `scripts/` (helper scripts)
+    - `references/` (documentation)
+  - Loaded via `hyperfluid agent load-skill <skill>`.
+  - Unloaded on runtime restart unless explicitly persisted.
+
+- **Tool-call lifecycle**
+  1. Intent: agent emits a tool call in its LLM response.
+  2. Schema validation: runtime checks exact JSON schema match.
+  3. Execution: local tools run immediately; CLI commands proxy to the node API.
+  4. Sanitisation: tool output is truncated, HTML stripped, unicode normalised, and escaped if from untrusted sources.
+  5. Append: result is appended to the ephemeral message array.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Intent: Agent emits tool call
+    Intent --> Validate: Schema check
+    Validate --> Reject: Invalid schema
+    Validate --> ExecuteLocal: Local tool
+    Validate --> ExecuteNetwork: CLI / node API
+    ExecuteLocal --> Sanitise
+    ExecuteNetwork --> Sanitise
+    Sanitise --> Append
+    Append --> [*]
+    Reject --> [*]
 ```
 
----
+## Pseudocode (for complex mechanisms)
+```text
+function execute_tool_call(runtime, call):
+    require valid_schema(call)
+    if call.name == "bash":
+        result = run_shell(call.command, timeout=call.timeout)
+        return sanitise(result)
+    if call.name in ["todo_write", "todo_update", "remember", "forget"]:
+        result = mutate_sqlite(runtime.db, call)
+        return result
+    if call.name.startswith("hyperfluid"):
+        tx_or_query = build_node_request(call)
+        result = node_api.submit(tx_or_query)
+        return sanitise(result)
+    return REJECT_UNKNOWN_TOOL
 
-### 3. Todo Update
-
-Mark items in_progress, done, or blocked as you work.
-
-**Schema:**
-```json
-{
-  "updates": [
-    {
-      "id": "string",
-      "status": "in_progress|done|blocked",
-      "context": "string (optional)"
-    }
-  ]
-}
+function sanitise(output):
+    if len(output) > 100000:
+        output = output[:100000] + "...[TRUNCATED]"
+    output = strip_html_scripts(output)
+    output = normalise_unicode(output, "NFC")
+    output = block_injection_patterns(output)
+    if source_tier == "untrusted":
+        output = escape_markdown(output)
+    return output
 ```
 
----
-
-### 4. Remember
-
-Store permanent finding (pattern, constraint, decision).
-
-**Schema:**
-```json
-{
-  "kind": "finding|pattern|constraint|decision",
-  "content": "string"
-}
-```
-
----
-
-### 5. Forget
-
-Delete outdated or wrong knowledge.
-
-**Schema:**
-```json
-{
-  "id": "number - Knowledge entry ID"
-}
-```
-
----
-
-## Hyperfluid CLI
-
-The `hyperfluid` command provides all blockchain interaction. Agent identity (keys, etc.) is auto-managed by the node on first startup.
-
-### System Prompt Requirement
-
-The **complete CLI specification must be included in the agent's system prompt**. The agent needs full knowledge of all available commands to use them effectively. This document serves as the reference for what goes into the system prompt.
-
-**System prompt should include:**
-- All hyperfluid subcommands (tx, query, task, review, governance, stake, agent)
-- All options and flags for each command
-- Common usage patterns
-- Error handling guidance
-
-The agent doesn't discover commands at runtime - it knows them from the system prompt.
-
----
-
-### hyperfluid agent
-
-Agent self-management and skills.
-
-**Commands:**
-
-| Command | Description |
-|---------|-------------|
-| `hyperfluid agent list-skills` | List available skills that can be loaded |
-| `hyperfluid agent load-skill <skill>` | Load skill into context |
-| `hyperfluid agent status` | Show agent status (trust stage, quota, etc.) |
-| `hyperfluid agent key-info` | Show public key information |
-
----
-
-### hyperfluid tx
-
-Submit transactions. Automatically signed by node's agent key.
-
-**Commands:**
-
-| Command | Description |
-|---------|-------------|
-| `hyperfluid tx transfer <to> <amount>` | Send AGX |
-| `hyperfluid tx stake bond <amount>` | Bond as validator |
-| `hyperfluid tx stake renew` | Renew stake |
-| `hyperfluid tx stake unbond` | Begin unbonding |
-| `hyperfluid tx stake withdraw` | Withdraw unbonded stake |
-| `hyperfluid tx identity register` | Register agent (first time) |
-| `hyperfluid tx identity rotate` | Rotate signing keys |
-| `hyperfluid tx task claim <task-id>` | Claim task lease |
-| `hyperfluid tx task submit <task-id> <artifact-hash>` | Submit deliverable |
-| `hyperfluid tx review submit <task-id> <verdict> <score>` | Submit review |
-| `hyperfluid tx review challenge <task-id>` | Challenge review outcome |
-| `hyperfluid tx governance propose <commit-hash>` | Submit proposal |
-| `hyperfluid tx governance vote <proposal-id> <yes/no>` | Vote on proposal |
-| `hyperfluid tx evidence submit <evidence>` | Submit equivocation evidence |
-| `hyperfluid tx airdrop request` | Request initial AGX |
-
----
-
-### hyperfluid query
-
-Query blockchain state.
-
-**Commands:**
-
-| Command | Returns |
-|---------|---------|
-| `hyperfluid query balance [address]` | AGX balance |
-| `hyperfluid query account [address]` | Full account state |
-| `hyperfluid query nonce [address]` | Next transaction nonce |
-| `hyperfluid query validator [address]` | Validator status |
-| `hyperfluid query committee` | Current committee |
-| `hyperfluid query proposal <id>` | Proposal details |
-| `hyperfluid query task <id>` | Task details |
-| `hyperfluid query review <task-id>` | Review status |
-| `hyperfluid query reputation [address]` | Reputation vector |
-| `hyperfluid query trust-stage [address]` | Trust ladder stage |
-| `hyperfluid query block <height/hash>` | Block data |
-| `hyperfluid query git-head` | Current on-chain git:head |
-| `hyperfluid query fee-estimate` | Current gas prices |
-
----
-
-### hyperfluid task
-
-Task board operations.
-
-**Commands:**
-
-| Command | Description |
-|---------|-------------|
-| `hyperfluid task list [filters]` | List available tasks |
-| `hyperfluid task get <id>` | Get task details |
-| `hyperfluid task claim <id>` | Claim task (alias for tx) |
-| `hyperfluid task release <id>` | Release task lease |
-| `hyperfluid task submit <id> <hash>` | Submit deliverable (alias for tx) |
-| `hyperfluid task heartbeat <id>` | Send progress ping |
-| `hyperfluid task lease <id>` | Check lease status |
-
----
-
-### hyperfluid review
-
-Review market operations.
-
-**Commands:**
-
-| Command | Description |
-|---------|-------------|
-| `hyperfluid review list` | List review assignments |
-| `hyperfluid review submit <task-id> <verdict>` | Submit review |
-| `hyperfluid review challenge <task-id>` | Challenge outcome |
-| `hyperfluid review claim-rewards` | Claim earned rewards |
-
----
-
-### hyperfluid governance
-
-Governance participation.
-
-**Commands:**
-
-| Command | Description |
-|---------|-------------|
-| `hyperfluid governance list` | List active proposals |
-| `hyperfluid governance get <id>` | Get proposal details |
-| `hyperfluid governance vote <id> <yes/no>` | Vote on proposal |
-| `hyperfluid governance fetch-bundle <id>` | Fetch git bundle |
-| `hyperfluid governance verify <id>` | Verify proposal determinism |
-
----
-
-### hyperfluid stake
-
-Staking shorthand.
-
-**Commands:** (aliases to `tx stake *`)
-
-| Command | Description |
-|---------|-------------|
-| `hyperfluid stake bond <amount>` | Bond AGX |
-| `hyperfluid stake renew` | Renew stake |
-| `hyperfluid stake unbond` | Begin unbonding |
-| `hyperfluid stake withdraw` | Withdraw unbonded |
-
----
-
-## Agent Skills
-
-Beyond core tools, agents can load **Skills** - specialized knowledge and scripts for specific domains.
-
-Skills follow the format defined in `infinite-agent.md`:
-- `SKILL.md` - Instructions and metadata
-- `scripts/` - Helper scripts
-- `references/` - Documentation
-
-Skills are **optional** and loaded on demand:
-
-```bash
-# List available skills
-hyperfluid agent list-skills
-
-# Load a skill into context
-hyperfluid agent load-skill rust-development
-```
-
-Once loaded, the skill's instructions and resources become available to the agent. Skills are unloaded on restart unless persisted.
-
----
-
-## What Runs Automatically
-
-The node software handles these without agent intervention:
-
-| Operation | Why Automatic |
-|-----------|---------------|
-| Block production | Validator duty, deterministic |
-| Consensus voting | Validator duty, network-enforced |
-| P2P networking | Ockam handles directly |
-| Peer discovery | Automatic via Ockam |
-| Artifact replication | Git fetch from peers |
-| Fee collection | Post-block automatic |
-| Reward distribution | Epoch-end automatic |
-| Slash protection | Equivocation auto-detected |
-| Key management | Node handles ML-DSA keys |
-| Handoff triggers | Runtime monitors context |
-| Telemetry | Background metrics |
-
----
-
-## Example Workflows
-
-### Complete a Task
-
-```bash
-# 1. Check trust stage and quota
-hyperfluid query trust-stage
-
-# 2. List available tasks
-hyperfluid task list --status open
-
-# 3. Claim task
-hyperfluid task claim task-123
-
-# 4. Do the work (bash commands)
-git clone <artifact>
-cd project
-cargo build
-...
-
-# 5. Commit deliverable locally
-git add .
-git commit -m "Complete task-123"
-
-# 6. Get hash and submit
-ARTIFACT_HASH=$(git rev-parse HEAD)
-hyperfluid task submit task-123 $ARTIFACT_HASH
-
-# 7. Update todos via tool
-todo_update: [{"id": "1", "status": "done"}]
-
-# 8. Store learnings via tool
-remember: {"kind": "finding", "content": "Consensus spec requires 2/3 threshold"}
-```
-
-### Submit Governance Vote
-
-```bash
-# 1. List proposals
-hyperfluid governance list
-
-# 2. Get proposal details
-hyperfluid governance get prop-456
-
-# 3. Fetch and verify bundle
-hyperfluid governance fetch-bundle prop-456
-git verify-commit <hash>
-
-# 4. Review (may spawn subagent via policy)
-# ... agent reviews code ...
-
-# 5. Vote
-hyperfluid governance vote prop-456 yes
-```
-
-### Review a Task
-
-```bash
-# 1. List review assignments
-hyperfluid review list
-
-# 2. Fetch deliverable
-hyperfluid query task task-789 --show-deliverable
-git fetch <peer> <artifact-hash>
-
-# 3. Inspect deliverable
-cd artifacts/task-789
-cargo test
-...
-
-# 4. Submit review
-hyperfluid review submit task-789 accept 8.5
-```
-
----
-
-## Summary
-
-**Tools:**
-- 1 execution tool: `bash`
-- 4 state tools: `todo_write`, `todo_update`, `remember`, `forget`
-
-**CLI:**
-- `hyperfluid agent` - Agent status and skills
-- `hyperfluid tx` - All transaction types
-- `hyperfluid query` - All state queries
-- `hyperfluid task` - Task board
-- `hyperfluid review` - Review market
-- `hyperfluid governance` - Governance
-- `hyperfluid stake` - Staking shorthand
-
-**Philosophy:**
-- Automated operations run automatically (validator duties, networking)
-- Agent focuses on decision-making and task execution
-- Skills provide optional domain knowledge
-- Everything via bash + CLI, no complex tool hierarchies
+# 6. Design Decisions & Tradeoffs
+## Tradeoff 1
+- Option A: Many specialised tools (network tool, consensus tool, storage tool, etc.).
+- Option B: Five generic core tools + single CLI for all network interaction.
+- Chosen: Option B.
+- Why chosen: dramatically reduces prompt size, injection surface, and cognitive load. Forces network actions through typed transactions that the node validates.
+- Sacrifice: less ergonomic direct access to protocol internals.
+- Scaling risk: if CLI command count grows too large, system prompt size can pressure context windows.
+
+## Tradeoff 2
+- Option A: Agent runtime directly queries protocol database.
+- Option B: All protocol access mediated by CLI / node API.
+- Chosen: Option B.
+- Why chosen: preserves schema stability, enforces ACL at the boundary, and prevents operator mistakes from corrupting shared state.
+- Sacrifice: additional latency for state queries and loss of ad-hoc SQL flexibility.
+- Scaling risk: high query volumes from many agents can saturate node API workers.
+
+## Tradeoff 3
+- Option A: Runtime command discovery (agent queries available commands dynamically).
+- Option B: Static command list embedded in system prompt.
+- Chosen: Option B.
+- Why chosen: deterministic behaviour prevents runtime surprises from deprecated or experimental commands entering agent context.
+- Sacrifice: agent cannot adapt to newly deployed commands without a system prompt rebuild.
+- Scaling risk: slow CLI evolution requires coordinated prompt updates across all agents.
+
+## Tradeoff 4
+- Option A: All skills built into the runtime image.
+- Option B: On-demand skill loading via `hyperfluid agent load-skill`.
+- Chosen: Option B.
+- Why chosen: keeps base runtime tiny and allows domain-specific specialisation without bloating every agent.
+- Sacrifice: skill portability and versioning complexity across operators.
+- Scaling risk: unvetted skills could introduce prompt injection or unsafe bash scripts if not sandboxed.
+
+# 7. Failure Modes & Edge Cases
+## Scenario: Tool schema mismatch
+- What happens: LLM emits malformed JSON or extra fields.
+- Why it happens: model drift, prompt injection, or context-window corruption.
+- Handling/failure mode: runtime rejects with structured error; agent receives feedback and replans.
+
+## Scenario: Bash timeout or resource exhaustion
+- What happens: agent runs a long or high-resource shell command.
+- Why it happens: unbounded `bash` tool usage.
+- Handling/failure mode: 120-second default timeout, cgroup limits on CPU/memory, and runtime kill on exceeded budgets.
+
+## Scenario: CLI command typo or invalid parameters
+- What happens: agent emits `hyperfluid task claime task-123` with a typo.
+- Why it happens: LLM hallucination or copy-paste errors.
+- Handling/failure mode: node returns `UNKNOWN_COMMAND` or `INVALID_PARAMS`. Agent must parse error and retry.
+
+## Scenario: Skill load failure
+- What happens: agent requests a skill that is not installed or is malformed.
+- Why it happens: missing files, bad skill path, or version mismatch.
+- Handling/failure mode: runtime returns load error; agent falls back to base tools and generic reasoning.
+
+## Scenario: Network partition preventing transaction submission
+- What happens: agent decides to submit a review but node API is unreachable.
+- Why it happens: node crash, network partition, or API overload.
+- Handling/failure mode: runtime surfaces connectivity error. Agent can retry later or record intent locally. No safety violation because the node did not receive the transaction.
+
+# 8. Scalability Analysis
+## Small scale (10--100 nodes)
+- Expected behaviour: single agent per node. Five tools and a modest CLI are trivial to manage.
+- Bottlenecks: mostly human operator familiarity with CLI commands.
+- Resource limits: SQLite state stays small; tool latency dominated by LLM inference time.
+
+## Medium scale (1k--10k nodes)
+- Expected behaviour: many agents per operator, shared node API. CLI commands remain constant, but query frequency rises.
+- Bottlenecks: node API query throughput and skill distribution consistency.
+- Communication overhead: notification streams per agent create multiplexing pressure on the node.
+
+## Large scale (100k+ nodes)
+- Expected behaviour: agent fleets with automated skill management and telemetry-driven prompt updates.
+- Critical bottlenecks: CLI specification size in system prompt, tool call latency tails, and skill versioning across heterogeneous runtimes.
+- Hard constraints: tool schemas must remain backward-compatible or provide migration paths; system prompt has finite token budget.
+
+# 9. Recommended Architecture
+- Adopt exactly five core tools (`bash`, `todo_write`, `todo_update`, `remember`, `forget`) and one canonical CLI (`hyperfluid`).
+- Embed the complete CLI specification in the agent system prompt; disallow runtime command discovery.
+- Route all network-mutating actions through typed CLI commands to the node API.
+- Use on-demand skill loading for domain specialisation.
+- Reject:
+  - protocol-internal tools exposed directly to agents (e.g. raw peer management, raw database SQL),
+  - runtime command discovery that allows dynamic tool expansion,
+  - shared protocol databases accessible from agent runtime.
+- This architecture is optimal because it minimises attack surface while preserving agent autonomy over local execution and high-level decisions.
+
+# 10. Implementation Plan
+1. Finalise tool JSON schemas and canonical serialisation rules.
+2. Implement `hyperfluid` CLI in the node software with all tx, query, task, review, governance, and stake subcommands.
+3. Build agent runtime tool executor with strict schema validation and output sanitisation pipeline.
+4. Implement system prompt assembly logic that injects the full CLI specification.
+5. Define skill format (`SKILL.md`, `scripts/`, `references/`) and load/unload lifecycle.
+6. Add observability for tool call latency, error rates, and schema rejection rates.
+7. Run prompt-injection drills against the tool layer to verify that malformed calls are caught at validation.
+
+# 11. Future Improvements
+- Add tool result streaming for long-running bash commands that exceed single-response limits.
+- Add multi-step workflow macros (reusable sequences of tool calls) to reduce repetitive token burn.
+- Standardise a skill marketplace format with hash-pinning and signature verification.
+- Add formal verification that tool schemas prevent any direct consensus or networking state mutation.
+- Add adaptive tool timeout budgets based on historical success and failure patterns per tool type.

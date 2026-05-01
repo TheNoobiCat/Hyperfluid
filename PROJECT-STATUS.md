@@ -20,17 +20,19 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 
 ## Research Gaps (to resolve before Layer 2)
 
-| Gap | Should Live In | Current State |
-|-----|----------------|---------------|
-| Token budget resource model (LOCAL runtime only) | `runtime/agent-runtime-spec.md` | Written: `docs/01-research/agents/token-budget-resource-model.md` |
-| VDF-based committee randomness | `protocol/consensus-spec.md` | Partial in research; needs formal VDF parameter spec |
-| Reviewer independence / operator-cluster diversity | `runtime/review-engine-spec.md` | Written in research; needs formal stake-graph clustering algorithm |
-| No-vote timeout fairness proof | `protocol/governance-spec.md` | Implied only |
-| Plan replay protection E2E | `runtime/policy-engine-spec.md` + storage specs | Partial |
-| Telemetry threat model | `security/` research → specs | Written: `docs/01-research/security/telemetry-threat-model.md` |
-| Sandbox escape analysis | `security/` research → specs | Unwritten |
-| Content-addressing SLA | `storage/artifact-availability-spec.md` | Assumed |
-| Economic timing parameters | `protocol/` specs | Partial in research |
+Per `BUILD-SYSTEM.md`, every gap must be either **resolved in research** or **converted to an explicit requirement** before Layer 2. Gaps marked "Explicit Requirement" will be captured as FR/NFR items rather than additional research documents.
+
+| Gap | Should Live In | Current State | Layer 2 Action |
+|-----|----------------|---------------|----------------|
+| Token budget resource model (LOCAL runtime only) | `runtime/agent-runtime-spec.md` | Written: `docs/01-research/agents/token-budget-resource-model.md` | Extract to FR-token-budget-* |
+| VDF-based committee randomness | `protocol/consensus-spec.md` | Partial in research (`agx-committee-bft-and-governance.md` lines 147-161); needs formal difficulty parameters | Extract to FR-consensus-vdf-* with parameter placeholders for spec |
+| Reviewer independence / operator-cluster diversity | `runtime/review-engine-spec.md` | Written in research (`proof-of-work-quality-and-review-markets.md` lines 273-277); needs formal clustering algorithm | Extract to FR-review-independence-* with algorithm placeholder for spec |
+| No-vote timeout fairness proof | `protocol/governance-spec.md` | Implied only (`agx-committee-bft-and-governance.md` lines 140-144) | **Explicit Requirement**: FR-governance-no-vote-fairness with assumption note that systematic exclusion analysis is deferred to validation |
+| Plan replay protection E2E | `runtime/policy-engine-spec.md` + storage specs | Partial in research (`network-policy-engine-spec.md` Section 5) | Extract to FR-policy-replay-*; E2E trace deferred to Layer 6 (Validation) |
+| Telemetry threat model | `security/` research → specs | Written: `docs/01-research/security/telemetry-threat-model.md` | Extract to NFR-telemetry-integrity-* |
+| Sandbox escape analysis | `security/` research → specs | Unwritten | **Explicit Requirement**: FR-security-sandbox-escape-prevention with reference to `infinite-agent.md` resource limits and `prompt-injection-and-network-policy-boundary.md` taint tracking. Short research note optional. |
+| Content-addressing SLA | `storage/artifact-availability-spec.md` | Assumed (`artifact-availability-and-retention.md` defines tiers but no SLA values) | **Explicit Requirement**: NFR-storage-availability-* with concrete min-replica and repair-latency targets |
+| Economic timing parameters | `protocol/` specs | Partial in research (challenge window, lease TTL, heartbeat, review deadlines are all concrete) | Extract to FR-economics-timing-* |
 
 ---
 

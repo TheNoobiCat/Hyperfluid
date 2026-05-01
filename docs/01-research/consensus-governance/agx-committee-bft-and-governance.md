@@ -66,7 +66,7 @@ flowchart TD
 - **Transaction types**
   - `TransferTx`: AGX transfer; first outbound transfer must include pubkey reveal.
   - `StakeBondTx`: lock AGX to enter validator candidate pool.
-  - `StakeRenewTx`: extend active stake before/at expiry, or reactivate `paused` stake after 1-epoch wait.
+  - `StakeRenewTx`: extend active stake before/at expiry, or reactivate `paused` stake after 1-epoch wait. This is the canonical transaction type for resuming from `paused`; no separate `ResumeTx` exists.
   - `UnbondRequestTx`: begin unbonding timer (funds still slashable during window).
   - `WithdrawUnbondedTx`: withdraw after unbonding delay.
   - `GovernanceProposeTx`: propose candidate `git:head` + deposit.
@@ -97,14 +97,14 @@ flowchart TD
     - smaller slash for repeated downtime.
   - Use simplified lifecycle states:
     - `active`: Currently validating and eligible for committees.
-    - `paused`: Not validating (missed >20% of blocks in epoch), stake still bonded. Can resume after 1-epoch wait.
+    - `paused`: Not validating (missed >20% of blocks in liveness window; genesis liveness window = 8192 blocks, equal to one epoch). Stake still bonded. Can resume after 1-epoch wait.
     - `unbonding`: User requested exit, 14-day timer running, funds slashable.
     - `withdrawn`: Fully exited, funds released.
   - Removed: `probationary` state (complex recovery logic, hard to test).
   - Removed: `inactive_bonded` state (merged into `paused`).
   - State transitions:
-    - Active → Paused: Miss >20% blocks in epoch.
-    - Paused → Active: Submit ResumeTx, wait 1 epoch.
+    - Active → Paused: Miss >20% blocks in liveness window.
+    - Paused → Active: Submit `StakeRenewTx`, wait 1 epoch.
     - Active/Paused → Unbonding: Submit UnbondRequestTx.
     - Unbonding → Withdrawn: After 14-day unbonding delay.
   - Slashing: Deduct stake from any state, continue from same state (not a separate state).
@@ -132,11 +132,11 @@ flowchart TD
   - Missed committee duties in one liveness window: move to `paused` and slash `0.1%`.
     - Liveness window: `8192 blocks` (~1 day at 10s block time).
     - Threshold: `miss_rate > 20%` within window triggers paused.
-  - To resume from paused: submit `ResumeTx`, wait `1 epoch`, return to `active`.
+  - To resume from paused: submit `StakeRenewTx`, wait `1 epoch`, return to `active`.
   - Proven equivocation: immediate `10%` slash + `30 days` jail + move to `paused`.
     - Evidence validity window: `equivocation_proof must be included within 24 hours` (8640 blocks) of the equivocation event.
     - If evidence submitted after window: slash cancelled, but validator marked for review.
-    - After jail period expires: validator may submit `ResumeTx`, wait `1 epoch`, then return to `active`.
+    - After jail period expires: validator may submit `StakeRenewTx`, wait `1 epoch`, then return to `active`.
   - **No-vote timeout semantics (unified across all subsystems)**
     - Timeout in any review/governance context = `no vote` (not deny, not abstain).
     - No-vote does not count toward quorum threshold.
@@ -248,8 +248,8 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> Active: StakeBond and selected
-    Active --> Paused: Miss >20% blocks in epoch
-    Paused --> Active: ResumeTx + 1 epoch wait
+    Active --> Paused: Miss >20% blocks in liveness window
+    Paused --> Active: StakeRenewTx + 1 epoch wait
     Active --> Unbonding: UnbondRequest
     Paused --> Unbonding: UnbondRequest
     Unbonding --> Withdrawn: After 14-day delay

@@ -149,13 +149,9 @@ flowchart TD
   - Inactive topics decay in ranking.
   - Low-signal or abuse-marked topics are throttled from discovery lists.
 
-- **Untrusted joiner onboarding ladder (explicit)**
-  - Trust-stage semantics are defined canonically in `identity-reputation-and-trust-ladder.md` Section 5 "Stage model".
-  - This document applies those stages to collaboration-layer quotas and permissions:
-    - `untrusted_joiner`: limited discovery and digest-priority messaging only, very low send quotas, no high-visibility topic creation, cannot hold primary lease.
-    - `sandboxed_contributor`: can claim low-risk tasks with short leases (max 2 primary leases).
-    - `trusted_contributor`: higher quotas, team participation, broader task claim range (max 6 primary leases).
-    - `coordinator_eligible`: can lead teams, create high-visibility topics, and assign subtasks (max 12 primary leases).
+- **Untrusted joiner onboarding ladder**
+  - Trust-stage semantics are defined canonically in `identity-reputation-and-trust-ladder.md` Section 5 "Stage model". This document does not redefine them.
+  - Collaboration-layer permission mappings are given in the "Lease and task defaults" table above.
 
 - **Typed network actions and boundary policy**
   - Network-mutating actions are allowlisted and schema-validated before execution.

@@ -184,8 +184,8 @@ function schedule_upgrade_probe(target_id):
                 set_state(target_id, RELAY_ACTIVE)
 
 function ingress_guard(peer):
-    if over_ip_or_asn_budget(peer.network_fingerprint):
-        return REJECT
+    # Protocol policy: identity-only rate limits.
+    # IP/ASN hardening is a local firewall concern, not enforced by protocol.
     if over_identity_connection_cap(peer.identifier):
         return REJECT
     if over_join_rate(peer.identifier):

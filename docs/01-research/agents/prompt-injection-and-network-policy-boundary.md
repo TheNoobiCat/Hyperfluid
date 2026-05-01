@@ -67,18 +67,7 @@ flowchart TD
     - `submit_fast_path_merge`
     - `submit_governance_proposal`
     - `cast_governance_vote`
-  - Required fields per action (normative baseline):
-    - `plan_id`
-    - `action_type`
-    - `resource_id`
-    - `risk_class`
-    - `reason_hash`
-    - `evidence_refs`
-    - `policy_bundle_hash`
-    - `nonce`
-    - `expires_at_height`
-    - `agent_signature`
-  - Normative serialization, replay semantics, and execution binding are defined in `network-policy-engine-spec.md` (same directory).
+  - The complete action plan schema and required fields are defined canonically in `network-policy-engine-spec.md` Section 5. This document does not redefine them.
   - Free text alone never executes tools.
   - Tool-call binding rule:
     - every network-mutating tool call must include either:
