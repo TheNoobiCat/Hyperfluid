@@ -8,6 +8,8 @@
 
 All work flows through an 8-layer documentation pipeline defined in `BUILD-SYSTEM.md`. For live project state, see `PROJECT-STATUS.md` — do not record state in this file.
 
+You are on Windows - use Powershell commands.
+
 ---
 
 ## First thing to read

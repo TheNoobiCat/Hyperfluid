@@ -11,8 +11,8 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 0: Research Audit | COMPLETE |
 | Phase 0: Decentralisation Audit | COMPLETE (issues in `docs/01-research/_overengineered.md`, fixes applied) |
 | Phase 1: Requirements | COMPLETE (190 requirements: 160 FR + 30 NFR) |
-| Phase 2: Architecture | NOT STARTED |
-| Phase 3: Specifications | NOT STARTED |
+| Phase 2: Architecture | COMPLETE (12 components, 12 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS) |
+| Phase 3: Specifications | COMPLETE (14 specs across 4 domains, all FRs mapped, trust-assumption inventories complete. Gate: PASS) |
 | Phase 4: Planning | NOT STARTED |
 | Phase 5+: Build | NOT STARTED |
 
@@ -29,8 +29,8 @@ All gaps were either resolved in research or converted to explicit FR/NFR items.
 | Reviewer independence / operator-cluster diversity | `runtime/review-engine-spec.md` | **RESOLVED** | FR-0099, FR-0033 |
 | No-vote timeout fairness proof | `protocol/governance-spec.md` | **RESOLVED** | FR-0029 (with validation deferred note) |
 | Plan replay protection E2E | `runtime/policy-engine-spec.md` + storage specs | **RESOLVED** | FR-0108 (E2E trace deferred to Layer 6) |
-| Telemetry threat model | `security/` research → specs | **RESOLVED** | NFR-0020, NFR-0021 |
-| Sandbox escape analysis | `security/` research → specs | **RESOLVED** | FR-0137 (full threat model still needed before Layer 4) |
+| Telemetry threat model | `security/` research -> specs | **RESOLVED** | NFR-0020, NFR-0021 |
+| Sandbox escape analysis | `security/` research -> specs | **RESOLVED** | FR-0137 (full threat model still needed before Layer 4) |
 | Content-addressing SLA | `storage/artifact-availability-spec.md` | **RESOLVED** | FR-0057 |
 | Economic timing parameters | `protocol/` specs | **RESOLVED** | FR-0148, FR-0149, FR-0150, FR-0169 |
 
@@ -38,7 +38,7 @@ All gaps were either resolved in research or converted to explicit FR/NFR items.
 
 ## Decentralisation Audit Status
 
-**Result:** PASS (with fixes applied)
+**Result:** PASS (with fixes applied across research; Layer 4 specs audit also PASS)
 
 See `docs/01-research/_overengineered.md` for:
 - Original issues found
@@ -63,14 +63,32 @@ None.
 
 ## Next Actions
 
-1. Begin Layer 3 (Architecture): component boundaries, trust boundaries, ADRs
-2. Map each FR to an architecture component; identify orphans
-3. Update traceability matrix: Research -> Requirement -> ADR links
-4. Begin Layer 4 (Specifications) for highest-priority components:
-   - `protocol/consensus-spec.md` (FR-0001 through FR-0020)
-   - `runtime/agent-runtime-spec.md` (FR-0061 through FR-0075)
-   - `runtime/policy-engine-spec.md` (FR-0106 through FR-0120)
+1. Begin Layer 5 (Planning): Define implementation stages, sequencing, and checkpoints.
+2. Prioritize stage ordering: Minimum Viable Chain (C1, C2, C7) -> Economic Foundation (C3, C5) -> Security Boundary (C9) -> Agent Autonomy (C10, C11) -> Protocol Evolution (C4, C6) -> Storage & Quality (C8, C12).
+3. Update traceability matrix: Spec -> Stage -> Implementation links.
+4. Run decentralisation audit gate between Specs and Planning (per BUILD-SYSTEM.md). Specs already audited — no issues found.
+
+## Layer 4 Spec Inventory (delivered)
+
+| Spec | Covers (Component/FR) | Status |
+|------|----------------------|--------|
+| `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010) | complete |
+| `protocol/staking-spec.md` | C3 Staking & Validator Manager (FR-0011-0020) | complete |
+| `protocol/governance-spec.md` | C4 Governance Engine (FR-0021-0030) | complete |
+| `protocol/p2p-wire-spec.md` | C7 P2P Networking (FR-0041-0050) | complete |
+| `protocol/fastpath-spec.md` | C6 Fast-Path Topic Protocol (FR-0031-0040) | complete |
+| `protocol/fee-market-spec.md` | C5 Fee Market (FR-0146-0160) | complete |
+| `storage/state-sync-spec.md` | C2 State Machine & SMT (FR-0010, NFR-0009) | complete |
+| `storage/artifact-availability-spec.md` | C8 Artifact Availability (FR-0051-0060) | complete |
+| `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075) | complete |
+| `runtime/policy-engine-spec.md` | C9 Policy Decision Point (FR-0106-0120) | complete |
+| `runtime/review-engine-spec.md` | C12 Economics - review markets (FR-0161-0175) | complete |
+| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox (FR-0076-0105) | complete |
+| `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
+| `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
+
+**Dropped:** `security/key-management-spec.md` — no Layer 1 research doc backing; key rotation is covered in `policy-engine-spec.md` Section 1 (FR-0118) and key binding is covered in `consensus-spec.md` Section 2 (FR-0005, FR-0006).
 
 ---
 
-*Last updated: 2026-05-01 (Phase 1 complete)*
+*Last updated: 2026-05-02 (Phase 3 complete, Phase 4 pending)*

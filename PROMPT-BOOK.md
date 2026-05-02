@@ -10,7 +10,7 @@ Before executing any phase:
 1. Read `BUILD-SYSTEM.md` for layer definitions, gates, and traceability rules.
 2. Read `TEMPLATES.md` for all artifact formats (research, FR-XXXX, spec, stage, checkpoint).
 3. Read `GLOSSARY.md` for canonical terminology.
-4. Read `PROJECT-STATUS.md` for current project state and blockers.
+4. Read `PROJECT-STATUS.md` for current project state, phase status, blockers, and spec inventory. **Always update `PROJECT-STATUS.md` after completing any phase.**
 5. **Read the latest handoff** (`docs/08-handoff/latest/checkpoint-*.md` and `docs/08-handoff/latest/build-status.md` if they exist). If the previous agent left unfinished work, complete it before starting the current phase. Handoff files are the canonical state of what has been done and what is next.
 
 This document contains only what is *unique to each phase*. Do not redefine formats that already live in `TEMPLATES.md`.
@@ -38,6 +38,8 @@ Create `research-audit-report.md` with:
 - Decentralisation audit findings (reference `_overengineered.md` if created)
 - GO/NO-GO recommendation for proceeding to Phase 1
 
+When complete, update `PROJECT-STATUS.md`: set Phase 0 status, record any blockers found, update "Next Actions" and "Last updated" date.
+
 ---
 
 ## Phase 1: Extract Requirements
@@ -63,7 +65,7 @@ Create directory structure:
 
 Create 60-200 total requirements covering all domains. Group related requirements into single files where logical.
 
-When complete, update `docs/08-handoff/latest/phase-01-status.md` with count and gaps.
+When complete, update `docs/08-handoff/latest/phase-01-status.md` with count and gaps, and update `PROJECT-STATUS.md`: set Phase 1 status, record any new gaps, update "Next Actions" and "Last updated" date.
 
 ---
 
@@ -88,7 +90,7 @@ Map every requirement to a component. If a requirement doesn't fit, flag it for 
 
 Record every significant decision as an ADR in `docs/03-architecture/decisions/ADR-XXXX-*.md`.
 
-When complete, update `docs/08-handoff/latest/phase-02-status.md`.
+When complete, update `docs/08-handoff/latest/phase-02-status.md`, and update `PROJECT-STATUS.md`: set Phase 2 status, record component/ADR counts, update "Next Actions" and "Last updated" date.
 
 ---
 
@@ -100,23 +102,25 @@ Use this prompt to create detailed technical specifications.
 
 Create Layer 4 (Specifications). Read `BUILD-SYSTEM.md` (Layer 4), `TEMPLATES.md` (Specification Section format), `GLOSSARY.md`, and the latest handoff (`docs/08-handoff/latest/`) if it exists, then read `docs/03-architecture/` and `docs/02-requirements/` and write all specs.
 
-Target specs (read `docs/01-research/index.md` for the research-to-spec mapping):
+Target specs (read `PROJECT-STATUS.md` section "Layer 4 Spec Inventory" for the canonical list):
 - `protocol/consensus-spec.md`
 - `protocol/staking-spec.md`
 - `protocol/governance-spec.md`
 - `protocol/p2p-wire-spec.md`
 - `protocol/fastpath-spec.md`
+- `protocol/fee-market-spec.md`
+- `storage/state-sync-spec.md`
+- `storage/artifact-availability-spec.md`
 - `runtime/agent-runtime-spec.md`
 - `runtime/policy-engine-spec.md`
 - `runtime/review-engine-spec.md`
-- `storage/artifact-availability-spec.md`
-- `storage/state-sync-spec.md`
-- `security/key-management-spec.md`
+- `runtime/collaboration-spec.md`
+- `security/telemetry-spec.md`
 - `security/incident-response-spec.md`
 
 Every spec **must** include a trust-assumption inventory (section X.8 per `TEMPLATES.md`). Use exact numbers, not placeholders. Uncertain parameters: mark `[TUNE]` with a reasonable default.
 
-When complete, update `docs/08-handoff/latest/phase-03-status.md` with spec inventory and any `[TUNE]` parameters.
+When complete, update `docs/08-handoff/latest/phase-03-status.md` with spec inventory and any `[TUNE]` parameters, and update `PROJECT-STATUS.md`: set Phase 3 status, mark specs as complete in the inventory table, update "Next Actions" and "Last updated" date.
 
 ---
 
@@ -139,7 +143,7 @@ Create these files:
 
 Be realistic about timelines. If uncertain, estimate on the longer side.
 
-When complete, update `docs/08-handoff/latest/phase-04-status.md`.
+When complete, update `docs/08-handoff/latest/phase-04-status.md`, and update `PROJECT-STATUS.md`: set Phase 4 status, update "Next Actions" and "Last updated" date.
 
 ---
 
