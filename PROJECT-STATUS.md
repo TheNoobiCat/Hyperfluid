@@ -13,7 +13,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 1: Requirements | COMPLETE (190 requirements: 160 FR + 30 NFR) |
 | Phase 2: Architecture | COMPLETE (12 components, 12 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS) |
 | Phase 3: Specifications | COMPLETE (14 specs across 4 domains, all FRs mapped, trust-assumption inventories complete. Gate: PASS) |
-| Phase 4: Planning | NOT STARTED |
+| Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
 | Phase 5+: Build | NOT STARTED |
 
 ---
@@ -63,10 +63,12 @@ None.
 
 ## Next Actions
 
-1. Begin Layer 5 (Planning): Define implementation stages, sequencing, and checkpoints.
-2. Prioritize stage ordering: Minimum Viable Chain (C1, C2, C7) -> Economic Foundation (C3, C5) -> Security Boundary (C9) -> Agent Autonomy (C10, C11) -> Protocol Evolution (C4, C6) -> Storage & Quality (C8, C12).
-3. Update traceability matrix: Spec -> Stage -> Implementation links.
-4. Run decentralisation audit gate between Specs and Planning (per BUILD-SYSTEM.md). Specs already audited — no issues found.
+1. Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold. See `docs/05-planning/stages/stage-00-foundation.md`.
+2. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
+3. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+4. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+5. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+6. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -91,4 +93,4 @@ None.
 
 ---
 
-*Last updated: 2026-05-02 (Phase 3 complete, Phase 4 pending)*
+*Last updated: 2026-05-02 (Phase 4 complete, Phase 5 pending)*
