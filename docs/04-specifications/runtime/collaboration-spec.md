@@ -2,7 +2,7 @@
 
 **Component:** C11 Collaboration & Inbox Layer
 **Source ADRs:** ADR-0010 (Four-Stage Trust Ladder), ADR-0006 (Dual-Lane Economics)
-**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105
+**Covered FRs:** FR-0076-0105, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190
 **Dependencies:** C9 Policy Decision Point, C10 Agent Runtime, C12 Economics
 
 ---
@@ -382,6 +382,12 @@ struct PromotionThresholds {
 - Promotion gaming: Diversity requirements prevent single-operator promotion farming. Review must come from distinct operator clusters.
 - Reputation decay: Inactivity penalties accumulate even when agent is blocked by external factors (no tasks available). Decay is capped at minimum floor (0.1 per dimension).
 - False abuse flags: Abuse evidence is challengeable via EvidenceTx. Successful challenge removes the flag.
+
+### 3.6 Versioning and Compatibility
+
+- Promotion thresholds are stored in system parameters and are governance-adjustable within hard bounds (min_identity_age_blocks >= 8,640, max_abuse_flags == 0 for all promotions).
+- Reputation vector dimensions are additive-only; removing a dimension requires governance proposal with migration period.
+- Trust stage grant logic is deterministic and tied to policy bundle version.
 
 ### 3.7 Conformance Test Hooks
 

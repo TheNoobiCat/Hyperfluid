@@ -2,7 +2,7 @@
 
 **Components:** C3 Staking & Validator Manager
 **Source ADRs:** ADR-0007 (Committee BFT with VDF), ADR-0010 (Four-Stage Trust Ladder)
-**Covered FRs:** FR-0011, FR-0012, FR-0013, FR-0014, FR-0015, FR-0016, FR-0017, FR-0018, FR-0019, FR-0020
+**Covered FRs:** FR-0011, FR-0012, FR-0013, FR-0014, FR-0015, FR-0016, FR-0017, FR-0018, FR-0019, FR-0020, FR-0151
 **Dependencies:** C1 Consensus Engine, C2 State Machine & SMT
 
 ---
@@ -176,11 +176,25 @@ enum VoteOption {
 }
 ```
 
-### 2.4 Failure Behavior
+### 2.4 State Transitions
+
+**Voting eligibility validation flow:**
+1. On GovernanceProposeTx receipt, snapshot all active validators at inclusion height.
+2. For each GovernanceVoteTx received: verify validator_id is in snapshot, verify vote weight equals bonded_stake at snapshot height, verify signature.
+3. Vote recorded against (proposal_id, voter_id). Later votes overwrite earlier ones.
+4. At proposal close height: compute quorum from total bonded stake in snapshot; compare total yes/no votes. Proposal passes if yes_weight > no_weight AND total_votes > quorum.
+
+### 2.5 Failure Behavior
 
 - Vote from ineligible validator (not active at snapshot) is rejected.
 - Vote weight computed by validator but verified by state machine against snapshot bonded_stake.
 - Double-vote: the later vote overwrites the earlier one for the same (proposal_id, voter_id).
+
+### 2.6 Versioning and Compatibility
+
+- Governance vote snapshot mechanics versioned in system parameters.
+- Vote weight computation is deterministic and tied to state root at snapshot height.
+- Breaking changes to eligibility rules require governance proposal.
 
 ### 2.7 Conformance Test Hooks
 

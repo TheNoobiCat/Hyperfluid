@@ -2,7 +2,7 @@
 
 **Component:** C4 Governance Engine
 **Source ADRs:** ADR-0003 (PDP Deterministic Rule Chain), ADR-0011 (Review Sandbox Isolation)
-**Covered FRs:** FR-0021, FR-0022, FR-0023, FR-0024, FR-0025, FR-0026, FR-0027, FR-0028, FR-0029, FR-0030
+**Covered FRs:** FR-0021, FR-0022, FR-0023, FR-0024, FR-0025, FR-0026, FR-0027, FR-0028, FR-0029, FR-0030, FR-0155
 **Dependencies:** C1 Consensus Engine, C2 State Machine & SMT, C3 Staking & Validator Manager
 
 ---

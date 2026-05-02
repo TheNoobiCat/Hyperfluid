@@ -2,7 +2,7 @@
 
 **Component:** C10 Agent Runtime
 **Source ADRs:** ADR-0004 (Agent Process Separation), ADR-0010 (Four-Stage Trust Ladder)
-**Covered FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075
+**Covered FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075, FR-0136, FR-0137, FR-0138
 **Dependencies:** C9 Policy Decision Point, C11 Collaboration & Inbox Layer
 
 ---
@@ -225,6 +225,12 @@ struct ForgetInput {
 - **Knowledge entry not found (forget):** No-op; returns "not found" message.
 - **Todo item not found (update):** No-op; logged with warning level.
 
+### 2.6 Versioning and Compatibility
+
+- Tool schemas are versioned independently; new fields are append-only per major version.
+- Bash tool sandbox configuration (cgroup limits, seccomp profile) is operator-tunable and node-version-specific.
+- Knowledge entry TTL and max count are governance-adjustable system parameters.
+
 ### 2.7 Conformance Test Hooks
 
 - Verify exact JSON schema validation: unknown fields rejected.
@@ -286,7 +292,25 @@ struct IngressTokenBudget {
 // coordinator_eligible:  4000/msg,  50000/hr
 ```
 
-### 3.4 Failure Behavior
+### 3.4 State Transitions
+
+**System prompt assembly flow (per iteration):**
+1. Load identity block (agent_id, trust stage, reputation vector).
+2. Load project knowledge (newest N active KnowledgeEntry rows, max 100).
+3. Load current todos (all non-done TodoItems).
+4. Load last HandoffRecord summary.
+5. Load recent messages (last N up to context_window * 0.25).
+6. Load tool specs (CLI specification, 10% of context).
+7. Assemble ContextEnvelope with percentage-capped blocks.
+8. Inline link resolution: HTTP/HTTPS URLs in payloads are resolved and content is appended.
+9. Send assembled prompt to LLM.
+
+**Token budget enforcement (per iteration):**
+1. After LLM response, count tokens in prompt + response.
+2. If consumed > context_limit * 0.70: inject reflection prompt, capture handoff, persist to SQLite, reset messages.
+3. Ingress token budgets enforced by sender trust stage before messages are added to context.
+
+### 3.5 Failure Behavior
 
 - Context overflow: if a block exceeds its allocation, content is summarized or pruned by priority score rather than silently truncated.
 - Excess messages: summarized into digest or dropped with notification to agent.
@@ -306,6 +330,13 @@ struct IngressTokenBudget {
 - PTok normalization across models
   - Justification: Normalization depends on accurate model context limits; cross-model comparability may be approximate.
   - Trust-minimised alternative: Protocol-enforced maximum context length per agent (model-agnostic).
+
+### 3.6 Versioning and Compatibility
+
+- System prompt assembly rules versioned in the policy bundle.
+- Context window allocation percentages are governance-adjustable with hard minima per block type (identity >= 5%, reserve >= 10%).
+- CLI specification is pinned to policy bundle hash; changes require governance proposal.
+- PTok normalization formula is protocol-wide and requires `git:head` update to change.
 
 ---
 
@@ -341,6 +372,23 @@ struct ResourceLimits {
 }
 ```
 
+### 4.4 State Transitions
+
+**Process lifecycle:**
+1. Node starts. Agent runtime process spawned as child with restricted sandbox.
+2. Runtime sandbox configured: seccomp filter (allow: read, write, openat, close, mmap, mprotect, brk, futex, nanosleep — deny all others), namespace isolation (new PID, network, mount namespaces), filesystem limited to designated working directory.
+3. gRPC/HTTP API endpoint exposed on localhost only (127.0.0.1).
+4. Runtime loop begins (see Section 1). All network-mutating operations routed through PDP via API.
+5. On runtime crash: node detects child process exit, reads exit code, logs incident, restarts runtime with same sandbox configuration.
+6. On node crash: runtime detects API unavailability, writes WAL checkpoint, enters wait-for-node loop.
+
+**Sandbox enforcement mechanism:**
+1. Runtime process tree is cgroup-scoped: memory.max, cpu.max, pids.max, io.max enforced by OS.
+2. seccomp BPF filter blocks all syscalls except an explicit allowlist.
+3. Filesystem access: mount namespace with bind-mount of designated working directory only. /proc, /sys, /dev are read-only or hidden.
+4. Network: unshare(CLONE_NEWNET) isolates network namespace. Only loopback interface is available. Node API is the sole channel for outbound data.
+5. On seccomp violation: SIGSYS delivered, runtime terminated, evidence logged to node's incident log with violation details (syscall number, attempted arguments).
+
 ### 4.5 Failure Behavior
 
 - Memory exhaustion: OOM killer terminates agent runtime. Node unaffected. Agent restarts and recovers from SQLite.
@@ -361,3 +409,10 @@ struct ResourceLimits {
 - OS sandbox correctness
   - Justification: Seccomp, namespace isolation, and cgroup limits are OS-level guarantees.
   - Trust-minimised alternative: Hardware-level isolation (VM per agent) — higher overhead but stronger isolation.
+
+### 4.6 Versioning and Compatibility
+
+- Sandbox profile (seccomp allowlist, cgroup limits, namespace configuration) is operator-configurable within protocol-defined minimum bounds.
+- Protocol-enforced minimum sandbox requirements are versioned in the policy bundle.
+- Resource limit defaults are advisory; operators may tighten but not relax below protocol minima.
+- API schema between runtime and node (I-01) is versioned; breaking changes require coordinated node+runtime upgrades.

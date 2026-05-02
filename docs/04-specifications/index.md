@@ -41,10 +41,10 @@ Located in `docs/04-specifications/runtime/`
 
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
-| [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation |
-| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 10-step deterministic rule chain, action plans, risk step-up, quota matrix, audit log |
+| [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
+| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120, FR-0121-0135 | 10-step deterministic rule chain, action plans, risk step-up, quota matrix, key rotation, prompt injection defense, audit log |
 | [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161-0175 | Three-phase quality pipeline, reviewer assignment, anti-collusion, settlement, clawback |
-| [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0091-0105 | Task board, soft leases, team formation, inbox routing, trust ladder, reputation |
+| [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, team formation, inbox routing, trust ladder, reputation, airdrop economics |
 
 ## Security Specs
 
@@ -71,12 +71,20 @@ Located in `docs/04-specifications/security/`
 | FR-0051-0060 | artifact-availability-spec.md | Sections 1-2 |
 | FR-0061-0075 | agent-runtime-spec.md | Sections 1-4 |
 | FR-0076-0105 | collaboration-spec.md | Sections 1-3 |
-| FR-0106-0120 | policy-engine-spec.md | Sections 1-2 |
+| FR-0106-0120 | policy-engine-spec.md | Sections 1-3 |
+| FR-0121-0135 | policy-engine-spec.md | Section 4 |
+| FR-0136-0138 | agent-runtime-spec.md | Section 4 |
 | FR-0139-0141 | telemetry-spec.md | Sections 1-2 |
 | FR-0142-0145 | incident-response-spec.md | Sections 1-2 |
-| FR-0146-0160 | fee-market-spec.md, staking-spec.md | Sections 1-2 |
+| FR-0146, FR-0147, FR-0159, FR-0160 | fee-market-spec.md | Sections 1-2 |
+| FR-0148, FR-0149, FR-0150, FR-0153 | review-engine-spec.md | Section 1 |
+| FR-0151 | staking-spec.md | Section 1 |
+| FR-0152 | p2p-wire-spec.md | Section 2 |
+| FR-0154 | incident-response-spec.md | Section 1 |
+| FR-0155 | governance-spec.md | Section 1 |
+| FR-0156, FR-0157, FR-0158 | collaboration-spec.md | Section 3 |
 | FR-0161-0175 | review-engine-spec.md | Section 1 |
-| FR-0176-0190 | collaboration-spec.md (trust ladder), fee-market-spec.md | — |
+| FR-0176-0190 | collaboration-spec.md | Section 3 |
 | NFR-0001-0015 | (cross-cutting, referenced per spec) | — |
 | NFR-0016-0030 | (cross-cutting, referenced per spec) | — |
 
@@ -107,7 +115,7 @@ Parameters marked `[TUNE]` in specs (reasonable default provided; calibration ta
 |-----------|---------|---------------|-------|
 | min_base_fee | 1,000,000 atto-AGX | fee-market-spec.md 1.3 | Minimum fee floor |
 | emergency_fee_floor | 10x normal minimum | incident-response-spec.md 1.3 | Emergency mode fee |
-| promotion thresholds | See collaboration-spec.md 3.3 | collaboration-spec.md 3.2 | Trust ladder promotion requirements |
+| promotion thresholds | See collaboration-spec.md 3.3 | collaboration-spec.md 3.3 | Trust ladder promotion requirements |
 | recovery exit hysteresis | 0.7x entry thresholds | incident-response-spec.md 1.4 | Prevents mode flapping |
 | fee adjustment denominator | 8 | fee-market-spec.md 1.4 | Base fee adjustment rate |
 | circuit-breaker window persist | 3 windows | incident-response-spec.md 1.4 | Sustained breach windows |

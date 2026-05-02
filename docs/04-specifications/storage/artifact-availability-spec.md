@@ -221,11 +221,28 @@ enum ReconciliationStatus {
 }
 ```
 
-### 2.4 Failure Behavior
+### 2.4 State Transitions
+
+**Telemetry envelope lifecycle:**
+1. Validator observes metric at height H. Constructs TelemetryEnvelope with seq_no = last_submitted_seq_no + 1.
+2. Signs envelope with ML-DSA key. Broadcasts via telemetry gossip lane.
+3. Receiving nodes validate: signature, height bound (|H - current_height| <= 10), seq_no monotonicity.
+4. Valid envelopes appended to telemetry state (SMT key prefix 0x07) for current epoch.
+5. At epoch boundary: collector aggregates all valid envelopes per metric class (see Section 1 for aggregation rules).
+6. Raw envelopes pruned after 30 days (short-term retention tier per retention table).
+
+### 2.5 Failure Behavior
 
 - **Insufficient reporters:** If fewer than M independent reporters submit for a metric class, the metric is marked as low-confidence and circuit-breaker triggers require additional corroboration.
 - **Outlier detection:** Producers with envelopes beyond z=3.0 are flagged. Repeated flagging (3+ consecutive epochs) triggers anomaly report.
 - **Reconciliation failure:** If aggregated telemetry disagrees with independently observable data by more than 10%, reconciliation is marked DiscrepancyDetected and circuit-breaker excludes that metric from triggers.
+
+### 2.6 Versioning and Compatibility
+
+- TelemetryEnvelope schema version is embedded in the first byte of the payload.
+- MetricClass enum is additive-only (governance proposal required for new classes).
+- Aggregation methods per metric class are specified in the policy bundle and activate at epoch boundaries.
+- Reconciliation methodology versioned separately from envelope schema.
 
 ### 2.7 Conformance Test Hooks
 

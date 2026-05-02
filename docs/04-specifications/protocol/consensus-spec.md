@@ -92,7 +92,7 @@ enum TxType {
 ### 1.5 Failure Behavior
 
 - **Committee stall:** If committee drops below 67 validators, block production halts. No governance override possible. Recovery at epoch boundary.
-- **Equivocation:** Two conflicting votes from same validator for same height/round triggers automatic evidence-based slash. See `staking-spec.md` Section 3.
+- **Equivocation:** Two conflicting votes from same validator for same height/round triggers automatic evidence-based slash. See `staking-spec.md` Section 1.
 - **Partition:** Network partition isolating >33% of committee causes liveness failure. Block production resumes on partition heal at next epoch boundary. No rollback needed.
 - **VDF failure:** If insufficient reveals available (less than 33% of committee committed), seed falls back to `SHA3-256(previous_epoch_seed || block_hash_chain || epoch_number)`.
 

@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 12 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS) |
 | Phase 3: Specifications | COMPLETE (14 specs across 4 domains, all FRs mapped, trust-assumption inventories complete. Gate: PASS) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | NOT STARTED |
+| Phase 5+: Build | IN PROGRESS (Stage 00, Week 1 complete) |
 
 ---
 
@@ -63,12 +63,13 @@ None.
 
 ## Next Actions
 
-1. Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold. See `docs/05-planning/stages/stage-00-foundation.md`.
-2. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
-3. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-4. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-5. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-6. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
+1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Week 1 complete. See `docs/08-handoff/latest/checkpoint-2026-05-02.md`.
+2. Stage 00 Week 2: Testnet scaffold (genesis cerberus, single-validator config, start/stop scripts), cold-start verification, `DEVELOPMENT.md`, `cargo-deny` audit pass.
+3. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
+4. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+5. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+6. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+7. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -89,8 +90,8 @@ None.
 | `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
 | `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
 
-**Dropped:** `security/key-management-spec.md` — no Layer 1 research doc backing; key rotation is covered in `policy-engine-spec.md` Section 1 (FR-0118) and key binding is covered in `consensus-spec.md` Section 2 (FR-0005, FR-0006).
+**Dropped:** `security/key-management-spec.md` — no Layer 1 research doc backing; key rotation is covered in `policy-engine-spec.md` Section 3 (FR-0118, NFR-0024) and key binding is covered in `consensus-spec.md` Section 2 (FR-0005, FR-0006).
 
 ---
 
-*Last updated: 2026-05-02 (Phase 4 complete, Phase 5 pending)*
+*Last updated: 2026-05-02 (Phase 5 Stage 00 Week 1 complete; Layer 4 spec gap resolution complete — all 190 FRs traceable, 29 subsections added, FR-0121-0135 prompt injection + FR-0136-0138 sandbox folded into existing specs)*

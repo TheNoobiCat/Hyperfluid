@@ -178,9 +178,24 @@ struct ReconciliationReport {
 - Fill ratio discrepancy >10%: Possible mempool admission discrepancy between nodes. Suggests partition or selective admission.
 - Reconciliation not possible (NotReconcilable): Metric excluded from circuit-breaker triggers. Relies on other metrics only.
 
+### 2.6 Versioning and Compatibility
+
+- Reconciliation methodology versioned in the policy bundle.
+- Independent observable mappings (which metrics reconcile against which on-chain data) are governance-adjustable.
+- Reconciliation discrepancy tolerance (default 10%) is a system parameter stored in protocol state.
+
 ### 2.7 Conformance Test Hooks
 
 - Verify finality lag reconciliation matches block header timestamp differences within 10%.
 - Verify fill ratio reconciliation matches mempool log analysis within 10%.
 - Verify reconciliation discrepancy >10% sets DiscrepancyDetected status.
 - Verify non-reconcilable metrics (reject ratio) are marked NotReconcilable.
+
+### 2.8 Trust-Assumption Inventory
+
+- Independent observable availability
+  - Justification: Reconciliation depends on independently verifiable on-chain data. Some metrics (e.g., reject ratio) have no independent observable.
+  - Trust-minimised alternative: Cross-node telemetry comparison requiring reporter diversity across operator clusters.
+- Reconciliation discrepancy tolerance
+  - Justification: 10% tolerance may miss subtle manipulation. Tighter tolerances increase false-positive reconciliation failures.
+  - Trust-minimised alternative: Governance-adjustable tolerance with per-metric-class granularity.

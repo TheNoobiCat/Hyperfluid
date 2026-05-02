@@ -1,0 +1,10 @@
+[package]
+name = "hyperfluid-fastpath"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "C6 Fast-Path Topic Protocol: Topic-scoped fast merges, quorum certificates, challenge windows"
+
+[dependencies]

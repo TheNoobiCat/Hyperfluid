@@ -2,7 +2,7 @@
 
 **Components:** C12 Economics (Circuit-Breaker), C4 Governance (Post-Incident Bridge)
 **Source ADRs:** ADR-0012 (Circuit-Breaker Escalation Hierarchy)
-**Covered FRs:** FR-0142, FR-0143, FR-0144, FR-0145
+**Covered FRs:** FR-0142, FR-0143, FR-0144, FR-0145, FR-0154
 **Dependencies:** C1 Consensus Engine, C2 State Machine, C4 Governance Engine, Telemetry System
 
 ---
@@ -227,9 +227,24 @@ Phase 3 (Epoch 3 after exit): quota_multiplier = 1.0
 - Deferred operation backlog: Processed at reduced rate during recovery. If backlog exceeds mempool capacity before full normalization, emergency mode extensible by governance.
 - Post-incident report publication: Required within 1 epoch of full recovery. Failure to publish (missing reporter quorum) delays governance bridge but does not affect system operation.
 
+### 2.6 Versioning and Compatibility
+
+- Recovery ramp-up schedule (epoch durations, quota multipliers) is stored in system parameters.
+- Post-incident quota multiplier values are governance-adjustable within bounds (0.25x-1.0x).
+- Recovery phase durations are governance-adjustable; shortening below 1 epoch requires emergency governance path.
+
 ### 2.7 Conformance Test Hooks
 
 - Verify post-incident quotas at 50% for first epoch after emergency exit.
 - Verify linear ramp to 100% over 3-epoch recovery period.
 - Verify deferred operations processed in FIFO order.
 - Verify immediate re-entry to emergency on metric breach during recovery.
+
+### 2.8 Trust-Assumption Inventory
+
+- Recovery metric monitoring reliability
+  - Justification: Recovery depends on accurate telemetry during the ramp-up phases. Fabricated telemetry during recovery could trigger false re-entry.
+  - Trust-minimised alternative: Multi-metric corroboration during recovery; additional reporter independence requirements during recovery phase.
+- Deferred operation backlog bounds
+  - Justification: Backlog during emergency may exceed post-incident processing capacity, causing indefinite delayed operations.
+  - Trust-minimised alternative: Per-operation-class maximum backlog size with oldest-first eviction beyond bounds.

@@ -1,0 +1,10 @@
+[package]
+name = "hyperfluid-artifact"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "C8 Artifact Availability: Content-addressed storage, proof-of-possession, retention, repair"
+
+[dependencies]

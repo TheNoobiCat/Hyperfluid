@@ -63,7 +63,7 @@
 2. Memory safety: MIRI on all `unsafe` blocks. Flag and fix any undefined behavior. Run `cargo-audit` and `cargo-deny` — update any vulnerable dependencies.
 3. Sandbox escape: custom harness attempting filesystem escape (path traversal, symlink attacks), network escape (raw socket via WASI, proxy bypass), and process escape (fork bomb, resource exhaustion). All must fail safe.
 4. Injection defense: prompt injection payloads targeting system prompt loader, action plan forgeries with tampered signatures, replay attacks with stale nonces. PDP must reject all.
-5. Key compromise: simulate agent key leak. Verify key rotation (policy-engine-spec.md Section 1, FR-0118) prevents replay with old key; incident FSM escalates.
+5. Key compromise: simulate agent key leak. Verify key rotation (policy-engine-spec.md Section 3, FR-0118) prevents replay with old key; incident FSM escalates.
 6. Parameter calibration: run load tests at 50%, 100%, 150%, 200% target throughput. Measure fee adjustment response, circuit-breaker trigger points, review pipeline backlog. Derive recommended [TUNE] parameter values.
 7. Bug fixes from all validation findings. Re-run affected conformance tests.
 8. Exit checkpoint: all exit criteria met; calibration report written; security audit clean.

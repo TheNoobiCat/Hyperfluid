@@ -1,0 +1,10 @@
+[package]
+name = "hyperfluid-governance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "C4 Governance Engine: On-chain git:head management, proposal lifecycle, vote aggregation"
+
+[dependencies]

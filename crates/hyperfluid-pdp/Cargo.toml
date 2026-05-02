@@ -1,0 +1,11 @@
+[package]
+name = "hyperfluid-pdp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "C9 Policy Decision Point: Deterministic policy evaluation, schema validation, risk scoring, quota enforcement"
+
+[dependencies]
+thiserror.workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "hyperfluid-economics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "C12 Economics & Incentives: Review markets, quality scoring, anti-Sybil, rewards, circuit-breakers"
+
+[dependencies]

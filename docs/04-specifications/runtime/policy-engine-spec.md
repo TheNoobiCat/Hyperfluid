@@ -2,7 +2,7 @@
 
 **Component:** C9 Policy Decision Point
 **Source ADRs:** ADR-0003 (PDP Deterministic Rule Chain), ADR-0012 (Circuit-Breaker Hierarchy)
-**Covered FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0112, FR-0113, FR-0114, FR-0115, FR-0116, FR-0117, FR-0118, FR-0119, FR-0120
+**Covered FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0112, FR-0113, FR-0114, FR-0115, FR-0116, FR-0117, FR-0118, FR-0119, FR-0120, FR-0121, FR-0122, FR-0123, FR-0124, FR-0125, FR-0126, FR-0127, FR-0128, FR-0129, FR-0130, FR-0131, FR-0132, FR-0133, FR-0134, FR-0135
 **Dependencies:** C1 Consensus Engine, C2 State Machine, C4 Governance Engine
 
 ---
@@ -112,7 +112,10 @@ Step 1: SCHEMA VALIDATION
   - Unknown fields → SCHEMA_VIOLATION → DENIED.
 
 Step 2: SIGNATURE VERIFICATION
-  - Verify agent_signature against agent's registered pubkey.
+  - Look up agent's key binding in state (see Section 3).
+  - If in grace window: verify against active_pubkey; on mismatch, retry against pending_pubkey. Accept if either matches.
+  - If past grace window (rotation finalized): verify only against active_pubkey. Pending_pubkey is now active; old key is revoked.
+  - If no pending rotation: verify against active_pubkey.
   - Invalid → SIGNATURE_INVALID → DENIED.
 
 Step 3: POLICY BUNDLE MATCH
@@ -190,6 +193,8 @@ Step 11: APPROVED
 - Verify atomic quota reservation: no negative balances, release on execution failure.
 - Verify plan binding hash: parameter drift → DRIFT_VIOLATION.
 - Verify taint tracking: medium/high risk action from tainted source requires additional review.
+- Verify key rotation: both old and new keys valid during 100-block grace window; old key rejected after grace window finalization.
+- Verify nonce continuity across key rotation (nonce is per agent_id, not per key).
 
 ### 1.8 Trust-Assumption Inventory
 
@@ -269,3 +274,341 @@ struct QuotaState {
 - Verify quota release on execution failure.
 - Verify circuit-breaker mode tightens all non-critical quotas.
 - Verify stage-specific multipliers applied correctly for per-sender quotas.
+
+### 2.6 Versioning and Compatibility
+
+- Quota matrix values are governance-adjustable within defined bounds per quota ID.
+- Stage multiplier tables are stored in system parameters and activate at epoch boundaries.
+- New quota IDs may be added via governance; existing IDs may not be removed (only zeroed to 0 limit).
+- Enforcement point ordering (hard deny → sender/stage → per-resource) is protocol-wide and requires `git:head` update to change.
+
+### 2.8 Trust-Assumption Inventory
+
+- Quota enforcement consistency
+  - Justification: Quotas are enforced at the PDP running on every node. Deterministic rule chain ensures identical enforcement.
+  - Trust-minimised alternative: On-chain quota state with SMT inclusion proofs per consumption; slashing for validators that approve quota-exceeding plans.
+- Stage multiplier calibration
+  - Justification: Multiplier differences between trust stages are governance-set and may create unintended privilege gradients.
+  - Trust-minimised alternative: Protocol-hardcoded ratio bounds (e.g., no stage gets >10x any lower stage multiplier).
+
+---
+
+## Section 3: Key Rotation State Finalization
+
+### 3.1 Purpose
+
+Define the key rotation state finalization rules for agent cryptographic keys. Covers FR-0118 and NFR-0024.
+
+### 3.2 Normative Behavior
+
+- The system MUST commit a key rotation transaction to state before a new agent public key is accepted for signature verification.
+- The system MUST provide a deterministic 100-block grace window during which both the old and new keys are valid for signature verification.
+- The system MUST reject signatures verified against a revoked (old) key after the grace window ends.
+- The system MUST record every key rotation event in the append-only PDP audit log.
+- The system MUST preserve agent identity (agent_id), nonce, and trust stage across key rotation.
+- The system MUST allow a pending rotation to be superseded by a new rotation transaction during the grace window, restarting the 100-block window.
+- The system MUST use the same ML-DSA-65 signature scheme for the new key.
+
+### 3.3 Data Structures
+
+```rust
+struct KeyBinding {
+    agent_id: [u8; 32],          // SHA3-256 of original active pubkey (stable identity)
+    active_pubkey: Vec<u8>,     // ML-DSA-65 pubkey (current, always set)
+    pending_pubkey: Option<Vec<u8>>,  // set during grace window
+    rotation_height: Option<u64>,     // block height when rotation tx committed
+    grace_end_height: Option<u64>,    // rotation_height + 100
+}
+
+enum TxType {
+    // ... existing transaction types ...
+    KeyRotationTx,
+}
+
+struct KeyRotationTransaction {
+    agent_id: [u8; 32],
+    new_pubkey: Vec<u8>,         // ML-DSA-65
+    new_pubkey_hash: [u8; 32],  // SHA3-256(new_pubkey) for pre-computation
+    signature: Vec<u8>,          // signed with current active_pubkey
+    nonce: u64,
+}
+```
+
+### 3.4 State Transitions
+
+**Key rotation lifecycle:**
+
+```
+State: STABLE
+  - active_pubkey only (no pending rotation)
+  - Signature verification uses active_pubkey
+
+  Agent submits KeyRotationTransaction ──→ State: GRACE_WINDOW
+
+State: GRACE_WINDOW (100 blocks)
+  - active_pubkey = old key, pending_pubkey = Some(new_key)
+  - Signature verification: try active_pubkey first; on fail, try pending_pubkey
+  - grace_end_height = commit_height + 100
+
+  New rotation tx submitted during grace → grace_end_height = new_height + 100 (restart)
+  Current block >= grace_end_height → State: ROTATION_FINALIZED
+
+State: ROTATION_FINALIZED
+  - active_pubkey = pending_pubkey
+  - pending_pubkey = None
+  - Old key permanently revoked
+  - Rotation event written to audit log
+  → returns to STABLE with new active_pubkey
+```
+
+**Signature verification during each phase:**
+
+| Phase | Verification rule |
+|-------|-------------------|
+| STABLE (no pending) | Verify against active_pubkey only |
+| GRACE_WINDOW | Verify against active_pubkey; on fail, retry pending_pubkey. Accept if either matches. |
+| ROTATION_FINALIZED | Verify against active_pubkey only (old key revoked, will fail) |
+
+**Nonce preservation:** Nonce is bound to agent_id, not pubkey. Nonce continuity is maintained across rotation — the agent continues from last_nonce + 1 with the new key.
+
+**Trust stage preservation:** Trust stage, reputation, and staked AGX are bound to agent_id. Key rotation does not reset or degrade these.
+
+### 3.5 Failure Behavior
+
+- **Replay with old key after finalization:** Old key no longer matches active_pubkey; ML-DSA verification fails → SIGNATURE_INVALID. Audit log records the attempt for intrusion detection.
+- **Double rotation during grace window:** Second KeyRotationTransaction resets grace_end_height to new commit height + 100. The original pending_pubkey is replaced. This prevents indefinite double-key windows (at most one pending rotation at a time).
+- **Rotation tx signed with revoked key:** Same as replay → SIGNATURE_INVALID.
+- **Rotation tx with invalid nonce:** Caught by Step 4 replay protection in the PDP rule chain before key binding lookup.
+- **Key rotation during circuit-breaker mode:** Rotation transactions are not subject to circuit-breaker quotas. Agents must be able to rotate compromised keys during emergencies.
+- **Key rotation during incident escalation:** No special handling required; same grace window rules apply. Rotation audit trail supports incident forensics.
+
+### 3.6 Versioning and Compatibility
+
+- KeyRotationTransaction type is versioned; new fields are append-only.
+- KeyBinding state is per-agent with no protocol-wide migration needed.
+- Rotation flow is backwards-compatible: nodes unaware of pending_pubkey field (empty → STABLE state) treat it as no rotation in progress.
+
+### 3.7 Conformance Test Hooks
+
+- Verify both old and new keys produce valid signature verification during grace window (100 blocks).
+- Verify old key is rejected after grace window finalization (block 101+ after rotation tx).
+- Verify second rotation during grace window resets grace_end_height and replaces pending_pubkey.
+- Verify nonce continuity: nonce after rotation equals last nonce before rotation + 1.
+- Verify trust stage and agent_id are preserved across rotation.
+- Verify rotation event is recorded in PDP audit log with both old and new pubkey hashes.
+- Verify rotation tx signed with a non-active key (not active_pubkey and not pending_pubkey) is rejected.
+
+### 3.8 Trust-Assumption Inventory
+
+- ML-DSA-65 cryptographic security
+  - Justification: Post-quantum signature security for all agent keys. Key rotation relies on the same primitive as all other signing operations.
+  - Trust-minimised alternative: ML-DSA is itself the post-quantum choice. Hybrid with classical ECDSA possible during transition.
+- 100-block grace window bounded risk
+  - Justification: A compromised old key can still sign during the 100-block grace window. This is an intentional tradeoff — the grace window allows in-flight action plans to complete, preventing operational disruption during legitimate rotation. At ~10s block times, the exposure window is ~17 minutes.
+  - Trust-minimised alternative: Zero-grace-window (instant rotation) would atomically revoke old key but would cause in-flight plan failures. The 100-block window is the minimal value that covers a full challenge window (144 blocks of plan validity) and allows queued plans to complete. Shorter windows (~50 blocks) increase the risk of false-positive plan rejections during rotation.
+
+---
+
+## Section 4: Prompt Injection Defense
+
+### 4.1 Purpose
+
+Define the deterministic policy controls, attack corpus registry, and evaluation framework for prompt injection defense at the protocol boundary. Covers FR-0121 through FR-0135.
+
+### 4.2 Normative Behavior
+
+- The system MUST treat all inbound payloads (DM, topic messages, documentation, web content, code) as untrusted at ingress regardless of sender identity.
+- The system MUST NOT allow untrusted text to directly trigger network-mutating actions without passing through the deterministic PDP rule chain.
+- The system MUST use classifier signals (e.g., ModernBERT-style) as auxiliary scoring inputs only; classifiers MUST NOT serve as root authorization truth.
+- The system MUST maintain a versioned attack corpus registry with deterministic scenario schemas, expected policy outcomes, and severity weights.
+- The system MUST support deterministic scenario replay with reproducible traces using seeded randomness.
+- The system MUST gate runtime promotion on dual metrics: safety (ASR, UER) and productivity (FPR-deny, P99 latency, task throughput delta).
+- The system MUST run canary scenario subsets periodically in production-like environments with drift budget alerting.
+- The system MUST feed discovered attack vectors from security incidents back into the attack corpus within defined SLAs.
+- The system MUST maintain rotating hidden scenario subsets to prevent runtime overfitting.
+- The system MUST sign evaluation telemetry with ML-DSA to prevent compromised runtimes from under-reporting unsafe executions.
+- The system MUST support staged policy bundle rollout with automatic rollback on canary metric breach.
+- The system MUST require additional review certificates for high-risk actions derived from tainted content (see Section 1, Step 8: Taint Check).
+- The system MUST block actions that pass schema validation but violate resource ACL, quota caps, or risk-step-up requirements.
+- The system MUST apply identical policy gate evaluation to actions from any sender regardless of apparent trust level.
+- The system MUST detect multi-turn delayed trigger payloads by evaluating each action independently of benign conversation history.
+- The system MUST sanitize role confusion payloads (e.g., "ignore previous instructions", "system:") from untrusted content before context insertion.
+
+### 4.3 Data Structures
+
+```rust
+struct AttackScenario {
+    scenario_id: [u8; 32],
+    corpus_version_hash: [u8; 32],
+    ingress_channel: IngressChannel,
+    initial_state_hash: [u8; 32],
+    interaction_script: Vec<InteractionStep>,
+    expected_outcome: ExpectedOutcome,
+    expected_reason_code: Option<DenyReason>,
+    severity_weight: f64,                // 0.0 to 1.0
+}
+
+enum IngressChannel {
+    DirectMessage,
+    TopicMessage,
+    DocumentAttachment,
+    WebContent,
+    CodeInput,
+}
+
+struct InteractionStep {
+    step_index: u32,
+    sender_role: SenderRole,
+    content: Vec<u8>,
+    asserted_identity: Option<[u8; 32]>,
+}
+
+enum SenderRole {
+    System,
+    User,
+    Assistant,
+}
+
+enum ExpectedOutcome {
+    Deny,
+    AllowLowRisk,
+    AllowWithStepUp,
+}
+
+struct AttackCorpus {
+    corpus_version: u64,
+    scenarios: Vec<AttackScenario>,
+    hidden_pool: Vec<AttackScenario>,     // not visible to runtime developers
+    created_at_height: u64,
+    last_updated_height: u64,
+    corpus_hash: [u8; 32],               // Merkle root over all scenarios
+}
+
+struct ScenarioRunResult {
+    scenario_id: [u8; 32],
+    run_seed: [u8; 32],                  // derived from initial_state_hash
+    trace: Vec<TraceEvent>,
+    outcome: ExpectedOutcome,
+    actual_outcome: ExpectedOutcome,
+    match_result: bool,                   // expected == actual
+    latency_ms: u64,
+    policy_decisions: Vec<ActionPlanResponse>,
+}
+
+struct TraceEvent {
+    step_index: u32,
+    event_type: TraceEventType,
+    data: Vec<u8>,
+    height: u64,
+}
+
+enum TraceEventType {
+    PolicyEvaluation,
+    ToolCall,
+    TaintPropagation,
+    QuotaCheck,
+}
+
+struct DualMetricGate {
+    max_asr: f64,                  // Acceptable Safety Rate ceiling
+    max_uer: f64,                  // Unsafe Execution Rate ceiling
+    max_fpr_deny: f64,             // False Positive Rate (deny) ceiling
+    max_p99_latency_ms: u64,       // P99 policy evaluation latency ceiling
+    task_throughput_delta_pct: f64, // maximum allowed throughput degradation
+}
+
+struct CanaryRunConfig {
+    interval_blocks: u64,          // how often to run canaries
+    scenario_subset_hash: [u8; 32],
+    drift_budget_asr: f64,         // max allowed ASR increase
+    drift_budget_uer: f64,         // max allowed UER increase
+}
+```
+
+### 4.4 State Transitions
+
+**Attack corpus lifecycle:**
+1. Initial corpus seeded from known injection patterns at genesis.
+2. Governance proposals may add new scenarios (FR-0123 acceptance criteria: deterministic schemas with expected outcomes).
+3. Attack vectors discovered during incidents enter the corpus via incident-to-corpus feedback (post-incident review exports evidence as new scenarios).
+4. Hidden scenario pool rotates on a schedule (governance-adjustable; default every 30 days). Rotation replaces 20% of hidden scenarios with newly generated ones.
+5. Corpus version bumps on any scenario addition. Version hash references the Merkle root over all scenarios.
+
+**Scenario runner execution flow:**
+1. Load scenario from corpus by scenario_id.
+2. Derive deterministic seed: SHA3-256(initial_state_hash || corpus_version_hash || scenario_id).
+3. Initialize PDP state snapshot from initial_state_hash.
+4. For each InteractionStep in interaction_script:
+   a. Feed content to agent runtime via specified ingress_channel.
+   b. Record agent's tool call attempts and PDP evaluations.
+   c. Record trace event (PolicyEvaluation, ToolCall, TaintPropagation, QuotaCheck).
+5. Classify actual_outcome: Deny (all mutations blocked), AllowLowRisk (only low-risk approved), AllowWithStepUp (high-risk with valid step-up certificate).
+6. Compare actual_outcome to expected_outcome. Record match_result.
+7. Archive ScenarioRunResult with content-addressed run_id.
+
+**Release gating pipeline:**
+1. On policy bundle update proposal, run full corpus against proposed policy.
+2. Compute ASR = denied_should_deny / total_should_deny, UER = allowed_should_deny / total_should_deny.
+3. Compute FPR-deny = denied_should_allow / total_should_allow, P99 latency, task throughput delta vs baseline.
+4. If any metric exceeds DualMetricGate thresholds: block release. Record all failures by severity.
+5. Severity-weighted failures may hard-fail even if aggregate passes.
+
+**Canary drift detection:**
+1. At configured interval, select canary scenario subset from corpus.
+2. Run scenarios against current production PDP+policy.
+3. Compute rolling ASR/UER over last N canary runs.
+4. If rolling ASR/n > baseline * (1 + drift_budget_asr): trigger alert. Export investigation bundle.
+5. Archive canary results for trend analysis.
+
+**Incident-to-corpus feedback loop:**
+1. On incident resolution (PostIncidentReport published), security review identifies new attack vectors.
+2. Attack vectors converted to AttackScenario format with severity_weight >= 0.7.
+3. Scenarios submitted via GovernanceProposeTx for corpus addition.
+4. SLA: new attack families added to corpus within 7 epochs of incident resolution.
+
+### 4.5 Failure Behavior
+
+- **Corpus blind spot:** An attack vector not in the corpus will not be caught by scenario runner. Mitigation: regular hidden pool rotation, incident-to-corpus feedback loop.
+- **Metric gaming:** Runtimes may optimize for known benchmarks. Mitigation: hidden scenario subsets (FR-0128), canary drift detection, telemetry signing prevents data manipulation.
+- **Overblocking release:** Policy update may pass safety metrics but degrade productivity. Mitigation: dual metric gating (FR-0125), staged rollout with canary subset (FR-0130), automatic rollback on threshold breach.
+- **Telemetry tampering:** Compromised runtime under-reports unsafe executions. Mitigation: signed telemetry envelopes (FR-0129), independent policy gateway reconciliation (FR-0141).
+- **Multi-turn delayed trigger:** Injection spread across multiple benign turns before activation. Mitigation: each action plan evaluated independently; no cumulative trust accumulation from prior benign turns.
+- **Role confusion bypass:** Payload mimics system instructions. Mitigation: deterministic pattern filtering on untrusted content; system prompt identity block is append-only and protected from message-level modification.
+- **Trusted channel compromise:** Compromised trusted sender delivers injection payload. Mitigation: all senders pass identical policy gate regardless of trust stage (FR-0133).
+
+### 4.6 Versioning and Compatibility
+
+- Attack corpus version is pinned in policy bundle for reproducible evaluation.
+- Scenario schema is append-only; new fields ignored by old runners.
+- DualMetricGate thresholds are governance-adjustable within protocol bounds.
+- Canary run interval and drift budgets are system parameters stored in protocol state.
+- Hidden pool rotation schedule is governance-adjustable.
+
+### 4.7 Conformance Test Hooks
+
+- Verify inbound payload from any sender (including trusted) is marked untrusted at ingress.
+- Verify classifier signals tighten quotas but cannot authorize execution.
+- Verify attack corpus scenario replay produces deterministic traces from same seed + state hash.
+- Verify dual metric gate blocks release when ASR > threshold OR UER > threshold.
+- Verify dual metric gate blocks release when FPR-deny exceeds ceiling.
+- Verify canary drift detection alerts when rolling ASR exceeds baseline + drift_budget.
+- Verify incident-to-corpus feedback adds new scenarios to corpus within SLA.
+- Verify staged rollout rolls back automatically on canary metric breach.
+- Verify taint-aware policy: high-risk action from tainted source requires step-up certificate.
+- Verify schema-conformant but ACL-violating actions are blocked.
+- Verify identical policy gate evaluation for all senders (no trust-based bypass).
+- Verify multi-turn delayed trigger: each action evaluated independently; no history-based trust.
+- Verify role confusion payloads are sanitized before context insertion.
+- Verify signed eval telemetry cannot be forged (invalid signature → rejected).
+
+### 4.8 Trust-Assumption Inventory
+
+- Classifier model quality
+  - Justification: Classifier (ModernBERT-style) is used for quota tightening and quarantine, not root authorization. False positives degrade throughput but never create security gaps.
+  - Trust-minimised alternative: No ML classifier; deterministic rule thresholds only.
+- Attack corpus completeness
+  - Justification: The corpus cannot enumerate all possible injection attacks. Unknown attack vectors will not be caught by scenario runner.
+  - Trust-minimised alternative: Continuous red-team engagement and incident-to-corpus feedback loop; hidden scenario rotation prevents overfitting to known patterns.
+- Deterministic PDP as root guard
+  - Justification: Prompt injection defense relies on the PDP rule chain being consistently enforced on all nodes. Any PDP bypass is a security boundary violation.
+  - Trust-minimised alternative: Formal verification of PDP rule chain determinism; adversarial testing against PDP implementation.

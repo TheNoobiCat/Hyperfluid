@@ -147,8 +147,23 @@ At each epoch boundary:
 - Validator slashed during epoch still receives rebate for blocks validated before slash.
 - Fractional atto-AGX: any remainder from integer division is added to the fee_burn_accumulator.
 
+### 2.6 Versioning and Compatibility
+
+- Fee rebate computation formula versioned in system parameters.
+- Rebate distribution epoch boundary execution is deterministic; all nodes compute identical rebates.
+- Breaking changes to rebate formula require governance proposal.
+
 ### 2.7 Conformance Test Hooks
 
 - Verify rebate amount proportional to bonded_stake / total_bonded_stake.
 - Verify rebate credited automatically at epoch boundary.
 - Verify paused validators receive no rebate.
+
+### 2.8 Trust-Assumption Inventory
+
+- Validator rebate fairness
+  - Justification: Fee rebates are computed from on-chain priority fee totals. Validators cannot inflate own rebates without consensus.
+  - Trust-minimised alternative: On-chain fee accounting with Merkle proof of per-block fee totals.
+- Stake-proportional reward liveness
+  - Justification: Validators receive rebates proportionally; large stakers earn proportionally more. This is by design, not a trust assumption.
+  - Trust-minimised alternative: Flat rebate with stake-capped multiplier to prevent concentration.

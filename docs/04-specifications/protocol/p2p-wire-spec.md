@@ -2,7 +2,7 @@
 
 **Component:** C7 P2P Networking & Connection Manager
 **Source ADRs:** ADR-0001 (12-Component Architecture)
-**Covered FRs:** FR-0041, FR-0042, FR-0043, FR-0044, FR-0045, FR-0046, FR-0047, FR-0048, FR-0049, FR-0050
+**Covered FRs:** FR-0041, FR-0042, FR-0043, FR-0044, FR-0045, FR-0046, FR-0047, FR-0048, FR-0049, FR-0050, FR-0152
 **Dependencies:** Ockam P2P framework, ML-DSA-65 identity keys
 
 ---
@@ -166,11 +166,29 @@ struct MempoolConfig {
 }
 ```
 
-### 2.4 Failure Behavior
+### 2.4 State Transitions
+
+**Mempool admission flow:**
+1. Transaction arrives at mempool ingress.
+2. Classify transaction type into lane (Evidence, ConsensusControl, Governance, Transfer).
+3. Check lane capacity: if lane is at reserved capacity, reject.
+4. Check per-sender limit: if sender has >= per_sender_tx_limit pending, reject lowest-fee tx from that sender in the same lane.
+5. Insert transaction into lane, ordered by priority_fee descending (FIFO by fee within lane).
+6. On block proposal: proposer selects transactions from each lane up to block gas target, respecting lane capacities.
+
+**Lane reallocation:** Under congestion, dynamic reallocation increases critical lane capacity up to 100% reserved. Transfer lane capacity may shrink but never below 25%.
+
+### 2.5 Failure Behavior
 
 - Lane starvation: critical lane transactions always admitted up to reserved capacity.
 - Transfer lane full: lowest-fee transactions evicted first.
 - Per-sender limit reached: additional transactions from same sender are rejected.
+
+### 2.6 Versioning and Compatibility
+
+- Mempool lane capacities are governance-adjustable within defined bounds (evidence 5%-25%, control 5%-20%, governance 5%-20%).
+- Per-sender transaction limit is stored in system parameters.
+- Lane classification is deterministic; new transaction types default to Transfer lane unless governance maps them.
 
 ### 2.7 Conformance Test Hooks
 
@@ -178,3 +196,12 @@ struct MempoolConfig {
 - Verify reserved capacity for governance lane under 100% transfer saturation.
 - Verify dynamic reallocation does not reduce critical lane capacities.
 - Verify per-lane eviction: lowest fee within lane evicted first.
+
+### 2.8 Trust-Assumption Inventory
+
+- Lane reservation under byzantine behavior
+  - Justification: Validators could bypass lane reservation in their own blocks. Peer rejection of blocks violating lane capacity provides enforcement.
+  - Trust-minimised alternative: Block validation rule rejects blocks that violate lane capacity; committee BFT requires 2f+1 honest validators to reject invalid blocks.
+- Mempool admission fairness
+  - Justification: Per-sender limits are locally enforced; colluding validators could admit own transactions exceeding limits.
+  - Trust-minimised alternative: Transaction admission proofs in block header verify lane/reservation compliance per-sender.

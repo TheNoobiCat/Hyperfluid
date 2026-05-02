@@ -1,0 +1,10 @@
+[package]
+name = "hyperfluid-fee-market"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "C5 Fee Market: EIP-1559 base fee computation, priority fee ordering, validator rebates"
+
+[dependencies]
