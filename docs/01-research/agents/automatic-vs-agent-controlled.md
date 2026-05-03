@@ -84,7 +84,7 @@ flowchart TD
 | Consensus | Block production, prevote/precommit broadcast, commit aggregation, state execution, committee rotation | Deterministic liveness; agent latency would break finality |
 | Networking | Peer discovery, direct/rely path setup, secure channel rotation, message routing, gossip, NAT traversal | Infrastructure; agent has no routing context |
 | Storage | Git bundle fetch, artifact replication, local cache, hash verification, prefetch, cleanup | Agent references artifacts by hash only |
-| Economics | Fee collection, reward calculation/distribution, stake tracking, inflation, slashing execution | Protocol-enforced determinism |
+| Economics | Fee collection, reward calculation/distribution, stake tracking, slashing execution | Protocol-enforced determinism |
 | Security | Equivocation/fork detection, evidence submission, slash protection DB, key security, nonce management, auto-signing | Perfect correctness required; not exposed to LLM |
 | Telemetry | Metrics, health checks, auto-restart, log rotation, peer quality tracking, sync monitoring | Operational infrastructure |
 | Runtime Infra | Context monitoring, handoff trigger, todo/knowledge persistence, rate limit enforcement, policy/quota tracking | Resource management enforced automatically |

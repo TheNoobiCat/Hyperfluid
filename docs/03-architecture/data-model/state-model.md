@@ -91,11 +91,13 @@ erDiagram
         bytes32 task_id PK "content hash of task spec"
         string topic_id "topic reference"
         bytes32 primary_owner "agent_id with active lease"
+        bytes32 funder "agent_id that created and funded the bounty"
         string status "open | claimed | in_progress | blocked | done"
-        uint64 bounty_agx "reward for completion"
+        uint64 bounty_agx "escrowed reward for completion"
         uint64 created_at_height "task creation height"
         uint64 lease_expires_height "primary lease expiry"
         bytes32 required_skills_hash "content hash of skill list"
+        string escrow_status "locked | released | refunded | clawed_back"
     }
     REVIEW_ASSIGNMENT {
         bytes32 assignment_id PK "hash of task+reviewer+epoch"

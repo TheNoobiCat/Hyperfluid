@@ -222,9 +222,9 @@ QuotaCheckResponse {
 
 ---
 
-### I-08: C12 → C2: Reward Settlement
+### I-08: C12 → C2: Bounty Settlement
 
-**Purpose:** Economics component computes rewards from finalized records and submits settlement to State Machine.
+**Purpose:** Economics component processes bounty payouts from finalized escrow records and submits settlement to State Machine. No new AGX is minted — all payouts originate from escrowed task bounties.
 
 **Direction:** C12 → C2
 
@@ -232,15 +232,16 @@ QuotaCheckResponse {
 ```
 SettlementBatch {
   epoch: uint64
-  settlements: [RewardEntry]
-  total_agx_distributed: uint64
+  settlements: [BountyPayout]
+  total_agx_released: uint64    // released from escrow, not newly minted
   computation_root: bytes32 (content hash of inputs)
 }
 
-RewardEntry {
+BountyPayout {
   recipient_id: bytes32
   amount: uint64
   reward_type: enum (work | review | relay | witness | staking_rebate)
+  escrow_ref: bytes32           // references the task escrow this came from
   evidence_ref: bytes32
 }
 ```

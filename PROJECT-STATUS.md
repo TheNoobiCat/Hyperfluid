@@ -10,7 +10,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 |-------|--------|
 | Phase 0: Research Audit | COMPLETE |
 | Phase 0: Decentralisation Audit | COMPLETE (issues in `docs/01-research/_overengineered.md`, fixes applied) |
-| Phase 1: Requirements | COMPLETE (190 requirements: 160 FR + 30 NFR) |
+| Phase 1: Requirements | COMPLETE (195 requirements: 165 FR + 30 NFR) |
 | Phase 2: Architecture | COMPLETE (12 components, 12 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS) |
 | Phase 3: Specifications | COMPLETE (14 specs across 4 domains, all FRs mapped, trust-assumption inventories complete. Gate: PASS) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
@@ -75,23 +75,40 @@ None.
 
 | Spec | Covers (Component/FR) | Status |
 |------|----------------------|--------|
+| `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075, FR-0193 Telegram/TUI — Section 5 added) | complete |
+| `runtime/policy-engine-spec.md` | C9 Policy Decision Point (FR-0106-0120) | complete |
+| `runtime/review-engine-spec.md` | C12 Economics - review markets, Sybil adjudication (FR-0161-0175, FR-0191 — Section 2 added) | complete |
+| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox, bounty escrow (FR-0076-0105, FR-0153b — Section 1.4 escrow lifecycle added) | complete |
+| `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
+| `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
+| `protocol/fee-market-spec.md` | C5 Fee Market (FR-0146-0160) | complete |
 | `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010) | complete |
 | `protocol/staking-spec.md` | C3 Staking & Validator Manager (FR-0011-0020) | complete |
 | `protocol/governance-spec.md` | C4 Governance Engine (FR-0021-0030) | complete |
 | `protocol/p2p-wire-spec.md` | C7 P2P Networking (FR-0041-0050) | complete |
 | `protocol/fastpath-spec.md` | C6 Fast-Path Topic Protocol (FR-0031-0040) | complete |
-| `protocol/fee-market-spec.md` | C5 Fee Market (FR-0146-0160) | complete |
 | `storage/state-sync-spec.md` | C2 State Machine & SMT (FR-0010, NFR-0009) | complete |
 | `storage/artifact-availability-spec.md` | C8 Artifact Availability (FR-0051-0060) | complete |
-| `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075) | complete |
-| `runtime/policy-engine-spec.md` | C9 Policy Decision Point (FR-0106-0120) | complete |
-| `runtime/review-engine-spec.md` | C12 Economics - review markets (FR-0161-0175) | complete |
-| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox (FR-0076-0105) | complete |
-| `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
-| `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
 
 **Dropped:** `security/key-management-spec.md` — no Layer 1 research doc backing; key rotation is covered in `policy-engine-spec.md` Section 3 (FR-0118, NFR-0024) and key binding is covered in `consensus-spec.md` Section 2 (FR-0005, FR-0006).
 
+## Recent Design Changes (2026-05-03)
+
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| AGX monetary policy | Switched from inflationary protocol issuance to genesis-only fixed supply. All AGX minted at genesis, held by airdrop agent. Agents earn via bounty marketplace, not protocol emissions. | `agx-economics-and-adversarial-incentives.md`, `FR-0146-0160`, `FR-0176-0190`, `automatic-vs-agent-controlled.md` |
+| Airdrop agent dual role | Airdrop agent now also posts initial seed tasks with bounties from genesis supply to bootstrap the marketplace. | `agx-economics-and-adversarial-incentives.md`, `collaboration-layer-parallel-teams.md`, FR-0192 |
+| Progressive Sybil bond | Bond increased to 20 AGX, released in 4 tranches gated by verified work and trust stage progression. | `agx-economics-and-adversarial-incentives.md`, FR-0157 |
+| Dynamic proof-of-agent puzzle | SHA3-256 HashCash with difficulty scaling with registration rate. Replaces unspecified "deterministic puzzle." | `agx-economics-and-adversarial-incentives.md`, FR-0176 |
+| Sybil detection correlation engine | New research doc. Five-signal behavioral correlation with automated adjudication panels. | `sybil-detection-correlation-engine.md` (new), FR-0191 |
+| Telegram bot + TUI setup | New research doc. Optional single-tenant Telegram dashboard and ratatui first-launch config wizard. | `agent-telemetry-interface.md` (new), FR-0193 |
+| Bounty escrow mechanism | Task creation now requires escrowing bounty from creator's balance. Formalized escrow lifecycle. | `agx-economics-and-adversarial-incentives.md`, FR-0153b |
+
+## New Research Documents
+
+- `docs/01-research/agents/sybil-detection-correlation-engine.md` — Sybil detection via behavioral correlation, automated adjudication, economic deterrence
+- `docs/01-research/agents/agent-telemetry-interface.md` — Telegram bot dashboard and ratatui TUI setup wizard for agent operators
+
 ---
 
-*Last updated: 2026-05-02 (Phase 5 Stage 00 Week 1 complete; Layer 4 spec gap resolution complete — all 190 FRs traceable, 29 subsections added, FR-0121-0135 prompt injection + FR-0136-0138 sandbox folded into existing specs)*
+*Last updated: 2026-05-03 (Phase 5 Stage 00 Week 1 complete; economic model redesigned to genesis-only fixed supply with bounty marketplace; Sybil detection correlation engine designed; Telegram bot + TUI setup wizard designed; 195 FRs: 165 FR + 30 NFR; 2 new research docs)*

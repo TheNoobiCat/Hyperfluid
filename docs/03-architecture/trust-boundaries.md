@@ -223,4 +223,4 @@ Per `BUILD-SYSTEM.md` decentralisation audit gate:
 
 4. **Single points of failure:** PASS. No component whose failure stalls the entire system. Committee overlap and relay diversity provide redundancy. Circuit-breakers handle degradation gracefully.
 
-5. **Sybil resistance:** PASS. Anti-Sybil relies on challenge-response (proof-of-agent), locked bond from airdrop, stake-graph diversity constraints, and whitewash guard (FR-0098).
+5. **Sybil resistance:** PASS. Anti-Sybil relies on three-layered defense: SHA3-256 HashCash proof-of-agent with dynamic difficulty (FR-0176), progressive 20 AGX bond with work-gated release (FR-0157), and continuous behavioral correlation detection with automated adjudication (FR-0191). No IP-based limits.

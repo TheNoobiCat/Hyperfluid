@@ -155,25 +155,70 @@
 
 ---
 
-## FR-0153: Useful Work Rewards Without Volume Farming
+## FR-0153: Quality-Weighted Bounty Payouts (Marketplace Model)
 
 **Category:** Economics
 
-**Statement:** The system shall reward validated outcome quality and reliability, not raw message volume or proposal volume.
+**Statement:** The system shall reward agents through task bounty payouts weighted by accepted outcome quality and reliability. All rewards originate from escrowed task bounties — no protocol issuance, no inflation.
 
-**Rationale:** Volume-based incentives invite spam farms. See `agx-economics-and-adversarial-incentives.md` Section 5 (Useful work rewards).
+**Rationale:** Volume-based incentives invite spam farms. A marketplace model where agents fund bounties from their own AGX aligns incentives: creators pay for work they value, workers earn for output that survives review. See `agx-economics-and-adversarial-incentives.md` Section 5 (Marketplace model).
 
 **Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 111-120
+- `agx-economics-and-adversarial-incentives.md` Section 5 (Marketplace model, Genesis-only mint, Useful work rewards)
 - `agx-economics-and-adversarial-incentives.md` Section 6, Tradeoff 2
 
 **Acceptance Criteria:**
-- [ ] Rewards are weighted by accepted fast-path merges surviving challenge window.
-- [ ] Review rewards require low reversal rate.
-- [ ] Liveness rewards require sustained participation with low fault rate.
-- [ ] Message volume alone yields no reward.
+- [ ] Payout is quality-weighted: `payout = payout_curve(quality_score) * task.bounty_agx`.
+- [ ] Only task outputs surviving challenge window receive payout.
+- [ ] Message volume alone yields no reward. Only accepted task outputs earn bounties.
+- [ ] No protocol issuance — all rewards originate from escrowed bounties.
 
 **Dependencies:** FR-0076, FR-0161
+**Tags:** must-have
+
+---
+
+## FR-0153a: Genesis-Only Mint and Fixed Supply
+
+**Category:** Economics
+
+**Statement:** All AGX shall be minted at genesis in a single block. The genesis block allocates the entire supply to the airdrop agent's controlled address. No ongoing protocol issuance. No inflation. Fee burning provides deflationary pressure.
+
+**Rationale:** A fixed supply coordination token is simpler, more predictable, and aligns incentives better than an inflationary model. The marketplace model (bounties, fees, transfers) circulates existing AGX rather than minting new AGX. See `agx-economics-and-adversarial-incentives.md` Section 5 (Genesis-only mint).
+
+**Source Research:**
+- `agx-economics-and-adversarial-incentives.md` Section 5 (Genesis-only mint and fixed supply)
+
+**Acceptance Criteria:**
+- [ ] Genesis block creates total AGX supply; no new AGX can be created after genesis.
+- [ ] Genesis supply is allocated entirely to the airdrop agent address.
+- [ ] Total supply is a governance-adjustable parameter set at genesis.
+- [ ] Fee burn mechanism permanently removes AGX from circulation (deflationary pressure).
+
+**Dependencies:** FR-0146
+**Tags:** must-have
+
+---
+
+## FR-0153b: Bounty Escrow Mechanism
+
+**Category:** Economics
+
+**Statement:** The system shall require task creators to escrow the full `bounty_agx` amount from their balance upon task creation. Escrowed funds are locked until the task completes or expires. Completed task bounties are paid to workers after review and challenge window. Unclaimed expired tasks refund the bounty (minus cancellation fee).
+
+**Rationale:** Ensures workers that bounties actually exist before they invest effort. Prevents bounty posting spam (must have real AGX at stake). See `agx-economics-and-adversarial-incentives.md` Section 5 (Marketplace model).
+
+**Source Research:**
+- `agx-economics-and-adversarial-incentives.md` Section 5 (Marketplace model: bounty-funded tasks)
+
+**Acceptance Criteria:**
+- [ ] Task creation deducts `bounty_agx` from creator's balance.
+- [ ] Escrowed funds are locked until task resolution.
+- [ ] Completed task: payout released to worker(s) after review and challenge window.
+- [ ] Unclaimed expired task: bounty refunded to creator (minus cancellation fee).
+- [ ] Failed review: bounty returned to creator; worker forfeits lease collateral.
+
+**Dependencies:** FR-0076
 **Tags:** must-have
 
 ---
@@ -246,26 +291,35 @@
 
 ---
 
-## FR-0157: Anti-Sybil Airdrop Mechanism
+## FR-0157: Anti-Sybil Airdrop With Progressive Bond Release
 
 **Category:** Economics
 
-**Statement:** The system shall provide autonomous airdrop of 100 AGX to verified new agents, with 10 AGX immediately locked as Sybil bond, released upon reaching sandboxed_contributor or after ~2 weeks.
+**Statement:** The system shall provide autonomous airdrop of 100 AGX to verified new agents. 20 AGX is immediately locked as a Sybil bond, released in 4 tranches gated by verified work output (5 AGX after first accepted task, 5 AGX after fifth accepted task, 5 AGX at `sandboxed_contributor`, 5 AGX at `trusted_contributor`). Proof-of-agent uses SHA3-256 HashCash puzzle with dynamic difficulty scaling with registration rate.
 
-**Rationale:** Lowers barrier to entry without creating Sybil farms. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding).
+**Rationale:** Lowers barrier to entry while making Sybil farming economically irrational — attacker must either do real useful work to unlock bonds or forfeit up to 20 AGX per identity. Dynamic puzzle difficulty adds compute cost that scales with attack volume. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding).
 
 **Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 121-152
+- `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding)
+- `sybil-detection-correlation-engine.md` Section 5 (Economic deterrence model)
 - `PROJECT-STATUS.md` (Decentralisation Audit: Airdrop anti-Sybil)
 
 **Acceptance Criteria:**
-- [ ] Airdrop request requires proof-of-agent (signed solution to deterministic puzzle).
-    - [ ] Per-agent: one-time only (100 AGX max).
+- [ ] Airdrop request requires SHA3-256 HashCash proof-of-agent with dynamic difficulty.
+  - [ ] Base difficulty: 16 leading zero bits (~65k attempts).
+  - [ ] Difficulty multiplier scales with registration rate: `1.0 + (registrations_this_epoch / epoch_cap)`.
+  - [ ] Circuit-breaker multiplier: 3.0x during emergency mode.
+- [ ] Per-agent: one-time only (100 AGX max). 80 AGX spendable immediately.
+- [ ] 20 AGX Sybil bond locked. Release tranches:
+  - [ ] 5 AGX after first accepted task (survives challenge window).
+  - [ ] 5 AGX after fifth accepted task.
+  - [ ] 5 AGX on reaching `sandboxed_contributor`.
+  - [ ] 5 AGX on reaching `trusted_contributor`.
 - [ ] Per-epoch cap prevents burst farming.
 - [ ] Birth-block delay: 1,000 blocks before airdropped AGX can be spent.
-- [ ] 10 AGX locked bond is burned if identity is flagged for Sybil farming before release.
+- [ ] Remaining locked bond is burned if identity is flagged for Sybil farming by the correlation detection engine.
 
-**Dependencies:** FR-0096
+**Dependencies:** FR-0096, FR-New (Sybil detection)
 **Tags:** must-have
 
 ---

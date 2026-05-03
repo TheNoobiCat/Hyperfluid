@@ -7,7 +7,7 @@ Hyperfluid is decomposed into 12 components organized across three architectural
 - 12 components in 3 layers
 - Deterministic interfaces with typed schemas
 - Policy Decision Point as security boundary
-- All 190 FR/NFR requirements mapped to components
+- All 195 FR/NFR requirements mapped to components
 - Components designed for independent scaling and failure isolation
 
 ## 2. System Overview
@@ -145,21 +145,21 @@ flowchart TD
 
 ### C10: Agent Runtime
 
-**Responsibility:** Infinite agent loop, tool provision (bash, todo, remember, forget), system prompt assembly, handoff management, knowledge accumulation, CLI interface, skill loading, sandbox isolation, process separation from node.
-**Owned state:** SQLite database (todos, knowledge, handoffs, messages), system prompt, tool registry, skill cache, resource limits.
-**Key FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075
+**Responsibility:** Infinite agent loop, tool provision (bash, todo, remember, forget), system prompt assembly, handoff management, knowledge accumulation, CLI interface, procedural skill loading, sandbox isolation, process separation from node. Optional operator interfaces: Telegram bot dashboard (single-tenant, read-only + AGX transfer) and ratatui TUI setup wizard for first-launch configuration.
+**Owned state:** SQLite database (todos, knowledge, handoffs, messages), system prompt, tool registry, skill cache, resource limits, `config.toml` (agent identity, LLM provider, optional Telegram token).
+**Key FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075, FR-0193
 
 ### C11: Collaboration & Inbox Layer
 
-**Responsibility:** Task board with soft leases, team formation, topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, circuit-breaker mode, trust ladder, reputation vector.
-**Owned state:** Task board, lease registry, topic metadata, inbox state, reputation vectors, trust stages, abuse records.
-**Key FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105
+**Responsibility:** Task board with soft leases, bounty escrow lifecycle (lock on creation, release/refund/clawback on resolution), team formation, topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, circuit-breaker mode, trust ladder, reputation vector.
+**Owned state:** Task board, lease registry, bounty escrow balances, topic metadata, inbox state, reputation vectors, trust stages, abuse records.
+**Key FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b
 
 ### C12: Economics & Incentives
 
-**Responsibility:** Review market operation, quality scoring, challenge/settlement lifecycle, challenger bonds, anti-Sybil airdrop, onboarding, reward computation, circuit-breaker controller, parameter bounds enforcement, decentralization score computation.
-**Owned state:** Review assignments, quality scores, settlement records, airdrop pool, circuit-breaker mode, parameter values, decentralization metrics.
-**Key FRs:** FR-0148-0160, FR-0161-0175, FR-0176-0190
+**Responsibility:** Review market operation, quality scoring, challenge/settlement lifecycle, challenger bonds, Sybil detection correlation engine (5-signal pairwise scoring, cluster aggregation, automated adjudication panels), anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, circuit-breaker controller, parameter bounds enforcement, decentralization score computation.
+**Owned state:** Review assignments, quality scores, settlement records, airdrop pool, seed task bounty pool, Sybil correlation scores, adjudication records, circuit-breaker mode, parameter values, decentralization metrics.
+**Key FRs:** FR-0148-0160, FR-0161-0175, FR-0176-0193
 
 ## 5. Component Dependencies
 

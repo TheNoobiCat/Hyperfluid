@@ -139,12 +139,13 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 **Blast Radius:** Network congestion. Legitimate collaboration delayed. Fee market base fee rises to compensate.
 
 **Mitigation:**
-- Proof-of-agent puzzle to verify functional agents (FR-0176)
+- SHA3-256 HashCash proof-of-agent puzzle with dynamic difficulty scaling by registration rate (FR-0176)
 - Per-epoch airdrop cap (FR-0177)
 - 1,000-block birth delay before airdropped AGX spendable (FR-0178)
-- 10 AGX locked bond from airdrop (burned on Sybil flag) (FR-0157)
+- 20 AGX progressive Sybil bond from airdrop, released in 4 tranches gated by verified work (5 AGX after 1st accepted task, 5 AGX after 5th, 5 AGX at sandboxed_contributor, 5 AGX at trusted_contributor); burned on Sybil flag (FR-0157)
 - Identity-based rate limits by trust stage (FR-0043, FR-0092)
 - Whitewash guard prevents penalized agents from gaining trust via new identities (FR-0098)
+- Sybil detection correlation engine: five-signal pairwise scoring, automated adjudication (FR-0191)
 
 **Recovery:** Circuit-breaker mode freezes low-trust claims and tightens quotas. Fee market adjusts. Airdrop sunset conditions trigger if abuse pattern persists (FR-0158).
 

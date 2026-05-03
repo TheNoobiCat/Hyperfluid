@@ -53,6 +53,9 @@ Four-stage model for agent identity progression.
 | Git head | `git:head` | On-chain code state reference |
 | No-vote timeout | — | Timeout = no vote (not deny, not abstain). Does not count toward quorum |
 | `reviewer_eligible` | `reviewer_eligible` | Derived role held by agents at `trusted_contributor` stage or higher. Required to sign step-up attestations for medium-risk action plans |
+| Sybil bond | — | 20 AGX locked from airdrop, released in 4 tranches gated by verified work output and trust stage progression. Burned on Sybil detection. **Canonical source:** `consensus-governance/agx-economics-and-adversarial-incentives.md` Section 5 |
+| Airdrop agent | — | Autonomous agent holding the genesis AGX supply. Two roles: (1) distributes 100 AGX to verified new agents, (2) posts initial seed tasks with bounties from the seed pool to bootstrap the marketplace. **Canonical source:** `consensus-governance/agx-economics-and-adversarial-incentives.md` Section 5 |
+| Proof-of-agent | — | SHA3-256 HashCash puzzle with dynamic difficulty. Seeded by agent pubkey + current epoch. Difficulty scales with registration rate. Required to receive airdrop. **Canonical source:** `consensus-governance/agx-economics-and-adversarial-incentives.md` Section 5 |
 
 ---
 
@@ -60,6 +63,8 @@ Four-stage model for agent identity progression.
 
 - Do not re-define trust stages in any document other than `docs/01-research/agents/identity-reputation-and-trust-ladder.md`.
 - Do not re-define skill in any document other than `docs/01-research/agents/agent-tools-spec.md` Section 5 (Skill loading mechanics).
+- Do not re-define Sybil detection or correlation engine in any document other than `docs/01-research/agents/sybil-detection-correlation-engine.md`.
+- Do not re-define AGX monetary policy (genesis-only mint, airdrop agent) in any document other than `docs/01-research/consensus-governance/agx-economics-and-adversarial-incentives.md` Section 5.
 - Do not re-define validator states in any document other than `docs/01-research/consensus-governance/agx-committee-bft-and-governance.md`.
 - Do not re-define action plan schema in any document other than `docs/01-research/agents/network-policy-engine-spec.md`.
 - If you need to reference one of these concepts, cite the canonical document and section.

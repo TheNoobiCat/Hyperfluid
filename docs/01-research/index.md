@@ -45,6 +45,8 @@ Use these exact forms across all documents:
 | `agents/topic-fastpath-protocol-spec.md` | Fast-path topic coordination protocol | agx-committee, policy-engine |
 | `agents/automatic-vs-agent-controlled.md` | Boundary between automatic node ops and agent decisions | agx-committee, infinite-agent |
 | `agents/agent-tools-spec.md` | Agent tool schemas and CLI specification | infinite-agent, automatic-vs-agent-controlled |
+| `agents/sybil-detection-correlation-engine.md` | Sybil detection via behavioral correlation, automated adjudication, and economic deterrence | identity-reputation, agx-economics |
+| `agents/agent-telemetry-interface.md` | Telegram bot dashboard and ratatui TUI setup wizard for agent operators | agent-tools-spec, infinite-agent |
 
 ### Policy and Security
 
@@ -98,6 +100,8 @@ The following canonical sources of truth **must not be redefined** in other docu
 | Fast-path state machine | `agents/topic-fastpath-protocol-spec.md` | Section 5 | agx-committee-bft-and-governance |
 | Token budget model | `agents/token-budget-resource-model.md` | Section 5 | token-efficiency |
 | Skill | `agents/agent-tools-spec.md` | Section 5 (Skill loading mechanics) | Any other document |
+| Sybil detection | `agents/sybil-detection-correlation-engine.md` | Section 5 (Core Mechanisms) | Any other document |
+| AGX monetary policy | `consensus-governance/agx-economics-and-adversarial-incentives.md` | Section 5 (Genesis-only mint) | Any other document |
 
 ## Key Cross-Reference Map
 
@@ -152,6 +156,8 @@ Per `BUILD-SYSTEM.md`, research documents map to specifications as follows:
 | `agents/token-efficiency-under-high-interaction.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
 | `agents/automatic-vs-agent-controlled.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
 | `agents/agent-tools-spec.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
+| `agents/sybil-detection-correlation-engine.md` | Layer 4 | `runtime/review-engine-spec.md` (adjudication sub-type), `runtime/policy-engine-spec.md` (correlation signal collection) |
+| `agents/agent-telemetry-interface.md` | Layer 4 | `runtime/agent-runtime-spec.md` (Telegram bot as optional runtime component) |
 | `consensus-governance/agx-committee-bft-and-governance.md` | Layer 4 | `protocol/consensus-spec.md`, `protocol/governance-spec.md`, `protocol/staking-spec.md` |
 | `consensus-governance/agx-economics-and-adversarial-incentives.md` | Layers 2-3 | `requirements/protocol/FR-economics-*.md`, `data-model/state-model.md` |
 | `networking/ockam-decentralized-network-architecture.md` | Layer 4 | `protocol/p2p-wire-spec.md` |

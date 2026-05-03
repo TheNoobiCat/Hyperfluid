@@ -1,7 +1,7 @@
 # Layer 3: Architecture
 
 **Status:** COMPLETE
-**Last updated:** 2026-05-01
+**Last updated:** 2026-05-03
 **Total components:** 12
 **ADRs:** 12
 
@@ -35,9 +35,9 @@ Located in `docs/03-architecture/component-model/`
 | C7 | P2P Networking & Connection Manager | Protocol Services | FR-0041-0050 |
 | C8 | Artifact Availability & Storage | Protocol Services | FR-0051-0060 |
 | C9 | Policy Decision Point (PDP) | Security Boundary | FR-0106-0120 |
-| C10 | Agent Runtime | Runtime | FR-0061-0075 |
-| C11 | Collaboration & Inbox Layer | Runtime | FR-0076-0105 |
-| C12 | Economics & Incentives | Economics | FR-0148-0190 |
+| C10 | Agent Runtime | Runtime | FR-0061-0075, FR-0193 |
+| C11 | Collaboration & Inbox Layer | Runtime | FR-0076-0105, FR-0153b |
+| C12 | Economics & Incentives | Economics | FR-0148-0160, FR-0161-0175, FR-0176-0193 |
 
 ---
 
@@ -117,13 +117,13 @@ Every FR/NFR maps to at least one component. For the full traceability matrix, s
 | FR-0136-0145 | Sandbox & Telemetry | C9 PDP, C10 Agent Runtime |
 | FR-0146-0160 | AGX Economics | C5 Fee Market, C12 Economics |
 | FR-0161-0175 | Review Markets | C12 Economics |
-| FR-0176-0190 | Incentives & Airdrop | C12 Economics |
+| FR-0176-0193 | Incentives, Airdrop, Sybil Detection, Operator Interface | C12 Economics, C10 Agent Runtime |
 | NFR-0001-0015 | Performance | Cross-cutting |
 | NFR-0016-0030 | Security/Reliability | Cross-cutting |
 
 ### Orphan Check
 
-All 190 requirements map to at least one component. Zero orphans.
+All 195 requirements map to at least one component. Zero orphans.
 
 ### Potential Red Flags for Requirement Revision
 
@@ -138,7 +138,7 @@ All 190 requirements map to at least one component. Zero orphans.
 
 | Check | Status |
 |-------|--------|
-| Every requirement maps to a component | PASS (190/190) |
+| Every requirement maps to a component | PASS (195/195) |
 | No orphan requirements | PASS |
 | Component boundaries documented | PASS |
 | Trust boundaries documented | PASS |

@@ -49,7 +49,7 @@
 ### Week 3–4: Adversarial & Load Testing
 1. Byzantine validator scenario: inject equivocating validators (propose two blocks at same height). Verify slashing evidence produced, validator slashed and paused.
 2. Censorship scenario: 33% validators refuse to include specific agent's transactions. Verify mempool retransmission eventually routes to honest proposer.
-3. Sybil agent cluster: create 50 agents sharing stake-graph correlation. Verify reviewer independence rejects correlated reviewers; trust ladder slows progression.
+3. Sybil agent cluster: create 50 agents sharing stake-graph and behavioral correlation. Verify Sybil detection correlation engine flags clusters above 0.70 threshold; automated adjudication confirms cluster; bonds burned; trust stages demoted. Verify false negatives: 3 uncorrelated honest agents collaborating on same topic are NOT flagged.
 4. Colluding reviewers: 2 reviewers collude via out-of-band channel. Verify statistical collusion detection flags correlated scores; clawback fires.
 5. Fast-path challenger flood: 100 concurrent challenges against 10 valid merges. Verify anti-flood deposit prevents abuse; persistent challenger banned.
 6. Governance manipulation: proposal with near-majority support but <33% quorum. Verify proposal expires; no-vote timeout functions; no state change occurs.

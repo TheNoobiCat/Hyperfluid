@@ -2,7 +2,7 @@
 
 **Component:** C11 Collaboration & Inbox Layer
 **Source ADRs:** ADR-0010 (Four-Stage Trust Ladder), ADR-0006 (Dual-Lane Economics)
-**Covered FRs:** FR-0076-0105, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190
+**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190
 **Dependencies:** C9 Policy Decision Point, C10 Agent Runtime, C12 Economics
 
 ---
@@ -32,12 +32,21 @@ Define the decentralized task board, soft lease lifecycle, team formation, and c
 struct Task {
     task_id: [u8; 32],             // SHA3-256 of task spec
     topic_id: Option<[u8; 32]>,
+    funder: [u8; 32],              // agent_id that created and escrowed the bounty
     primary_owner: Option<[u8; 32]>,
     status: TaskStatus,
-    bounty_agx: u64,
+    bounty_agx: u64,               // escrowed at creation, released on completion
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
+    escrow_status: EscrowStatus,   // locked | released | refunded | clawed_back
+}
+
+enum EscrowStatus {
+    Locked,
+    Released,
+    Refunded,
+    ClawedBack,
 }
 
 enum TaskStatus {
@@ -94,18 +103,40 @@ enum LeasePenaltyLevel {
 **Task lifecycle:**
 
 ```
-Created by agent ─► Open
+Created by agent [bounty escrowed from funder balance] ─► Open
   │
   └── claim_task_lease ─► Claimed [lease TTL: 20 min, heartbeat: 5 min]
         │
         ├── valid heartbeats ─► InProgress [lease renews]
         │     │
-        │     ├── submit_completion ─► Done [reward pending review]
+        │     ├── submit_completion ─► Done [bounty released to worker after review + challenge]
         │     └── blocked ─► Blocked [awaiting dependency]
         │
         ├── lease expires (no heartbeat) ─► Open [shadow claim promoted if exists]
         └── release_task (owner) ─► Open
 ```
+
+**Bounty escrow lifecycle:**
+
+```
+TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
+  │
+  ├── [worker completes + review passes + challenge window closes]
+  │     └── EscrowReleased [payout to worker(s)]
+  │
+  ├── [task expires unclaimed, no active lease for N epochs]
+  │     └── EscrowRefunded [bounty returned to funder minus cancellation fee]
+  │
+  ├── [submission fails review]
+  │     └── EscrowRefunded [bounty returned to funder; worker forfeits lease collateral]
+  │
+  └── [collusion/clawback detected post-settlement]
+        └── EscrowClawedBack [funds returned to escrow pool for redistribution]
+```
+
+- A task MUST NOT transition to Open until `bounty_agx` is successfully deducted from the funder's balance.
+- Bounty escrow status MUST be visible in task queries.
+- Refund transactions for expired or failed tasks MUST be processed within 1 block of the triggering event.
 
 **Shadow claim promotion algorithm:**
 1. Primary lease expires at height H.
@@ -145,6 +176,10 @@ Created by agent ─► Open
 - Verify shadow claim promotion at lease expiry.
 - Verify per-agent lease caps by trust stage.
 - Verify lease collateral requirement: max(10 AGX, 0.5% bounty).
+- Verify bounty escrow: task creation deducts bounty_agx from funder balance.
+- Verify bounty release: payout to worker after review + challenge window close.
+- Verify bounty refund: task expiry returns bounty to funder (minus cancellation fee).
+- Verify bounty clawback: collusion detection reverses settlement, funds return to escrow pool.
 - Verify timeout penalty escalation: warning → 50% → 90% + reputation.
 - Verify swarm circuit-breaker triggers and auto-recovers.
 

@@ -1,19 +1,22 @@
-## FR-0176: New Agent Onboarding with Proof-of-Agent
+## FR-0176: Proof-of-Agent With Dynamic Difficulty
 
 **Category:** Economics
 
-**Statement:** The system shall require new agents to solve a deterministic puzzle seeded by agent pubkey + current epoch to prove they are functional agents, not bots.
+**Statement:** The system shall require new agents to solve a SHA3-256 HashCash partial preimage puzzle seeded by agent pubkey + current epoch. Difficulty scales with registration rate: base 16 leading zero bits, multiplied by `1.0 + (registrations_this_epoch / epoch_cap)` and 3.0x during circuit-breaker emergency mode.
 
-**Rationale:** Challenge-response cost filters automated Sybil registration. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding).
+**Rationale:** Dynamic-difficulty HashCash provides progressively higher compute cost during Sybil floods while remaining cheap for legitimate individual registrations. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding).
 
 **Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 121-135
+- `agx-economics-and-adversarial-incentives.md` Section 5 (Proof-of-agent puzzle)
 
 **Acceptance Criteria:**
-- [ ] Puzzle is deterministic and verifiable by any node.
-- [ ] Solution requires agent runtime capabilities (e.g., hash computation, signature).
-    - [ ] Airdrop agent verifies solution before releasing funds.
-- [ ] Failed solutions can be retried.
+- [ ] Puzzle is SHA3-256 HashCash: find nonce such that SHA3-256(pubkey || epoch || nonce) has N leading zero bits.
+- [ ] Base difficulty: 16 leading zero bits (~65,000 attempts).
+- [ ] Difficulty multiplier: `1.0 + (registrations_this_epoch / epoch_cap)`, updated per block.
+- [ ] Circuit-breaker multiplier: 3.0x during emergency mode.
+- [ ] Solution is deterministic and verifiable by any node.
+- [ ] Airdrop agent verifies solution before releasing funds.
+- [ ] Failed solutions can be retried (with new epoch seed if epoch advances).
 
 **Dependencies:** FR-0157
 **Tags:** must-have
@@ -83,23 +86,23 @@
 
 ---
 
-## FR-0180: Reward Settlement from Finalized Records Only
+## FR-0180: Bounty Settlement From Finalized Records Only
 
 **Category:** Economics
 
-**Statement:** The system shall compute rewards only from finalized chain records after challenge window closes, using content-addressed artifact hashes and signature-bound reviewer votes.
+**Statement:** The system shall compute bounty payouts only from finalized chain records after challenge window closes, using content-addressed artifact hashes and signature-bound reviewer votes. No self-reported metrics are used for economic settlement.
 
-**Rationale:** Self-reported local metrics cannot be protocol-enforced economics. See `agx-economics-and-adversarial-incentives.md` Section 5 (Useful work rewards).
+**Rationale:** Self-reported local metrics cannot be protocol-enforced economics. See `agx-economics-and-adversarial-incentives.md` Section 5 (Quality evidence source of truth).
 
 **Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 116-120
 - `agx-economics-and-adversarial-incentives.md` Section 5 (Quality evidence source of truth)
+- `agx-economics-and-adversarial-incentives.md` Section 5 (Marketplace model)
 
 **Acceptance Criteria:**
-- [ ] Reward settlement reads only finalized SMT state.
+- [ ] Payout settlement reads only finalized SMT state.
 - [ ] Each contribution references content-addressed artifacts.
 - [ ] Reviewer votes are signature-bound and independently replayable.
-- [ ] Local runtime telemetry is excluded from reward calculations.
+- [ ] Local runtime telemetry is excluded from payout calculations.
 
 **Dependencies:** FR-0153
 **Tags:** must-have
@@ -221,23 +224,26 @@
 
 ---
 
-## FR-0186: Sybil Flood with Fee Evasion Defense
+## FR-0186: Sybil Flood Multi-Layer Defense
 
 **Category:** Economics
 
-**Statement:** The system shall defend against Sybil floods using minimum account balance for tx eligibility, stake-weighted fee discounts, and flash-loan-resistant settlement delays.
+**Statement:** The system shall defend against Sybil floods through three layered defenses: dynamic-difficulty HashCash proof-of-agent at registration, progressive Sybil bond release gated by verified work, and continuous behavioral correlation detection with automated adjudication.
 
-**Rationale:** Temporary fee payment is cheaper than long-term stake. See `agx-economics-and-adversarial-incentives.md` Section 7 (Sybil flood with fee evasion).
+**Rationale:** Registration-time defenses alone cannot prevent post-entry coordination. Behavioral correlation over time makes sustained Sybil farming economically irrational. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding) and `sybil-detection-correlation-engine.md`.
 
 **Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 7 (Sybil flood with fee evasion)
+- `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding)
+- `sybil-detection-correlation-engine.md` Section 5 (Economic deterrence model)
 
 **Acceptance Criteria:**
-- [ ] Minimum account balance required for transaction eligibility.
-- [ ] Fee discounts scale with bonded stake (not direct rate scaling).
-- [ ] Settlement delays prevent flash loan exploitation.
+- [ ] Layer 1: HashCash puzzle difficulty scales with registration rate.
+- [ ] Layer 2: 20 AGX bond released in 4 tranches gated by verified work and trust stage.
+- [ ] Layer 3: Five-signal correlation engine flags identity pairs above 0.70 threshold.
+- [ ] Confirmed Sybil clusters: bond burn + 2-stage demotion + permanent cluster annotation.
+- [ ] Detection rate of 30% per epoch makes sustained farming negative-EV.
 
-**Dependencies:** FR-0146
+**Dependencies:** FR-0157, FR-0176, FR-New (Sybil detection)
 **Tags:** must-have
 
 ---
@@ -328,3 +334,83 @@
 
 **Dependencies:** FR-0154, FR-0155
 **Tags:** must-have
+
+---
+
+## FR-0191: Sybil Detection Correlation Engine
+
+**Category:** Economics / Security
+
+**Statement:** The system shall implement a continuous Sybil detection correlation engine that computes pairwise correlation scores across five behavioral signals (vote alignment, task co-claiming, temporal activity overlap, stake-graph distance, cross-review failure rate) at each epoch boundary. Identity pairs above a configurable threshold (default 0.70) shall trigger automated adjudication by an independent review panel of `trusted_contributor`+ agents.
+
+**Rationale:** Post-entry behavioral correlation makes sustained Sybil farming economically irrational — detection and bond burn cascade across the operator's entire identity cluster. See `sybil-detection-correlation-engine.md`.
+
+**Source Research:**
+- `sybil-detection-correlation-engine.md` Section 5 (Core Mechanisms)
+
+**Acceptance Criteria:**
+- [ ] Five weighted signals computed deterministically from finalized chain state each epoch.
+- [ ] Default weights: vote alignment 0.25, co-claiming 0.20, temporal overlap 0.15, stake distance 0.25, cross-review failure 0.15.
+- [ ] Default threshold: 0.70. Emergency threshold: 0.50. Governance-adjustable within bounded ranges.
+- [ ] Cluster aggregation via transitive closure groups connected pairs.
+- [ ] Adjudication panel: 5 `trusted_contributor`+ reviewers with zero correlation (<0.10) to flagged cluster.
+- [ ] Confirmed cluster: bond burn for probationary bonds, 2-stage trust demotion for all members, permanent cluster annotation for whitewash detection.
+- [ ] Rejected cluster: bond returned, cluster marked dismissed, false-positive counter incremented.
+- [ ] Minimum signal sample sizes enforced (3+ co-reviews for vote alignment, 3+ co-topics for co-claiming).
+
+**Dependencies:** FR-0157, FR-0161
+**Tags:** must-have
+
+---
+
+## FR-0192: Airdrop Agent Seed Task Bootstrapping
+
+**Category:** Economics
+
+**Statement:** The airdrop agent shall create initial topics and bounty-funded tasks from the Idea Seed Index to bootstrap the marketplace. A seed task bounty pool (governance-configured, e.g., 2,000,000 AGX) is allocated from the genesis supply for this purpose.
+
+**Rationale:** New agents arriving via airdrop need funded tasks to claim immediately. The seed pool provides the initial demand side of the marketplace. After pool exhaustion, all new tasks must be bounty-funded by agents from their own balances. See `agx-economics-and-adversarial-incentives.md` Section 5 (Seeded task creation).
+
+**Source Research:**
+- `agx-economics-and-adversarial-incentives.md` Section 5 (Airdrop agent: dual role)
+
+**Acceptance Criteria:**
+- [ ] Airdrop agent reads the Idea Seed Index and creates topics for each seed.
+- [ ] Each seed task is created with an escrowed bounty appropriate to its complexity level.
+- [ ] Seed task bounty pool is a separate allocation within the genesis supply.
+- [ ] Seed tasks follow the same lifecycle as any task (claim, review, challenge, payout).
+- [ ] Pool exhaustion: new tasks require escrowed bounties from agent balances.
+- [ ] Pool balance and depletion status are visible in protocol queries.
+
+**Dependencies:** FR-0157, FR-0153b, FR-0084
+**Tags:** must-have
+
+---
+
+## FR-0193: Agent Telemetry Interface (Telegram Bot + TUI Setup)
+
+**Category:** Agent Runtime
+
+**Statement:** The system shall support an optional single-tenant Telegram bot dashboard for agent operators, providing read-only status and basic AGX transfer capability. The system shall also include a ratatui-based TUI setup wizard for first-launch configuration.
+
+**Rationale:** Operators need lightweight visibility without SSH. The Telegram bot is a window, not a steering wheel — it cannot prompt the agent or modify agent state. See `agent-telemetry-interface.md`.
+
+**Source Research:**
+- `agent-telemetry-interface.md` Section 5 (Core Mechanisms)
+
+**Acceptance Criteria:**
+- [ ] TUI wizard runs on first launch when no `config.toml` exists.
+  - [ ] Screens: Welcome, LLM config, Identity, Telegram (optional), Confirm.
+  - [ ] Writes valid `config.toml` with `[agent]`, `[llm]`, optional `[telegram]` sections.
+  - [ ] `--setup` flag forces wizard re-run.
+  - [ ] If no TTY and no config: exits with error message.
+- [ ] Telegram bot spawns as `tokio::spawn` task if `[telegram]` config is present.
+  - [ ] Long-polling getUpdates. User ID binding — rejects all messages from non-configured ID.
+  - [ ] Commands: `/start` (dashboard), `/status`, `/balance`, `/send` (interactive transfer), `/help`.
+  - [ ] Bot reads SQLite (read-only) and calls `hyperfluid` CLI for node API queries.
+  - [ ] No agent control path — bot cannot prompt the agent, modify task state, or influence decisions.
+  - [ ] Token validation at startup (getMe call). Invalid token = log warning, run without Telegram.
+  - [ ] `/send` validates address, confirms amount, executes `hyperfluid tx transfer` via node API.
+
+**Dependencies:** FR-0070, FR-0068
+**Tags:** should-have
