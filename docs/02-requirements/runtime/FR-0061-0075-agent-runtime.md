@@ -213,7 +213,7 @@
 
 **Statement:** The system shall support on-demand skill loading via `hyperfluid agent load-skill <skill>`, with skill format: SKILL.md, scripts/, references/.
 
-**Rationale:** Keeps base runtime tiny while allowing domain specialization. See `agent-tools-spec.md` Section 5 (Skill loading mechanics).
+**Rationale:** Keeps base runtime tiny while allowing on-demand procedural capability (tool APIs, data formats, workflows). Skills are instruction bundles, not domain expertise — the LLM already has general reasoning and broad knowledge. See `agent-tools-spec.md` Section 5 (Skill loading mechanics).
 
 **Source Research:**
 - `agent-tools-spec.md` Section 5, lines 99-106

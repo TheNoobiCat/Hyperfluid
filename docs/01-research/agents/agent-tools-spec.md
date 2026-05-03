@@ -6,7 +6,7 @@
 - All blockchain interaction occurs through a single `hyperfluid` CLI exposed by the node API.
 - Tools are intentionally minimal to reduce prompt size, attack surface, and cognitive load for LLM agents.
 - The CLI provides subcommands for transactions, queries, tasks, reviews, governance, and staking.
-- Agent skills are optional domain-specific extensions loaded on demand via the CLI.
+- Agent skills are procedural instruction bundles (SKILL.md + optional scripts/ and references/) loaded on demand via the CLI. They teach agents how to use specific tools, APIs, data formats, or workflows — not domain expertise. The LLM already has the reasoning and general knowledge; skills provide the mechanics.
 - The design enforces that infrastructure operations (consensus, networking, storage) are automatic and never exposed as agent tools.
 - This specification serves as the canonical reference for the agent system prompt and runtime integration.
 - Minimalism is deliberate: fewer tools mean fewer injection vectors and clearer failure modes.
@@ -30,7 +30,7 @@
 - Components:
   - **Tool Layer**: core tools (`bash`, `todo_write`, `todo_update`, `remember`, `forget`) executed by the agent runtime.
   - **CLI Layer**: the `hyperfluid` command family (`agent`, `tx`, `query`, `task`, `review`, `governance`, `stake`) backed by the node API.
-  - **Skill Layer**: optional domain-specific knowledge bundles loaded via `hyperfluid agent load-skill`.
+  - **Skill Layer**: procedural instruction bundles (SKILL.md, scripts/, references/) loaded via `hyperfluid agent load-skill`. They supply tool-specific instructions, not domain expertise.
   - **Node API Layer**: HTTP/gRPC boundary validating and executing all network-mutating requests.
 
 ```mermaid
@@ -38,7 +38,7 @@ flowchart TD
     Agent["Agent Runtime"]
     Tools["Tool Layer<br/>bash, todo, remember, forget"]
     CLI["CLI Layer<br/>hyperfluid *"]
-    Skills["Skill Layer<br/>on-demand knowledge"]
+    Skills["Skill Layer<br/>procedural instructions"]
     API["Node API Layer<br/>HTTP/gRPC"]
     Node["Node Infrastructure<br/>consensus, policy gate"]
 
@@ -97,10 +97,11 @@ flowchart TD
   - The prompt section includes: all subcommands, flags, common patterns, and error handling guidance.
 
 - **Skill loading mechanics**
-  - Skills follow the format defined in `infinite-agent.md`:
+  - Skills are procedural instruction bundles — not domain expertise. The LLM already possesses general reasoning and broad knowledge. Skills teach it the mechanics of specific tools, APIs, data formats, and workflows.
+  - Skill format:
     - `SKILL.md` (instructions and metadata)
-    - `scripts/` (helper scripts)
-    - `references/` (documentation)
+    - `scripts/` (helper scripts, optional)
+    - `references/` (documentation, optional)
   - Loaded via `hyperfluid agent load-skill <skill>`.
   - Unloaded on runtime restart unless explicitly persisted.
 
@@ -181,7 +182,7 @@ function sanitise(output):
 - Option A: All skills built into the runtime image.
 - Option B: On-demand skill loading via `hyperfluid agent load-skill`.
 - Chosen: Option B.
-- Why chosen: keeps base runtime tiny and allows domain-specific specialisation without bloating every agent.
+- Why chosen: keeps base runtime tiny and allows on-demand procedural capability (tool APIs, data formats, workflows) without bloating every agent.
 - Sacrifice: skill portability and versioning complexity across operators.
 - Scaling risk: unvetted skills could introduce prompt injection or unsafe bash scripts if not sandboxed.
 
@@ -231,7 +232,7 @@ function sanitise(output):
 - Adopt exactly five core tools (`bash`, `todo_write`, `todo_update`, `remember`, `forget`) and one canonical CLI (`hyperfluid`).
 - Embed the complete CLI specification in the agent system prompt; disallow runtime command discovery.
 - Route all network-mutating actions through typed CLI commands to the node API.
-- Use on-demand skill loading for domain specialisation.
+- Use on-demand skill loading for procedural capability (tool APIs, data formats, workflows).
 - Reject:
   - protocol-internal tools exposed directly to agents (e.g. raw peer management, raw database SQL),
   - runtime command discovery that allows dynamic tool expansion,

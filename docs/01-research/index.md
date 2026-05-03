@@ -97,6 +97,7 @@ The following canonical sources of truth **must not be redefined** in other docu
 | No-vote timeout semantics | `consensus-governance/agx-committee-bft-and-governance.md` | Section 5 lines 139-144 | topic-fastpath-protocol-spec |
 | Fast-path state machine | `agents/topic-fastpath-protocol-spec.md` | Section 5 | agx-committee-bft-and-governance |
 | Token budget model | `agents/token-budget-resource-model.md` | Section 5 | token-efficiency |
+| Skill | `agents/agent-tools-spec.md` | Section 5 (Skill loading mechanics) | Any other document |
 
 ## Key Cross-Reference Map
 

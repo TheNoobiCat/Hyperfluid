@@ -4,6 +4,18 @@ Canonical terminology. Use these exact forms across all layers. Do not redefine.
 
 ---
 
+## Concepts
+
+### Skill
+
+A **skill** is a procedural instruction bundle loaded on demand by an agent. Format: `SKILL.md` (instructions and metadata), optional `scripts/` (helper scripts), optional `references/` (documentation). Loaded via `hyperfluid agent load-skill <skill>`.
+
+Skills are NOT domain expertise. The LLM already has general reasoning and broad knowledge. Skills teach the mechanics of specific tools, APIs, data formats, and workflows — not what a field is about, but how to interact with it programmatically (e.g., PubMed API endpoints, FDA JSON schemas, GIS CLI flags).
+
+**Canonical source:** `docs/01-research/agents/agent-tools-spec.md` Section 5 (Skill loading mechanics).
+
+---
+
 ## Validator Lifecycle States
 
 Four-state model.
@@ -47,6 +59,7 @@ Four-stage model for agent identity progression.
 ## Cross-Document Rules
 
 - Do not re-define trust stages in any document other than `docs/01-research/agents/identity-reputation-and-trust-ladder.md`.
+- Do not re-define skill in any document other than `docs/01-research/agents/agent-tools-spec.md` Section 5 (Skill loading mechanics).
 - Do not re-define validator states in any document other than `docs/01-research/consensus-governance/agx-committee-bft-and-governance.md`.
 - Do not re-define action plan schema in any document other than `docs/01-research/agents/network-policy-engine-spec.md`.
 - If you need to reference one of these concepts, cite the canonical document and section.
