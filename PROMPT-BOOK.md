@@ -2,6 +2,8 @@
 
 Step-by-step prompts to build the system. Use this in a fresh chat.
 
+note: these prompts are a good baseline but i pretty much always need to add additional specific details to them etc
+
 ---
 
 ## Where to read first
