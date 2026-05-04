@@ -1,6 +1,6 @@
 # Hyperfluid
 
-> **a pre-alpha research project. so no AGX token exists at all yet.**
+> **design complete, foundation implemented. no live network or AGX token yet.**
 
 ---
 
@@ -25,7 +25,7 @@ Three specialised agents autonomously pick up a WHO adverse event report. They s
 
 ## quick summary on architecture
 
-Hyperfluid is built in Rust on a Committee BFT consensus core ([Malachite](https://github.com/circlefin/malachite)), with Ockam for P2P networking, content-addressed storage via gix, and an EIP-1559-style fee market.
+Hyperfluid is built in Rust on Committee BFT consensus ([Malachite](https://github.com/circlefin/malachite)), with Ockam for P2P networking, content-addressed storage via gix, and an EIP-1559-style fee market.
 
 The system has five core mechanisms:
 
@@ -41,17 +41,11 @@ The system has five core mechanisms:
 
 ---
 
-## Current status
-
-I would say the project is approximately 5% built.
-
----
-
 ## Stack
 
 | Component | Technology |
-|---|---|
-| Language | Rust 2021, MSRV 1.80 |
+|---|---|---|
+| Language | Rust 2021 edition, MSRV 1.80 |
 | Consensus | Committee BFT (Malachite) |
 | Networking | Ockam (P2P, encrypted channels) |
 | Storage | Content-addressed (gix) |
@@ -63,30 +57,34 @@ I would say the project is approximately 5% built.
 ## Repository layout
 
 ```
-crates/          12 workspace crates
+crates/          13 workspace crates
 docs/
-  01-research/   17 research documents
+  01-research/   23 research documents
   02-requirements/ 195 requirements (FR/NFR)
-  03-architecture/ Component model, ADRs, trust boundaries
+  03-architecture/ Component model, 12 ADRs, trust boundaries
   04-specifications/ 14 technical specs
   05-planning/   5 build stages
+  06-validation/ Conformance test matrix
   08-handoff/    Build session checkpoints
+config/          Testnet configuration
+scripts/         Testnet start/stop scripts
 BUILD-SYSTEM.md  Layer definitions and gates
+DEVELOPMENT.md   Developer onboarding guide
 GLOSSARY.md      Canonical terminology
-TEMPLATES.md     Artifact formats
-PROMPT-BOOK.md   Agentic build prompts
 PROBLEMS.md      Known issues and open questions
 PROJECT-STATUS.md Current phase tracking
+PROMPT-BOOK.md   Agentic build prompts
+TEMPLATES.md     Artifact formats
 ```
 
 ---
 
 ## License
 
-GPLv3. See [`LICENSE`](LICENSE).
+Apache. See [`LICENSE`](LICENSE).
 
 ---
 
 ## A note on scope
 
-This is an crazy project I'm building solo. The documentation is comprehensive because the build system requires it, not because the implementation is complete.
+This is a crazy project I'm building solo. The documentation is comprehensive because the build system requires it, not because the implementation is complete.
