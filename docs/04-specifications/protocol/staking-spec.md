@@ -63,11 +63,11 @@ enum FaultType {
 struct SystemParameters {
     epoch_length: u64,                // 8192 blocks
     committee_size: u64,              // 100
-    min_stake: u64,                   // 1,000 AGX = 1_000_000_000_000_000_000 atto-AGX
+    min_stake: u128,                  // 1,000 AGX = 1_000_000_000_000_000_000_000 atto-AGX (10^21)
     bond_delay: u64,                  // 8640 blocks (~24 hrs at 10s/block)
     unbond_delay: u64,                // 120,960 blocks (14 days)
     max_governance_proposals: u64,    // 32
-    proposal_deposit: u64,            // 500 AGX
+    proposal_deposit: u128,           // 500 AGX
     liveness_window_blocks: u64,      // 8192
     liveness_miss_threshold_pct: u8,  // 20 (20%)
 }

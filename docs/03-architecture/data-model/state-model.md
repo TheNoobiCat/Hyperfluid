@@ -12,7 +12,7 @@ erDiagram
     ACCOUNT ||--o{ IDENTITY : "controls"
     ACCOUNT {
         bytes32 account_id PK "SHA3-256 of ML-DSA pubkey"
-        uint64 balance "AGX in atto-AGX"
+        uint128 balance "AGX in atto-AGX"
         uint64 nonce "strictly monotonic"
         bytes32 pubkey_hash "revealed on first spend"
         bytes pubkey "revealed on first spend"
@@ -20,7 +20,7 @@ erDiagram
     VALIDATOR {
         bytes32 validator_id PK "same as account_id"
         string state "active | paused | unbonding | withdrawn"
-        uint64 bonded_stake "total bonded AGX"
+        uint128 bonded_stake "total bonded AGX in atto-AGX"
         uint64 bonding_height "height of StakeBondTx"
         uint64 unbonding_height "height of UnbondRequestTx"
         uint64 jail_until_height "0 if not jailed"
@@ -33,7 +33,7 @@ erDiagram
         bytes32 slash_id PK "hash of evidence + validator"
         bytes32 validator_id FK "references VALIDATOR"
         string fault_type "equivocation | liveness | other"
-        uint64 slash_amount "AGX slashed"
+        uint128 slash_amount "AGX slashed in atto-AGX"
         uint64 slash_height "block of slash"
         bytes32 evidence_ref "content hash of evidence"
     }

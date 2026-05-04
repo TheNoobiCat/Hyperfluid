@@ -60,7 +60,7 @@ struct ReplicationLease {
     lease_start_height: u64,
     lease_end_height: u64,
     challenge_cadence: u16,          // blocks between proof challenges
-    collateral: u64,                 // AGX locked
+    collateral: u128,                // AGX locked in atto-AGX
     status: LeaseStatus,
 }
 

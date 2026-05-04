@@ -52,7 +52,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 
 | Stage | Status | Started | Completed | Gate Result |
 |-------|--------|---------|-----------|-------------|
-| Stage 00: Foundation | IN PROGRESS | 2026-05-02 | — | — |
+| Stage 00: Foundation | COMPLETE | 2026-05-02 | 2026-05-04 | Gate result: PASS |
 | Stage 01: Protocol Core | NOT STARTED | — | — | — |
 | Stage 02: Agent Runtime | NOT STARTED | — | — | — |
 | Stage 03: Validation | NOT STARTED | — | — | — |

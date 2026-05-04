@@ -32,13 +32,13 @@ struct GovernanceProposal {
     proposed_commit: [u8; 32],       // target git commit hash
     bundle_manifest_hash: [u8; 32],  // SHA-256 of bundle manifest
     current_commit: [u8; 32],        // git_head at proposal time
-    deposit_amount: u64,             // 500 AGX locked
+    deposit_amount: u128,             // 500 AGX locked in atto-AGX
     snapshot_height: u64,
     vote_start_height: u64,
     vote_end_height: u64,
     status: ProposalStatus,
-    yes_weight: u64,
-    no_weight: u64,
+    yes_weight: u128,
+    no_weight: u128,
 }
 
 enum ProposalStatus {

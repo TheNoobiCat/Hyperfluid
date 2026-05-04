@@ -30,4 +30,9 @@ Thumbs.db
 # VSCode (workspace settings can be committed if needed)
 .vscode/
 
+# Generated genesis files
+genesis.json
+
 personalnotes.md
+
+ascripts/

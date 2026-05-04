@@ -30,16 +30,16 @@ Define the EIP-1559 style dynamic fee market for transaction pricing, spam preve
 
 ```rust
 struct FeeMarketState {
-    base_fee: u64,                   // atto-AGX per unit
+    base_fee: u128,                  // atto-AGX per unit
     block_utilization_history: Vec<u8>,  // rolling window of utilization percentages
-    fee_burn_accumulator: u64,       // total AGX burned
-    min_fee_floor: u64,              // absolute minimum fee
+    fee_burn_accumulator: u128,      // total AGX burned in atto-AGX
+    min_fee_floor: u128,             // absolute minimum fee in atto-AGX
 }
 
 struct FeeConfig {
     target_utilization_pct: u8,      // 50 (%)
     max_adjustment_pct: u8,          // 12.5 (%)
-    min_base_fee: u64,               // floor in atto-AGX — [TUNE] default 1_000_000 atto-AGX
+    min_base_fee: u128,              // floor in atto-AGX — [TUNE] default 1_000_000 atto-AGX
     max_per_sender_tx: u32,          // 100 per block
     fee_burn_ratio: u8,              // 100% (of base fee), governance-adjustable 50%-100%
 }
@@ -121,14 +121,14 @@ Define the validator fee rebate distribution mechanism.
 ```rust
 struct FeeRebateBatch {
     epoch: u64,
-    total_priority_fees: u64,          // total priority fees collected during epoch
+    total_priority_fees: u128,          // total priority fees collected during epoch in atto-AGX
     distributions: Vec<FeeRebateEntry>,
 }
 
 struct FeeRebateEntry {
     validator_id: [u8; 32],
-    bonded_stake: u64,
-    rebate_amount: u64,                // proportional to stake share
+    bonded_stake: u128,
+    rebate_amount: u128,                // proportional to stake share in atto-AGX
 }
 ```
 

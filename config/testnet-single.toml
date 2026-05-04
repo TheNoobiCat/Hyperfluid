@@ -1,0 +1,30 @@
+# Hyperfluid local testnet configuration
+# Single-validator genesis config — same format as production deployment.
+
+chain_id = "hyperfluid-testnet-1"
+timestamp = 0
+epoch_length = 8192
+committee_size = 100
+min_stake = 1000000000000000000           # 1,000 AGX (atto-AGX)
+bond_delay = 8640
+unbond_delay = 120960
+max_governance_proposals = 32
+proposal_deposit = 500000000000000000     # 500 AGX (atto-AGX)
+liveness_window_blocks = 8192
+liveness_miss_threshold_pct = 20
+total_agx_supply = 10000000000000000000   # 10M AGX (atto-AGX)
+airdrop_amount_per_agent = 100000000000000000  # 100 AGX (atto-AGX)
+
+[[accounts]]
+account_id = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+balance = 10000000000000000000           # airdrop agent: entire supply
+pubkey_hex = ""
+
+[[accounts]]
+account_id = "abababababababababababababababababababababababababababababababab"
+balance = 2000000000000000000            # validator: 2,000 AGX
+pubkey_hex = "abababababababababababababababababababababababababababababababab"
+
+[[validators]]
+validator_id = "abababababababababababababababababababababababababababababababab"
+bonded_stake = 1000000000000000000       # 1,000 AGX (min stake)

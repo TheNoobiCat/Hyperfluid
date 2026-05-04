@@ -1,9 +1,9 @@
-# Build Status — Stage 00 (Foundation)
+# Build Status — Stage 00 (Foundation) COMPLETE
 
-**Last updated:** 2026-05-02
-**Stage:** 00 — Foundation
+**Last updated:** 2026-05-04
+**Stage:** 00 — Foundation — **COMPLETE**
 
-## Week 1: Complete
+## Week 1: Complete (2026-05-02)
 
 | Task | Status |
 |------|--------|
@@ -18,25 +18,61 @@
 | `CONTRIBUTING.md` | Complete |
 | `.github/workflows/ci.yml` (fmt, clippy, test, doc, audit, bench-check) | Complete |
 | `.devcontainer/devcontainer.json` | Complete |
-| `.gitignore` updated (comprehensive Rust entries) | Complete |
+| `.gitignore` updated (comprehensive Rust entries + genesis.json) | Complete |
 | PDP crate: `error.rs` and `types.rs` stub modules with TrustStage/RiskLevel | Complete |
+
+## Week 2: Complete (2026-05-04)
+
+| Task | Status |
+|------|--------|
+| Core types: `hyperfluid-state` (KeyPrefix, Account, SMTNode, InclusionProof) | Complete |
+| Core types: `hyperfluid-consensus` (Committee, BlockHeader, Block, TransactionEnvelope, TxType, GenesisConfig) | Complete |
+| Core types: `hyperfluid-staking` (ValidatorRecord, ValidatorState, SlashRecord, SystemParameters, GovernanceVoteTx) | Complete |
+| `hyperfluid-node` binary crate (config loading, genesis block, consensus loop, --gen-genesis) | Complete |
+| Testnet config: `config/testnet-single.toml` (single-validator genesis) | Complete |
+| Start/stop scripts: `scripts/testnet/start.ps1`, `scripts/testnet/stop.ps1` | Complete |
+| `DEVELOPMENT.md` (developer onboarding guide) | Complete |
+| `cargo-deny` installed and passing (advisories, bans, licenses, sources all ok) | Complete |
+| `.gitignore` updated (genesis.json) | Complete |
+| Full cold-start verification | Complete |
 
 ## Verification
 
 | Check | Result |
 |-------|--------|
-| `cargo build --workspace` | PASS (12 crates) |
-| `cargo test --workspace` | PASS (12/12) |
+| `cargo build --workspace` | PASS (13 crates including node binary) |
+| `cargo test --workspace` | PASS (21/21 tests) |
 | `cargo fmt --all -- --check` | PASS (clean) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero warnings) |
 | `cargo doc --workspace --no-deps` | PASS |
+| `cargo deny check` | PASS (advisories ok, bans ok, licenses ok, sources ok) |
+| `hyperfluid-node` boots (genesis block, consensus loop) | PASS |
+| `hyperfluid-node --gen-genesis` produces genesis.json | PASS |
+| Single-node testnet boots and stops cleanly | PASS |
+| CI pipeline runs on push/PR | READY |
+| Dependency licenses audited; no GPL/AGPL | PASS |
+| All risks documented and acceptable | PASS |
+| Next stage inputs prepared | PASS |
 
-## Week 2: Pending
+## Known Issues
 
-- [ ] Testnet scaffold (genesis cerberus, single-validator config, start/stop scripts)
-- [ ] Full cold-start verification (`git clone` -> `cargo build` -> `cargo test` -> local testnet boots)
-- [ ] `DEVELOPMENT.md` (developer onboarding guide)
-- [ ] Verify `cargo-deny` passes (needs `cargo-deny` installed)
+1. SCALE encoding deferred to Stage 01. Spec requires SCALE (consensus-spec.md Section 2.2). Current crates use serde for test serialization; SCALE codec (`parity-scale-codec`) to be added in Stage 01.
+2. PDP crate has stub `error.rs` + `types.rs` with `thiserror` dependency. Will grow in Stage 02.
+3. Node consensus loop is a stub (100ms timer, no real block production). Stage 01 implements Committee BFT.
+
+## Resolved Issues (Bug Audit 2026-05-04)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| AGX monetary amounts overflow u64 (10M AGX at atto-AGX precision) | Critical | Changed all monetary fields to u128 across 3 crates. Total supply now correctly 10^25 atto-AGX |
+| liveness_bitmap Vec<u8> instead of [u8; 1024] | Major | Added SPEC_DEVIATION comment; deferred to Stage 01 SCALE encoding |
+| RiskLevel has spurious Critical variant not in spec RiskClass | Major | Removed Critical variant; matches spec's 3-level model |
+| Wrong AGX unit conversion in spec comments | Major | Fixed conversion factor comments in staking-spec.md |
+| parent_hash printed as block hash in log | Minor | Fixed log label to read parent_hash |
+| Unused workspace dependencies (8 deps) | Minor | Removed ed25519-dalek, bincode, rand, bytes, chrono, async-trait, parking_lot, dashmap |
+| Trivially passing scaffold tests | Minor | Added spec-value assertions for total supply and airdrop amount |
+
+See `docs/01-research/_audit-bugs-2026-05-04.md` for full report.
 
 ## Exit Criteria Status
 
@@ -45,13 +81,10 @@
 | `cargo build` from clean checkout | PASS |
 | `cargo test` passes | PASS |
 | `just fmt` and `just lint` pass zero warnings | PASS |
-| CI pipeline runs on push/PR | READY (workflow file created; needs repo push to verify) |
-| Single-node testnet boots | NOT STARTED (Week 2) |
-| Dependency licenses audited; no GPL/AGPL | NOT RUN (needs cargo-deny binary) |
-| All risks documented and acceptable | IN PROGRESS |
-| Next stage inputs prepared | PENDING |
+| CI pipeline runs on push/PR | READY |
+| Single-node testnet boots | PASS |
+| Dependency licenses audited; no GPL/AGPL | PASS |
+| All risks documented and acceptable | PASS |
+| Next stage inputs prepared | PASS |
 
-## Known Issues
-
-1. `cargo-deny` (audit) not yet run — requires `cargo install cargo-deny` on a machine with the binary. CI workflow includes the `cargo-deny-action` so it will run on push. Blocked on: toolchain not on this machine.
-2. PDP crate has stub `error.rs` + `types.rs` with `thiserror` dependency. Lightweight and intentional — these types will grow in Stage 02.
+**Stage 00: COMPLETE. Ready for Stage 01 (Protocol Core).**

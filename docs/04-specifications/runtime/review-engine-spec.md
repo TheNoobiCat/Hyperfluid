@@ -74,7 +74,7 @@ struct ChallengeRecord {
     task_id: [u8; 32],
     challenger_id: [u8; 32],
     evidence_hash: [u8; 32],
-    bond_amount: u64,             // 20% of task_bounty
+    bond_amount: u128,             // 20% of task_bounty in atto-AGX
     submitted_at_height: u64,
     outcome: Option<ChallengeOutcome>,
 }

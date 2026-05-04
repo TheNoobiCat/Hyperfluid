@@ -35,7 +35,7 @@ struct Task {
     funder: [u8; 32],              // agent_id that created and escrowed the bounty
     primary_owner: Option<[u8; 32]>,
     status: TaskStatus,
-    bounty_agx: u64,               // escrowed at creation, released on completion
+    bounty_agx: u128,              // escrowed at creation in atto-AGX, released on completion
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
@@ -61,7 +61,7 @@ struct TaskLease {
     lease_id: [u8; 32],
     task_id: [u8; 32],
     owner_id: [u8; 32],
-    collateral: u64,               // locked AGX
+    collateral: u128,               // locked AGX in atto-AGX
     started_at_height: u64,
     expires_at_height: u64,        // started_at + 120 blocks (20 min)
     last_heartbeat_height: u64,

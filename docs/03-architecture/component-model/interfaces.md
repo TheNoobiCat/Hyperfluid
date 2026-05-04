@@ -142,14 +142,14 @@ BlockOutput {
 **Key Data Structures:**
 ```
 ValidatorRecord {
-  validator_id: bytes32
-  state: enum (active | paused | unbonding | withdrawn)
-  bonded_stake: uint64
-  bonding_height: uint64
-  unbonding_height: uint64
-  jail_until_height: uint64
-  liveness_window: [bool; 8192]
-  slash_count: uint32
+    validator_id: bytes32
+    state: enum (active | paused | unbonding | withdrawn)
+    bonded_stake: uint128
+    bonding_height: uint64
+    unbonding_height: uint64
+    jail_until_height: uint64
+    liveness_window: [bool; 8192]
+    slash_count: uint32
 }
 ```
 
@@ -166,12 +166,12 @@ ValidatorRecord {
 **Format:**
 ```
 GovernanceVoteTx {
-  proposal_id: bytes32
-  voter_id: bytes32
-  vote: enum (yes | no)
-  reason_hash: bytes32
-  vote_weight: uint64 (bonded_stake at snapshot)
-  signature: bytes
+    proposal_id: bytes32
+    voter_id: bytes32
+    vote: enum (yes | no)
+    reason_hash: bytes32
+    vote_weight: uint128 (bonded_stake at snapshot in atto-AGX)
+    signature: bytes
 }
 ```
 
@@ -231,18 +231,18 @@ QuotaCheckResponse {
 **Format:**
 ```
 SettlementBatch {
-  epoch: uint64
-  settlements: [BountyPayout]
-  total_agx_released: uint64    // released from escrow, not newly minted
-  computation_root: bytes32 (content hash of inputs)
+    epoch: uint64
+    settlements: [BountyPayout]
+    total_agx_released: uint128    // released from escrow in atto-AGX, not newly minted
+    computation_root: bytes32 (content hash of inputs)
 }
 
 BountyPayout {
-  recipient_id: bytes32
-  amount: uint64
-  reward_type: enum (work | review | relay | witness | staking_rebate)
-  escrow_ref: bytes32           // references the task escrow this came from
-  evidence_ref: bytes32
+    recipient_id: bytes32
+    amount: uint128
+    reward_type: enum (work | review | relay | witness | staking_rebate)
+    escrow_ref: bytes32           // references the task escrow this came from
+    evidence_ref: bytes32
 }
 ```
 

@@ -183,15 +183,22 @@ If you discover a trust assumption or centralised dependency not listed in the s
 2. File in `open-questions.md`.
 3. Escalate to spec revision before continuing.
 
-**Testing:**
-- Write tests alongside implementation.
-- Target test coverage of the specified behavior.
-- Add conformance test entries under `docs/06-validation/conformance/`.
+**Testing (TDD — Red → Green → Refactor):**
+- The spec's Section X.7 Conformance Test Hooks ARE the TDD stories.
+- For each hook, in order:
+  1. **RED:** Write a failing test that asserts the hook's behavior.
+  2. **GREEN:** Write minimum code to make the test pass.
+  3. **REFACTOR:** Clean up while keeping the test green.
+- `cargo test` before any implementation must fail on the new test.
+- Test file convention: `crates/<component>/tests/` mirroring spec sections.
+- Test naming: `conforms_to_<spec>_<section>_<short_description>`.
+- Conformance matrix entries are derived from these tests (they ARE the evidence).
 
 **Checkpoint cadence:**
-- Create a checkpoint after every completed task, not just at week boundaries.
-- A checkpoint is a one-paragraph summary: what works, what's next, blockers.
-- File it as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
+- Create a checkpoint after each passing green test, not just week boundaries.
+- A checkpoint is one line per test: `hook <name> — PASS`.
+- At week boundaries, summarise: total new tests, what works, what's next, blockers.
+- File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
 
 When the week's tasks are complete:
 1. Update stage file (mark week complete).
@@ -229,3 +236,110 @@ In a fresh chat, determine current state:
 6. Does `docs/05-planning/stages/` have stage files?
    NO -> Run Phase 4
    YES -> Run Phase 5 (Implementation)
+
+---
+
+## Utility A: Fix-and-Update
+
+Use this when encountering a build error, runtime crash, test failure, or when a new feature/capability is needed mid-build. Paste the error message, stack trace, test output, or feature description as your message, then run this prompt. It will fix the code AND synchronise all related documentation in one cycle.
+
+### Prompt:
+
+Read `BUILD-SYSTEM.md`, `GLOSSARY.md`, `TEMPLATES.md`, then:
+
+1. **Read current state:**
+   - Latest handoff: `docs/08-handoff/latest/` (prioritise most recent `checkpoint-*.md` and `build-status.md`).
+   - Current stage file in `docs/05-planning/stages/` (check which week is active and what tasks are pending/complete).
+   - `PROJECT-STATUS.md`.
+   - All relevant spec files in `docs/04-specifications/` — read the spec(s) for the component(s) involved in the error or feature request.
+   - All relevant source code in `crates/` for the affected components.
+   - Architecture docs and ADRs in `docs/03-architecture/` if the fix crosses design boundaries.
+
+2. **Diagnose the user's message:**
+   - If error/bug: trace root cause. Check whether the code deviates from the spec (accidental bug) or the spec itself is wrong/underspecified (design gap).
+   - If feature request: check whether this is:
+     - **Already in scope** but under-specified in the spec → update spec, then implement.
+     - **Genuinely new** → file an ADR in `docs/03-architecture/decisions/ADR-XXXX-description.md`, update the affected spec section, and if the feature introduces new requirements, add a FR file in `docs/02-requirements/`. Then implement.
+
+3. **Fix or implement:**
+   - Apply the fix or build the feature in the appropriate crate. Follow existing code conventions (error types, naming, module structure).
+   - When a spec deviation is intentional or forced by implementation constraints, annotate with `// SPEC_DEVIATION: [reason]` and reference the ADR if one was created.
+   - Write or update tests that cover the fix/feature.
+
+4. **Synchronise documentation:**
+   - If spec was wrong/ambiguous: update the spec file in `docs/04-specifications/`. If the change affects the trust-assumption inventory (section X.8), update it.
+   - If an ADR was created: register it in `docs/03-architecture/index.md` (add to the ADR table).
+   - If a requirement was added: register it in `docs/02-requirements/index.md`.
+   - Update `build-status.md`: mark affected tasks, add new entries for any new work done.
+   - Create `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md` summarising: what broke, root cause, what was fixed/changed, and any new gaps or open questions.
+   - If a week boundary was crossed or new tasks were injected into the stage plan, update the stage file's week-by-week breakdown.
+   - Update `PROJECT-STATUS.md`: record the fix, update "Next Actions" and "Last updated".
+
+5. **Verify:**
+   - `cargo build --workspace` passes.
+   - `cargo test --workspace` passes (new and existing tests).
+   - `cargo fmt --all -- --check` passes.
+   - `cargo clippy --workspace --all-targets -- -D warnings` passes.
+   - `cargo doc --workspace --no-deps` passes.
+   - If any verification step fails, fix the issue before proceeding.
+
+6. **Report back:** Summarise what was found, what code files were changed, what docs were updated, and any remaining open questions or gaps.
+
+---
+
+## Utility B: Code Audit (Silent Bugs)
+
+Use this during or after Phase 5 build execution to find bugs in implemented code that are NOT already documented in handoffs, checkpoints, or build-status. This is a fresh-perspective audit, not a progress review — it intentionally ignores "what's done vs what's left" and focuses only on undiscovered defects.
+
+### Prompt:
+
+Read `BUILD-SYSTEM.md`, `GLOSSARY.md`, then:
+
+1. **Read known-state inventory** (so you know what bugs/issues are already documented and should be skipped):
+   - Every file in `docs/08-handoff/latest/` — `build-status.md`, all `checkpoint-*.md`. Pay attention to "Known Issues" sections and any `open-questions.md`.
+   - `PROJECT-STATUS.md` — blockers and gaps sections.
+   - All stage files in `docs/05-planning/stages/` — note any "Risk Areas" or deferred items.
+
+2. **Read source material** (the canonical "what should be true"):
+   - Every spec in `docs/04-specifications/` — read all sections including trust-assumption inventories. These define correct behaviour.
+   - Architecture docs in `docs/03-architecture/` — especially `interfaces.md` (message formats, error codes), `failure-model.md` (failure scenarios), `state-model.md` (state transitions).
+   - Requirements in `docs/02-requirements/` for high-level intent.
+
+3. **Read every line of code:**
+   - Walk every file in every crate under `crates/`. Read tests too — test bugs are bugs.
+
+4. **Cross-reference code against specs and architecture to find bugs:**
+
+   For each component, check systematically:
+
+   - **Logic errors:** Wrong comparison operator, off-by-one, inverted conditional, missing negation, incorrect state transition in a match/if chain, integer overflow/underflow (checked vs unchecked arithmetic).
+   - **Spec deviations:** Behaviour that diverges from the spec. Distinguish intentional `// SPEC_DEVIATION:` comments (skip these — they're documented choices) from accidental deviations (REPORT).
+   - **Missed error handling:** `.unwrap()`, `.expect()`, or `panic!()` calls on fallible operations; ignored `Result` return values; missing `?` propagation; catch-all `match` arms that hide errors.
+   - **Security issues:** Missing or incorrect signature verification, input not validated against schema, missing bounds checks on untrusted data, reentrancy, shared mutable state without synchronisation, hardcoded secrets/keys.
+   - **Type/representation errors:** Wrong enum variant used, incorrect field mapping between wire format and internal struct, field omitted during serialisation/deserialisation, wrong units (milliseconds vs height, nanoAGX vs AGX).
+   - **Cross-crate inconsistencies:** Two crates defining the same concept differently (e.g., `TrustStage` ordering differs between `hyperfluid-pdp` and `hyperfluid-agent`), incompatible type definitions, mismatched wire format expectations.
+   - **Concurrency errors:** Shared state accessed without `Mutex`/`RwLock`, `async` functions that hold locks across await points, incorrect `Send`/`Sync` bounds, race window between check-and-act operations.
+   - **Dead or unreachable code:** Unused functions, dead match arms, unreachable `panic!`, imports that are never used, variables assigned but never read.
+   - **Test bugs:** Tests that don't actually assert anything (no `assert!`/`assert_eq!`), tests that pass trivially due to wrong setup, tests that don't match spec behaviour.
+
+5. **Filter the bug list:**
+   Compare every candidate bug against the known-state inventory from step 1. If the bug is ALREADY documented in a checkpoint, build-status "Known Issues", open-questions.md, or PROJECT-STATUS gaps section — SKIP IT. Only report genuinely NEW discoveries.
+
+6. **Fix every new bug found:**
+   - Apply the fix in the appropriate crate.
+   - If the fix reveals a spec gap or ambiguity, update the relevant spec in `docs/04-specifications/` and note the fix in the spec change log.
+   - If the fix requires an architecture decision (e.g., changing an interface), file an ADR in `docs/03-architecture/decisions/` and update `docs/03-architecture/index.md`.
+
+7. **Document and verify:**
+   - Create `docs/01-research/_audit-bugs-YYYY-MM-DD.md` with:
+     - Summary: total bugs found and fixed, severity breakdown (critical, major, minor).
+     - For each bug: file path + line number, severity, what code did vs what it should do (cite spec section), root cause category (from step 4 list), and what was changed.
+     - Systemic patterns (e.g., "all crates use `.unwrap()` on deserialisation").
+   - Update `build-status.md` to reflect fixes applied.
+   - Create `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md` summarising the audit scope and fixes.
+   - Update `PROJECT-STATUS.md`: record the audit, update "Next Actions", "Last updated".
+   - `cargo build --workspace` passes.
+   - `cargo test --workspace` passes.
+   - `cargo fmt --all -- --check` passes.
+   - `cargo clippy --workspace --all-targets -- -D warnings` passes.
+   - `cargo doc --workspace --no-deps` passes.

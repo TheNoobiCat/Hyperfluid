@@ -13,12 +13,12 @@ pub enum TrustStage {
 }
 
 /// Risk level assigned to an action_plan.
+/// Maps to spec's RiskClass (3 levels). Source: policy-engine-spec.md Section 1.3
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RiskLevel {
     Low,
     Medium,
     High,
-    Critical,
 }
 
 /// Result of a PDP policy evaluation.

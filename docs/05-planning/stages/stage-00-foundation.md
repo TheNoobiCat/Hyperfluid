@@ -46,11 +46,15 @@
 - [x] PDP crate seeded with early `error.rs` and `types.rs` (TrustStage, RiskLevel, PolicyResult).
 - [x] `.gitignore` updated with comprehensive Rust entries.
 
-### Week 2 (if needed)
-1. Wire CI pipeline: GitHub Actions workflow or equivalent — `just fmt`, `just lint`, `just test`, `just audit`, `just bench`.
-2. Create local testnet scaffold: genesis cerberus, single-validator config, start/stop shell scripts.
-3. Verify full cold-start: `git clone` → `cargo build` → `cargo test` → local testnet boots.
-4. Document developer onboarding in `BUILD-SYSTEM.md` appendix or separate `DEVELOPMENT.md`.
+### Week 2 [x] COMPLETE (2026-05-04)
+
+1. [x] Core types in `hyperfluid-state` (KeyPrefix, Account, SMTNode, InclusionProof), `hyperfluid-consensus` (Committee, BlockHeader, Block, TransactionEnvelope, TxType, GenesisConfig), `hyperfluid-staking` (ValidatorRecord, ValidatorState, SlashRecord, SystemParameters, GovernanceVoteTx).
+2. [x] `hyperfluid-node` binary crate: genesis block generation, config loading, stub consensus loop, `--gen-genesis` flag, clean shutdown.
+3. [x] Local testnet scaffold: `config/testnet-single.toml`, `scripts/testnet/start.ps1`, `scripts/testnet/stop.ps1`.
+4. [x] Full cold-start verification: `cargo build`, `cargo test` (21 tests), `cargo fmt --check`, `cargo clippy`, `cargo doc`, node boots and stops cleanly.
+5. [x] `DEVELOPMENT.md` developer onboarding guide.
+6. [x] `cargo-deny` installed and passing: advisories ok, bans ok, licenses ok, sources ok.
+7. [x] `.gitignore` updated with `genesis.json`.
 
 ## Risk Areas
 - **Dependency license conflict:** Some Rust crypto crates use AGPL or GPL. Mitigation: `cargo-deny` configured upfront; evaluate alternatives before adding any dependency past Stage 00.

@@ -8,3 +8,9 @@ rust-version.workspace = true
 description = "C2 State Machine & SMT: State transitions, SMT root, nonce enforcement, account state"
 
 [dependencies]
+serde.workspace = true
+sha3.workspace = true
+hex.workspace = true
+# SCALE encoding (parity-scale-codec) will be added in Stage 01.
+# Spec requires "All entity values MUST be serialized in SCALE encoding" (consensus-spec.md Section 2.2)
+

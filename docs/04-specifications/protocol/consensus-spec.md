@@ -184,7 +184,7 @@ enum KeyPrefix {
 
 struct Account {
     account_id: [u8; 32],       // SHA3-256 of ML-DSA pubkey
-    balance: u64,                // atto-AGX
+    balance: u128,               // atto-AGX (u128 required for 10M AGX total supply at atto-AGX precision)
     nonce: u64,
     pubkey_hash: [u8; 32],
     pubkey: Option<Vec<u8>>,    // revealed on first spend

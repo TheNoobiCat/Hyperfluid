@@ -1,7 +1,6 @@
-//! C1 Consensus Engine
-//!
-//! Committee BFT consensus via Malachite. Block production, committee rotation,
-//! Byzantine agreement, transaction ordering, and finality.
+// === C1 Consensus Engine: Core Types ===
+//
+// Source: specs/protocol/consensus-spec.md Section 1
 
-#[cfg(test)]
-mod tests {}
+pub mod genesis;
+pub mod types;

@@ -70,7 +70,7 @@ struct FastPathChallengeTx {
     topic_id: [u8; 32],
     challenger_id: [u8; 32],
     evidence_hash: [u8; 32],
-    challenger_bond: u64,            // 20% of merge reward value
+    challenger_bond: u128,           // 20% of merge reward value in atto-AGX
     signature: Vec<u8>,
 }
 

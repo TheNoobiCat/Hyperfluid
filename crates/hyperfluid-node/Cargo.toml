@@ -1,0 +1,23 @@
+[package]
+name = "hyperfluid-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Hyperfluid full node binary: Genesis boot, consensus loop, P2P networking, shutdown"
+
+[[bin]]
+name = "hyperfluid-node"
+path = "src/main.rs"
+
+[dependencies]
+hyperfluid-consensus = { path = "../hyperfluid-consensus" }
+hyperfluid-state = { path = "../hyperfluid-state" }
+hyperfluid-staking = { path = "../hyperfluid-staking" }
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

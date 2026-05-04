@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 12 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS) |
 | Phase 3: Specifications | COMPLETE (14 specs across 4 domains, all FRs mapped, trust-assumption inventories complete. Gate: PASS) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 00, Week 1 complete) |
+| Phase 5+: Build | IN PROGRESS (Stage 00 complete. Stage 01 next: Protocol Core — Minimum Viable Chain) |
 
 ---
 
@@ -61,10 +61,20 @@ None.
 
 ---
 
+## Bug Audit (2026-05-04)
+
+**Result:** 7 bugs found and fixed across 3 crates and 10 spec/architecture documents. See `docs/01-research/_audit-bugs-2026-05-04.md` for full report.
+
+Key findings:
+1. **CRITICAL:** All AGX monetary amounts changed from `u64` to `u128` — 10M AGX total supply at atto-AGX precision (10^25) overflows u64 (max ~1.8*10^19).
+2. **MAJOR:** `liveness_bitmap` type divergence documented with SPEC_DEVIATION flag.
+3. **MAJOR:** PDP `RiskLevel` had spurious `Critical` variant not in spec — removed.
+4. Spec documents updated for u128 type migration across all 10 affected struct definitions.
+
 ## Next Actions
 
-1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Week 1 complete. See `docs/08-handoff/latest/checkpoint-2026-05-02.md`.
-2. Stage 00 Week 2: Testnet scaffold (genesis cerberus, single-validator config, start/stop scripts), cold-start verification, `DEVELOPMENT.md`, `cargo-deny` audit pass.
+1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete. See `docs/08-handoff/latest/checkpoint-2026-05-04.md`.
+2. ~~Bug audit completed. See `docs/01-research/_audit-bugs-2026-05-04.md`.~~ 
 3. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
 4. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
 5. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
@@ -111,4 +121,4 @@ None.
 
 ---
 
-*Last updated: 2026-05-03 (Phase 5 Stage 00 Week 1 complete; economic model redesigned to genesis-only fixed supply with bounty marketplace; Sybil detection correlation engine designed; Telegram bot + TUI setup wizard designed; 195 FRs: 165 FR + 30 NFR; 2 new research docs)*
+*Last updated: 2026-05-04 (Stage 00 complete; 13 crates + node binary; core types in state/consensus/staking following spec data structures with u128 monetary types; testnet scaffold with single-validator config and start/stop scripts; 23 unit tests (+2 added by audit); bug audit completed with 7 fixes across crates and specs; cargo-deny passing; ready for Stage 01 Protocol Core)*
