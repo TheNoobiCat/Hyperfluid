@@ -245,7 +245,7 @@ Use this when encountering a build error, runtime crash, test failure, or when a
 
 ### Prompt:
 
-Read `BUILD-SYSTEM.md`, `GLOSSARY.md`, `TEMPLATES.md`, then:
+Read the prompt left by the user at the end of this message, then read `BUILD-SYSTEM.md`, `GLOSSARY.md`, `TEMPLATES.md`, then:
 
 1. **Read current state:**
    - Latest handoff: `docs/08-handoff/latest/` (prioritise most recent `checkpoint-*.md` and `build-status.md`).
@@ -284,6 +284,8 @@ Read `BUILD-SYSTEM.md`, `GLOSSARY.md`, `TEMPLATES.md`, then:
    - If any verification step fails, fix the issue before proceeding.
 
 6. **Report back:** Summarise what was found, what code files were changed, what docs were updated, and any remaining open questions or gaps.
+
+The prompt from the user: 
 
 ---
 
