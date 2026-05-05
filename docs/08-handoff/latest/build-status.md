@@ -113,6 +113,21 @@
 
 See `docs/01-research/_audit-bugs-2026-05-04.md` for full report.
 
+## Resolved Issues (Bug Audit 2026-05-05)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| state-model.md: 11 monetary fields still uint64 after B-01 fix (DB-01) | Major | Changed to uint128 across GOVERNANCE_PROPOSAL, GOVERNANCE_VOTE, REPLICATION_LEASE, AIRDROP_POOL, SYSTEM_PARAMETERS |
+| Missing traceability-matrix.md per BUILD-SYSTEM.md requirement (DB-02) | Major | Created at docs/08-handoff/latest/traceability-matrix.md |
+| f64 in PDP QuotaEntry violates determinism mandate (DB-03) | Major | Changed to rational pair (u64,u64) |
+| f64 in ReputationVector causes SMT non-determinism (DB-04) | Major | Changed to u8 scaled 0-255 |
+| policy-engine-spec.md section ordering error (DB-05) | Minor | Reordered 2.5→2.6→2.7→2.8; removed duplicate |
+| architecture/index.md requirement count out of date (DB-06) | Minor | Updated 195→202; added FR-0194-0200 mapping |
+| components.md requirement count out of date (DB-07) | Minor | Updated 195→202; tool list 5→9 |
+| Spec headers missing FR-0194–0200 coverage (DB-08) | Minor | Added missing FRs to consensus-spec.md, agent-runtime-spec.md, collaboration-spec.md headers |
+
+See `docs/01-research/_audit-bugs-2026-05-05.md` for full report.
+
 ## Exit Criteria Status
 
 | Criterion | Status |

@@ -71,17 +71,32 @@ Key findings:
 3. **MAJOR:** PDP `RiskLevel` had spurious `Critical` variant not in spec — removed.
 4. Spec documents updated for u128 type migration across all 10 affected struct definitions.
 
+## Bug Audit (2026-05-05) — Documentation Layer
+
+**Result:** 8 bugs found and fixed across 8 documentation files. No code changes. See `docs/01-research/_audit-bugs-2026-05-05.md` for full report.
+
+Key findings:
+1. **MAJOR:** 11 monetary fields in `state-model.md` remained `uint64` after the B-01 u128 migration (incomplete fix propagation).
+2. **MAJOR:** Missing `traceability-matrix.md` required by BUILD-SYSTEM.md.
+3. **MAJOR:** `f64` in PDP `QuotaEntry.stage_multipliers` violates PDP determinism mandate.
+4. **MAJOR:** `f64` in `ReputationVector` causes SMT non-determinism.
+5. Architecture documents (index.md, components.md) referenced pre-amendment requirement count (195 vs 202).
+6. Spec headers missing FR-0194–0200 coverage added in checkpoint amendments.
+
+Systemic patterns identified: incomplete migration propagation, f64 in deterministic contexts, documentation drift after Layer 2 amendments.
+
 ## Next Actions
 
 1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete. See `docs/08-handoff/latest/checkpoint-2026-05-04.md`.
-2. ~~Bug audit completed. See `docs/01-research/_audit-bugs-2026-05-04.md`.~~ 
+2. ~~Bug audit (code) completed. See `docs/01-research/_audit-bugs-2026-05-04.md`.~~
 3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013. See `checkpoint-2026-05-05.md`.~~
-3. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5: 7 FRs, ADR-0014, 4 specs, planning. See `checkpoint-2026-05-05b.md` and `checkpoint-2026-05-05c.md`.~~
-4. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
-5. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-6. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-7. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-8. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
+4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5: 7 FRs, ADR-0014, 4 specs, planning. See `checkpoint-2026-05-05b.md` and `checkpoint-2026-05-05c.md`.~~
+5. ~~Documentation-layer bug audit completed. See `docs/01-research/_audit-bugs-2026-05-05.md`.~~
+7. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
+8. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+9. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+10. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+11. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -90,11 +105,11 @@ Key findings:
 | `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075, FR-0193, FR-0199, FR-0200 — CLI + sponsored submission added) | complete |
 | `runtime/policy-engine-spec.md` | C9 Policy Decision Point (FR-0106-0120) | complete |
 | `runtime/review-engine-spec.md` | C12 Economics - review markets, Sybil adjudication (FR-0161-0175, FR-0191 — Section 2 added) | complete |
-| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox, bounty escrow (FR-0076-0105, FR-0153b — Section 1.4 escrow lifecycle added) | complete |
+| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox, bounty escrow (FR-0076-0105, FR-0153b, FR-0194-0198, FR-0176-0190 — Section 3 incentives, FR-0194 task_create) | complete |
 | `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
 | `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
 | `protocol/fee-market-spec.md` | C5 Fee Market (FR-0146-0160) | complete |
-| `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010) | complete |
+| `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010, FR-0194 — TaskCreateTx) | complete |
 | `protocol/staking-spec.md` | C3 Staking & Validator Manager (FR-0011-0020) | complete |
 | `protocol/governance-spec.md` | C4 Governance Engine (FR-0021-0030) | complete |
 | `protocol/p2p-wire-spec.md` | C7 P2P Networking (FR-0041-0050) | complete |
@@ -123,4 +138,4 @@ Key findings:
 
 ---
 
-*Last updated: 2026-05-05 (Stage 00 complete; agent tools expanded 5→9; seed index at `/ideas/`; seed-centric model: seeds=topic buckets, seed_ref required, governance entry, single-agent tasks; user-task-submission pipeline fully propagated through L2-L5: 7 new FRs (FR-0194–FR-0200), ADR-0014, 4 specs updated, planning updated; total 202 requirements (172 FR + 30 NFR); 13 crates + node binary; testnet scaffold; bug audit completed; cargo-deny passing; ready for Stage 01 Protocol Core)*
+*Last updated: 2026-05-05 (Stage 00 complete; agent tools expanded 5→9; seed index at `/ideas/`; seed-centric model: seeds=topic buckets, seed_ref required, governance entry, single-agent tasks; user-task-submission pipeline fully propagated through L2-L5: 7 new FRs (FR-0194–FR-0200), ADR-0014, 4 specs updated, planning updated; total 202 requirements (172 FR + 30 NFR); 13 crates + node binary; testnet scaffold; 8 documentation-layer bugs found and fixed across architecture/specs/handoff; traceability-matrix.md created; f64 removed from deterministic spec data structures; cargo-deny passing; ready for Stage 01 Protocol Core)*

@@ -7,7 +7,7 @@ Hyperfluid is decomposed into 12 components organized across three architectural
 - 12 components in 3 layers
 - Deterministic interfaces with typed schemas
 - Policy Decision Point as security boundary
-- All 195 FR/NFR requirements mapped to components
+- All 202 FR/NFR requirements mapped to components
 - Components designed for independent scaling and failure isolation
 
 ## 2. System Overview
@@ -145,7 +145,7 @@ flowchart TD
 
 ### C10: Agent Runtime
 
-**Responsibility:** Infinite agent loop, tool provision (bash, todo, remember, forget), system prompt assembly, handoff management, knowledge accumulation, CLI interface, procedural skill loading, sandbox isolation, process separation from node. Optional operator interfaces: Telegram bot dashboard (single-tenant, read-only + AGX transfer) and ratatui TUI setup wizard for first-launch configuration.
+**Responsibility:** Infinite agent loop, tool provision (bash, todo, remember, forget, read, edit, write, apply_patch), system prompt assembly, handoff management, knowledge accumulation, CLI interface, procedural skill loading, sandbox isolation, process separation from node. Optional operator interfaces: Telegram bot dashboard (single-tenant, read-only + AGX transfer) and ratatui TUI setup wizard for first-launch configuration.
 **Owned state:** SQLite database (todos, knowledge, handoffs, messages), system prompt, tool registry, skill cache, resource limits, `config.toml` (agent identity, LLM provider, optional Telegram token).
 **Key FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075, FR-0193
 

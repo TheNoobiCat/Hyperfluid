@@ -43,19 +43,19 @@ erDiagram
         bytes32 proposed_commit "git commit hash"
         bytes32 bundle_manifest_hash "sha256 of bundle manifest"
         bytes32 current_commit "current git_head at proposal"
-        uint64 deposit_amount "AGX locked"
+        uint128 deposit_amount "AGX locked"
         uint64 snapshot_height "validator snapshot height"
         uint64 vote_start_height "voting begins"
         uint64 vote_end_height "voting ends"
         string status "active | passed | rejected | executed"
-        uint64 yes_weight "total yes votes"
-        uint64 no_weight "total no votes"
+        uint128 yes_weight "total yes votes"
+        uint128 no_weight "total no votes"
     }
     GOVERNANCE_VOTE {
         bytes32 proposal_id PK,FK
         bytes32 voter_id PK,FK
         string vote "yes | no"
-        uint64 vote_weight "bonded stake at snapshot"
+        uint128 vote_weight "bonded stake at snapshot"
         bytes32 reason_hash "content hash of rationale"
         bytes signature "ML-DSA-65"
     }
@@ -84,7 +84,7 @@ erDiagram
         uint64 lease_start_height "lease begins"
         uint64 lease_end_height "lease expires"
         uint16 challenge_cadence "blocks between proofs"
-        uint64 collateral "AGX locked"
+        uint128 collateral "AGX locked"
         string status "active | at_risk | expired"
     }
     TASK {
@@ -134,8 +134,8 @@ erDiagram
     }
     AIRDROP_POOL {
         bytes32 pool_id PK "singleton"
-        uint64 total_allocated "10,000,000 AGX"
-        uint64 remaining "currently unclaimed"
+        uint128 total_allocated "10,000,000 AGX"
+        uint128 remaining "currently unclaimed"
         uint64 airdrops_this_epoch "count this epoch"
         uint64 epoch_cap "max per epoch"
         string status "active | sunset"
@@ -154,14 +154,14 @@ erDiagram
     SYSTEM_PARAMETERS {
         uint64 epoch_length "blocks per epoch"
         uint64 committee_size "validator count"
-        uint64 min_stake "AGX minimum"
+        uint128 min_stake "AGX minimum"
         uint64 bond_delay "blocks"
         uint64 unbond_delay "blocks"
         uint64 challenge_window "blocks"
         uint64 max_governance_proposals "32"
-        uint64 proposal_deposit "500 AGX"
-        uint64 airdrop_amount "100 AGX per agent"
-        uint64 airdrop_pool_total "10,000,000 AGX"
+        uint128 proposal_deposit "500 AGX"
+        uint128 airdrop_amount "100 AGX per agent"
+        uint128 airdrop_pool_total "10,000,000 AGX"
         bytes32 git_head "current git commit hash"
     }
     CIRCUIT_BREAKER_STATE {

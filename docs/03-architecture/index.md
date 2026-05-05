@@ -1,9 +1,9 @@
 # Layer 3: Architecture
 
 **Status:** COMPLETE
-**Last updated:** 2026-05-03
+**Last updated:** 2026-05-05
 **Total components:** 12
-**ADRs:** 12
+**ADRs:** 14
 
 ---
 
@@ -120,12 +120,13 @@ Every FR/NFR maps to at least one component. For the full traceability matrix, s
 | FR-0146-0160 | AGX Economics | C5 Fee Market, C12 Economics |
 | FR-0161-0175 | Review Markets | C12 Economics |
 | FR-0176-0193 | Incentives, Airdrop, Sybil Detection, Operator Interface | C12 Economics, C10 Agent Runtime |
+| FR-0194-0200 | Task Submission, Sponsorship, Discovery, CLI, Telegram | C9 PDP, C10 Agent Runtime, C11 Collaboration, C7 P2P |
 | NFR-0001-0015 | Performance | Cross-cutting |
 | NFR-0016-0030 | Security/Reliability | Cross-cutting |
 
 ### Orphan Check
 
-All 195 requirements map to at least one component. Zero orphans.
+All 202 requirements map to at least one component. Zero orphans.
 
 ### Potential Red Flags for Requirement Revision
 
@@ -140,7 +141,7 @@ All 195 requirements map to at least one component. Zero orphans.
 
 | Check | Status |
 |-------|--------|
-| Every requirement maps to a component | PASS (195/195) |
+| Every requirement maps to a component | PASS (202/202) |
 | No orphan requirements | PASS |
 | Component boundaries documented | PASS |
 | Trust boundaries documented | PASS |

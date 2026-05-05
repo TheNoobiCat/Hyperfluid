@@ -235,7 +235,7 @@ struct QuotaEntry {
     dimension: String,        // "per_agent", "per_topic", "per_hour", etc.
     limit: u64,
     window_blocks: u64,       // window for rolling quota
-    stage_multipliers: [(TrustStage, f64); 4],
+    stage_multipliers: [(TrustStage, (u64, u64)); 4],  // rational pair (numerator, denominator), e.g. (1,2) = 0.5x
 }
 
 struct QuotaState {
@@ -271,6 +271,13 @@ struct QuotaState {
 - Circuit-breaker active: All quotas tightened to emergency levels.
 - Quota monitoring: Quota exhaustion events are logged and trigger telemetry reporting.
 
+### 2.6 Versioning and Compatibility
+
+- Quota matrix values are governance-adjustable within defined bounds per quota ID.
+- Stage multiplier tables are stored in system parameters and activate at epoch boundaries.
+- New quota IDs may be added via governance; existing IDs may not be removed (only zeroed to 0 limit).
+- Enforcement point ordering (hard deny → sender/stage → per-resource) is protocol-wide and requires `git:head` update to change.
+
 ### 2.7 Conformance Test Hooks
 
 - Verify hard deny quotas checked before sender/stage quotas.
@@ -278,13 +285,6 @@ struct QuotaState {
 - Verify quota release on execution failure.
 - Verify circuit-breaker mode tightens all non-critical quotas.
 - Verify stage-specific multipliers applied correctly for per-sender quotas.
-
-### 2.6 Versioning and Compatibility
-
-- Quota matrix values are governance-adjustable within defined bounds per quota ID.
-- Stage multiplier tables are stored in system parameters and activate at epoch boundaries.
-- New quota IDs may be added via governance; existing IDs may not be removed (only zeroed to 0 limit).
-- Enforcement point ordering (hard deny → sender/stage → per-resource) is protocol-wide and requires `git:head` update to change.
 
 ### 2.8 Trust-Assumption Inventory
 

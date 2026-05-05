@@ -2,7 +2,7 @@
 
 **Component:** C11 Collaboration & Inbox Layer
 **Source ADRs:** ADR-0010 (Four-Stage Trust Ladder), ADR-0006 (Dual-Lane Economics)
-**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190
+**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190, FR-0194, FR-0195, FR-0198
 **Dependencies:** C9 Policy Decision Point, C10 Agent Runtime, C12 Economics
 
 ---
@@ -362,10 +362,10 @@ enum TrustStageEnum {
 }
 
 struct ReputationVector {
-    delivery_quality: f64,   // [0, 1] — accepted work / reviewed work
-    review_reliability: f64, // [0, 1] — accurate reviews / total reviews
-    liveness: f64,           // [0, 1] — active epochs / total epochs
-    safety: f64,             // [0, 1] — 1.0 - (abuse_events / total_actions)
+    delivery_quality: u8,   // [0, 255] scaled — accepted work / reviewed work (0=0%, 255=100%)
+    review_reliability: u8, // [0, 255] scaled — accurate reviews / total reviews
+    liveness: u8,           // [0, 255] scaled — active epochs / total epochs
+    safety: u8,             // [0, 255] scaled — 1.0 - (abuse_events / total_actions)
 }
 
 struct PromotionThresholds {
@@ -374,8 +374,8 @@ struct PromotionThresholds {
     min_accepted_work: u32,           // 3
     min_reviewer_diversity: u32,      // 2
     max_abuse_flags: u32,             // 0
-    min_delivery_quality: f64,        // 0.6
-    min_liveness: f64,                // 0.3
+    min_delivery_quality: u8,         // 153 (0.6 * 255)
+    min_liveness: u8,                 // 76 (0.3 * 255)
 
     // trusted_contributor:
     // min_identity_age_blocks: 172,800 (~20 days)

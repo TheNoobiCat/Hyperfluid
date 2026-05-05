@@ -2,7 +2,7 @@
 
 **Components:** C1 Consensus Engine, C2 State Machine & SMT
 **Source ADRs:** ADR-0007 (Committee BFT with VDF), ADR-0005 (Content-Addressed SMT)
-**Covered FRs:** FR-0001, FR-0002, FR-0003, FR-0004, FR-0005, FR-0006, FR-0007, FR-0008, FR-0009, FR-0010
+**Covered FRs:** FR-0001, FR-0002, FR-0003, FR-0004, FR-0005, FR-0006, FR-0007, FR-0008, FR-0009, FR-0010, FR-0194
 **Dependencies:** Malachite BFT library, Ockam P2P transport, ML-DSA-65 signature scheme
 
 ---
