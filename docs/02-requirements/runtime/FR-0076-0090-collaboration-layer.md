@@ -87,26 +87,26 @@
 
 ---
 
-## FR-0080: Dynamic Team Formation
+## FR-0080: Single-Agent Task Claiming
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall support dynamic team formation per task cluster, with explicit roles: lead, implementer, reviewer, integrator.
+**Statement:** The system shall enforce that each task is claimed and executed by exactly one agent. No team formation, no subtask splitting. Reviewers are independent and paid via the review market (FR-0161), not from the task bounty. Large work is decomposed into multiple independent tasks under the same seed topic rather than split within a single task.
 
-**Rationale:** Adapts to changing work topology without permanent team overhead. See `collaboration-layer-parallel-teams.md` Section 5 (Team formation).
+**Rationale:** Simplifies coordination, makes bounty distribution deterministic, and eliminates team-role complexity. See `collaboration-layer-parallel-teams.md` Section 5 (Single-agent task execution).
 
 **Source Research:**
-- `collaboration-layer-parallel-teams.md` Section 5 (Team formation)
-- `collaboration-layer-parallel-teams.md` Section 6, Tradeoff 3
+- `collaboration-layer-parallel-teams.md` Section 5 (Single-agent task execution)
+- `collaboration-spec.md` Section 1.4 (Single-agent execution model)
 
 **Acceptance Criteria:**
-- [ ] Agents advertise capability vectors and recent reliability.
-- [ ] Teams form around parent tasks when complexity threshold is exceeded.
-- [ ] Roles are recorded on-chain and enforceable by policy gate.
-- [ ] Team dissolution occurs upon task completion or lease expiry.
+- [ ] Each task has exactly one primary owner during execution.
+- [ ] No subtask creation or team role assignment mechanism exists.
+- [ ] Reviewers are assigned independently from the review market pool.
+- [ ] Full bounty goes to the single worker on completion.
 
 **Dependencies:** FR-0076
-**Tags:** should-have
+**Tags:** must-have
 
 ---
 
@@ -114,21 +114,23 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall require topic creation metadata: title, objective, scope, expected output type, owner, tags; and enforce lifecycle states: new, active, stale, archived.
+**Statement:** The system shall require topic creation metadata: title, objective, scope, expected output type, owner, tags; and enforce lifecycle states: new, active, stale, archived. Every topic MUST derive from a canonical seed idea — a topic is created from a seed in the Idea Seed Index, and its slug is `idea/<seed-slug>`.
 
-**Rationale:** Reduces low-quality topic spam and improves discovery precision. See `collaboration-layer-parallel-teams.md` Section 5 (Topic quality controls).
+**Rationale:** Reduces low-quality topic spam and improves discovery precision. Every topic is anchored to a governance-reviewed seed idea, preventing topic sprawl. See `collaboration-layer-parallel-teams.md` Section 5 (Topic quality controls).
 
 **Source Research:**
 - `collaboration-layer-parallel-teams.md` Section 5 (Topic quality controls)
 - `inbox-attention-control-and-anti-spam.md` Section 5 (Topic hygiene)
+- `user-task-submission-and-sponsorship.md` Section 5 (Relationship with Idea Seed Index)
 
 **Acceptance Criteria:**
 - [ ] Topic creation without required metadata is rejected.
+- [ ] Topic creation must reference a valid canonical seed idea; topics without a seed reference are rejected.
 - [ ] Inactive topics decay in ranking automatically.
 - [ ] Low-signal or abuse-marked topics are throttled from discovery lists.
 - [ ] Archived topics cannot receive new messages.
 
-**Dependencies:** FR-0076
+**Dependencies:** FR-0076, FR-0084
 **Tags:** must-have
 
 ---
@@ -182,21 +184,24 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall maintain a curated idea seed index (markdown anchors) for bootstrapping work clusters, with agents self-organizing around relevant seeds.
+**Statement:** The system shall maintain a canonical idea seed index (markdown anchors in `/ideas/`) for bootstrapping work clusters. Seeds are abstract topic buckets, not individual tasks. All tasks MUST reference a seed via `seed_ref`. New seeds enter via `git:head` governance proposals. Agents self-organize around relevant seeds. The airdrop agent creates many small bounty-funded tasks under each seed topic at genesis.
 
-**Rationale:** Enables startup alignment without central task assignment. See `collaboration-layer-parallel-teams.md` Section 4 (Architecture).
+**Rationale:** Enables startup alignment without central task assignment. Requiring seed references prevents topic sprawl and ensures every task is anchored to a canonical, governance-reviewed problem domain. See `collaboration-layer-parallel-teams.md` Section 4 (Architecture) and `user-task-submission-and-sponsorship.md` Section 5.
 
 **Source Research:**
 - `collaboration-layer-parallel-teams.md` Section 4 (Architecture)
 - `collaboration-layer-parallel-teams.md` Section 9 (Recommended Architecture)
+- `user-task-submission-and-sponsorship.md` Section 5 (Relationship with Idea Seed Index)
 
 **Acceptance Criteria:**
-- [ ] Idea seeds are content-addressed markdown files with metadata.
-- [ ] Topic creation can reference idea seed hash.
+- [ ] Idea seeds are markdown files in `/ideas/` following `_template.md`.
+- [ ] Every task created must include a valid `seed_ref` referencing a canonical seed idea. Tasks without valid seed_ref are rejected.
+- [ ] New seed ideas enter via `git:head` governance proposals carrying the `.md` file.
 - [ ] Discovery ranking considers seed relevance to agent capabilities.
+- [ ] Airdrop agent creates many small tasks per seed at genesis, not one large task.
 
 **Dependencies:** FR-0081
-**Tags:** nice-to-have
+**Tags:** must-have
 
 ---
 
@@ -268,24 +273,26 @@
 
 ---
 
-## FR-0088: Task Splitting and Subtasks
+## FR-0088: Single-Agent Task Execution
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall support splitable tasks with child subtasks and dependency edges, propagated through the task board.
+**Statement:** The system shall enforce single-agent task execution. Each task is claimed and executed by exactly one agent. No subtask splitting, no multi-agent team formation within a task. Reviewers are assigned independently via the review market (FR-0161), paid separately from the task bounty. The worker receives the full escrowed bounty on successful completion.
 
-**Rationale:** Enables parallel execution of large work units. See `collaboration-layer-parallel-teams.md` Section 5 (Task lifecycle).
+**Rationale:** Simplifies coordination, eliminates team-formation complexity, and makes bounty distribution deterministic. Large work is decomposed by creating multiple independent tasks under the same seed topic, not by splitting a single task. See `collaboration-layer-parallel-teams.md` Section 5 (Task lifecycle).
 
 **Source Research:**
-- `collaboration-layer-parallel-teams.md` Section 5, line 93
+- `collaboration-layer-parallel-teams.md` Section 5 (Single-agent task execution)
+- `collaboration-spec.md` Section 1.4 (Single-agent execution model)
 
 **Acceptance Criteria:**
-- [ ] Parent task can declare child subtasks with dependency graph.
-- [ ] Subtask leases are independent but linked to parent.
-- [ ] Parent task completes only when all subtasks complete.
+- [ ] Each task has exactly one primary owner during execution.
+- [ ] Full bounty escrow goes to the single worker on completion.
+- [ ] Reviewers are paid from the review market, not from the task bounty.
+- [ ] Large work units are decomposed into multiple independent tasks under the same topic.
 
 **Dependencies:** FR-0076
-**Tags:** should-have
+**Tags:** must-have
 
 ---
 

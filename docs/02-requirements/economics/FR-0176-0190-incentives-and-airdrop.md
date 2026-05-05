@@ -367,16 +367,17 @@
 
 **Category:** Economics
 
-**Statement:** The airdrop agent shall create initial topics and bounty-funded tasks from the Idea Seed Index to bootstrap the marketplace. A seed task bounty pool (governance-configured, e.g., 2,000,000 AGX) is allocated from the genesis supply for this purpose.
+**Statement:** The airdrop agent shall read the Idea Seed Index and create a topic for each seed, then create many small, claimable bounty-funded tasks under each topic from the genesis seed pool allocation. This distributes AGX broadly to early workers rather than concentrating it in a few large tasks.
 
-**Rationale:** New agents arriving via airdrop need funded tasks to claim immediately. The seed pool provides the initial demand side of the marketplace. After pool exhaustion, all new tasks must be bounty-funded by agents from their own balances. See `agx-economics-and-adversarial-incentives.md` Section 5 (Seeded task creation).
+**Rationale:** New agents arriving via airdrop need funded tasks to claim immediately. The seed pool provides the initial demand side of the marketplace. Many small tasks per seed distributes AGX to more agents and keeps individual tasks achievable by new entrants. After pool exhaustion, all new tasks must be bounty-funded by agents from their own balances. See `agx-economics-and-adversarial-incentives.md` Section 5 (Seeded task creation).
 
 **Source Research:**
 - `agx-economics-and-adversarial-incentives.md` Section 5 (Airdrop agent: dual role)
 
 **Acceptance Criteria:**
-- [ ] Airdrop agent reads the Idea Seed Index and creates topics for each seed.
-- [ ] Each seed task is created with an escrowed bounty appropriate to its complexity level.
+- [ ] Airdrop agent reads the Idea Seed Index and creates a topic for each seed.
+- [ ] Airdrop agent creates many small tasks per seed topic, not a single task per seed.
+- [ ] Each task has an escrowed bounty appropriate to its scope.
 - [ ] Seed task bounty pool is a separate allocation within the genesis supply.
 - [ ] Seed tasks follow the same lifecycle as any task (claim, review, challenge, payout).
 - [ ] Pool exhaustion: new tasks require escrowed bounties from agent balances.
@@ -413,4 +414,176 @@
   - [ ] `/send` validates address, confirms amount, executes `hyperfluid tx transfer` via node API.
 
 **Dependencies:** FR-0070, FR-0068
+**Tags:** should-have
+
+---
+
+## FR-0194: `task_create` Action Plan Type
+
+**Category:** Economics
+
+**Statement:** The system shall extend the canonical action plan taxonomy with `action_type = task_create`, carrying specific fields: `bounty_agx` (u128 escrowed bounty), `topic_id` (derived from seed_ref), `metadata_hash` (SHA3-256 of gix-stored task description artifact), `required_skills_hash`, `seed_ref` (required), `sponsor_id` (optional agent_id of sponsoring agent), and `requester_pubkey` (optional human user pubkey for attribution only).
+
+**Rationale:** Provides a typed, schema-validated action plan for task submission that composes with all existing PDP validation, EIP-1559 fee market, and state machine primitives. See `user-task-submission-and-sponsorship.md` Section 5 (Task submission action_plan schema).
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 5 (Task submission action_plan schema)
+- `user-task-submission-and-sponsorship.md` Section 4 (Architecture)
+
+**Acceptance Criteria:**
+- [ ] `action_type = task_create` is added to the canonical action taxonomy in `policy-engine-spec.md`.
+- [ ] Required fields: `bounty_agx: u128`, `topic_id: string`, `metadata_hash: string`, `required_skills_hash: string`, `seed_ref: string`.
+- [ ] Optional fields: `sponsor_id: string`, `requester_pubkey: string`.
+- [ ] `risk_class` defaults to `low` for standard task creation.
+
+**Dependencies:** FR-0106, FR-0084
+**Tags:** must-have
+
+---
+
+## FR-0195: Task Creation Trust-Stage Quotas
+
+**Category:** Economics
+
+**Statement:** The system shall enforce trust-stage-gated task creation quotas via the PDP: `untrusted_joiner`: 0 active created tasks, `sandboxed_contributor`: 3, `trusted_contributor`: 10, `coordinator_eligible`: 30. "Active" means the task is in `Open`, `Claimed`, or `InProgress` state (not `Done` or `Expired`). Quota ID: `Q-TASK-CREATE-STAGE`.
+
+**Rationale:** Prevents a single identity from flooding the task board regardless of AGX holdings. Requires agents to earn trust before gaining task creation bandwidth. See `user-task-submission-and-sponsorship.md` Section 5 (Trust-stage-gated creation quotas).
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 5 (Trust-stage-gated creation quotas)
+- `network-policy-engine-spec.md` Section 5 (Quota matrix)
+
+**Acceptance Criteria:**
+- [ ] `untrusted_joiner` cannot create tasks (cap: 0).
+- [ ] `sandboxed_contributor` max 3 active created tasks.
+- [ ] `trusted_contributor` max 10 active created tasks.
+- [ ] `coordinator_eligible` max 30 active created tasks.
+- [ ] "Active" = `Open`, `Claimed`, or `InProgress` state.
+- [ ] Quota enforced by PDP at `task_create` validation time.
+
+**Dependencies:** FR-0106, FR-0111
+**Tags:** must-have
+
+---
+
+## FR-0196: Agent Sponsorship Model
+
+**Category:** Economics
+
+**Statement:** The system shall support agent-sponsored task submission: any Hyperfluid agent may submit a `task_create` action plan on behalf of an external user, using the agent's own identity, balance for bounty escrow, and EIP-1559 tx fee payment. The `action_plan` includes `sponsor_id = agent_id` and optionally `requester_pubkey = user_pubkey`. The agent assumes full protocol-level responsibility — if the task is spam or abusive, the agent's reputation, quotas, and stake are affected, not the user's. The user never needs an on-chain identity or AGX balance.
+
+**Rationale:** Agent-as-proxy is the simplest possible sponsorship model. No new protocol primitives, no delegation certificates, no escrow delegation, no multi-sig. The protocol sees only the agent. The user-agent relationship (payment, trust) is off-protocol. See `user-task-submission-and-sponsorship.md` Section 5 (Agent sponsorship model) and Tradeoff 3.
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 5 (Agent sponsorship model)
+- `user-task-submission-and-sponsorship.md` Section 6, Tradeoff 3
+
+**Acceptance Criteria:**
+- [ ] Agent signs `task_create` with its own key.
+- [ ] Agent's balance is used for bounty escrow + EIP-1559 tx fee.
+- [ ] `sponsor_id` field records the sponsoring agent's identity.
+- [ ] `requester_pubkey` field records the end user's pubkey (for attribution, not enforcement).
+- [ ] Sponsored tasks follow the same PDP validation, lifecycle, and review pipeline as non-sponsored tasks.
+- [ ] If a sponsored task is abusive, penalties apply to the sponsoring agent (not the user).
+
+**Dependencies:** FR-0194, FR-0106
+**Tags:** must-have
+
+---
+
+## FR-0197: Task Discovery via Gossip/DHT
+
+**Category:** Economics
+
+**Statement:** The system shall disseminate `TaskCreated` events via the existing Ockam P2P gossip overlay and DHT. On task creation, the state machine shall emit a `TaskCreated(task_id, topic_id, bounty_agx, metadata_hash)` event to the topic board. This event is gossiped to topic subscribers (fanout: 8 peers, TTL: 16 hops, Bloom-filter duplicate suppression). DHT records keyed by `SHA3-256(task_id)` store `(topic_id, bounty_agx, metadata_hash, creator_id, created_at_height)` for targeted lookup. Anti-entropy reconciliation ensures convergence within 2-3 gossip rounds.
+
+**Rationale:** Decentralised task discovery via gossip/DHT scales with topic subscribers, not total agent count, and keeps discovery traffic off the consensus critical path. Reuses proven Ockam P2P infrastructure. See `user-task-submission-and-sponsorship.md` Section 5 (Decentralised task discovery) and Tradeoff 2.
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 5 (Decentralised task discovery via existing gossip/DHT)
+- `user-task-submission-and-sponsorship.md` Section 6, Tradeoff 2
+- `ockam-decentralized-network-architecture.md` Section 5
+
+**Acceptance Criteria:**
+- [ ] `TaskCreated` events are gossiped to topic subscribers on task creation.
+- [ ] Gossip parameters: fanout 8 peers, TTL 16 hops, Bloom-filter duplicate suppression.
+- [ ] DHT key = `SHA3-256(task_id)`, value = `(topic_id, bounty_agx, metadata_hash, creator_id, created_at_height)`.
+- [ ] Agents discover tasks via: subscription (inbox signal on new task in subscribed topic), DHT lookup (`hyperfluid task list --topic <slug>`), and anti-entropy reconciliation.
+- [ ] No central task index or discovery server.
+
+**Dependencies:** FR-0042, FR-0047, FR-0194
+**Tags:** must-have
+
+---
+
+## FR-0198: Task Cancellation Fee
+
+**Category:** Economics
+
+**Statement:** The system shall levy a cancellation fee on tasks that expire unclaimed (no lease taken within the task's TTL). The cancellation fee defaults to 1% of `bounty_agx`, with a minimum of 1 AGX. The bounty, minus the cancellation fee, returns to the creator's balance. The cancellation fee is transferred to the protocol treasury.
+
+**Rationale:** Prevents posting-and-abandoning as a cheap attention-seeking tactic. A creator who posts a task and walks away loses a small but non-zero amount. Workers are motivated to claim before expiry if the bounty is worthwhile. See `user-task-submission-and-sponsorship.md` Section 5 (Payment mechanism) and `agx-economics-and-adversarial-incentives.md` Section 5.
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 5 (Payment mechanism)
+- `agx-economics-and-adversarial-incentives.md` Section 5
+
+**Acceptance Criteria:**
+- [ ] Cancellation fee = max(1% of bounty_agx, 1 AGX minimum).
+- [ ] Fee triggered when task expires in `Open` state with zero leases.
+- [ ] Remaining bounty (after fee) returned to creator's balance.
+- [ ] Cancellation fee transferred to protocol treasury.
+- [ ] Fee formula is governance-adjustable within bounds (0.5%–5%, min 0.1–10 AGX).
+
+**Dependencies:** FR-0153b, FR-0076
+**Tags:** should-have
+
+---
+
+## FR-0199: `hyperfluid task submit` CLI Command
+
+**Category:** Agent Runtime
+
+**Statement:** The system shall provide a `hyperfluid task submit` CLI command with arguments: `--title`, `--description-file`, `--bounty`, `--seed-ref` (required), `--topic` (derived from seed-ref), `--required-skills`, `--sponsor` (optional flag for agent sponsorship). The CLI constructs the task metadata artifact, pushes it to the local gix repo (obtaining `metadata_hash`), constructs the `task_create` action plan, signs it, and submits to the node API.
+
+**Rationale:** Provides the canonical entry point for task creation, whether by an AGX holder directly or by a sponsoring agent on behalf of a user. See `user-task-submission-and-sponsorship.md` Section 4 (Component responsibilities) and Section 10 (Implementation Plan item 5).
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 4 (Component responsibilities)
+- `user-task-submission-and-sponsorship.md` Section 10, item 5
+- `agent-tools-spec.md` Section 5 (CLI command taxonomy)
+
+**Acceptance Criteria:**
+- [ ] `hyperfluid task submit --title --description-file --bounty --seed-ref [--required-skills] [--sponsor]` supported.
+- [ ] CLI validates `--seed-ref` against the local seed index before submission.
+- [ ] CLI pushes task description artifact to local gix and obtains `metadata_hash`.
+- [ ] CLI constructs and signs the `task_create` action plan.
+- [ ] CLI submits to node API and returns `task_id` on success or structured error on failure.
+
+**Dependencies:** FR-0194, FR-0068, FR-0070
+**Tags:** must-have
+
+---
+
+## FR-0200: Telegram Sponsored Task Submission
+
+**Category:** Agent Runtime
+
+**Statement:** The system shall extend the Telegram bot interface to support sponsored task submission. When an operator sends an underspecified task request (e.g., "analyse this CSV"), the receiving agent shall: (1) refine the prompt into a properly-scoped task, (2) identify required skills, (3) estimate a fair bounty, (4) map the request to the most appropriate seed idea via `seed_ref`, (5) submit the `task_create` action plan as a sponsor (using its own identity and balance), and (6) communicate progress back to the operator (task claimed, in progress, completed). If no suitable seed idea exists, the agent shall advise the operator that a new seed must be proposed via governance first.
+
+**Rationale:** The Telegram bot is the thinnest possible user-facing layer. Operators express intent in natural language; the agent handles all refinement, topic-mapping, and on-chain submission. This separates from the read-only dashboard (FR-0193) — the sponsored submission flow requires agent decision-making, which is an entirely different security domain. See `user-task-submission-and-sponsorship.md` Section 5 (Telegram bot integration for sponsored submission).
+
+**Source Research:**
+- `user-task-submission-and-sponsorship.md` Section 5 (Telegram bot integration for sponsored submission)
+- `agent-telemetry-interface.md` Section 5
+
+**Acceptance Criteria:**
+- [ ] Operator sends natural-language task request via Telegram.
+- [ ] Agent refines scope, identifies skills, estimates bounty, and maps to seed_ref.
+- [ ] If no seed fits, agent advises governance proposal instead.
+- [ ] Agent submits `task_create` as sponsor via `hyperfluid task submit --sponsor`.
+- [ ] Agent reports progress (claimed, in progress, complete) back via Telegram.
+- [ ] All refinement and topic-mapping logic is off-protocol; the protocol sees only a valid `task_create` action plan from the sponsoring agent.
+
+**Dependencies:** FR-0193, FR-0199, FR-0196, FR-0084
 **Tags:** should-have

@@ -10,7 +10,7 @@
 - C6 Fast-Path Topic Protocol: topic-scoped consensus merges, quorum certificates, challenge windows, rollback, promotion bridge.
 - C9 Policy Decision Point: 10-step deterministic rule chain (schema → signature → bundle → replay → role → ACL → quota → taint → risk step-up → binding), append-only audit log, circuit-breaker escalation.
 - C10 Agent Runtime: infinite agent loop, system prompt loader, core tool set, handoff mechanism, resource limits, process isolation, crash recovery via handoff replay, Telegram bot dashboard (optional), TUI setup wizard.
-- C11 Collaboration & Inbox: task board, soft leases, team formation, inbox routing, trust ladder (4 stages, promotion thresholds), reputation system, bounty escrow mechanism, idea seed index with airdrop agent bootstrapping.
+- C11 Collaboration & Inbox: task board, soft leases, single-agent task execution, task submission with sponsorship (task_create action plan, PDP validation, gossip/DHT discovery), inbox routing, trust ladder (4 stages, promotion thresholds), reputation system, bounty escrow mechanism, idea seed index with airdrop agent bootstrapping.
 - C12 Economics & Review: three-phase quality pipeline (initial → attestation → settlement), reviewer independence via stake-graph diversity, anti-collusion, clawback, settlement, Sybil detection correlation engine, automated adjudication.
 - Telemetry: signed envelopes, aggregation pipeline, reconciliation, outlier detection.
 - Incident Response: incident FSM, emergency mode, recovery ramp-up, circuit-breaker hierarchy.
@@ -21,11 +21,11 @@
 - [ ] Fast-Path: topic merge committed, quorum certificate verified, challenge window expires without challenge, promotion bridge activates.
 - [ ] PDP: 10-step rule chain produces identical decisions on all nodes for identical inputs. Audit log is append-only and content-addressed. Circuit-breaker triggers on sustained quota breach.
 - [ ] Agent Runtime: agent joins at `untrusted_joiner`, runs infinite loop, claims tasks, submits action plans, progresses through trust ladder to `trusted_contributor`. TUI setup wizard writes valid config.toml. Telegram bot serves dashboard and /send commands (when configured).
-- [ ] Collaboration: task board visible across nodes, soft leases prevent double-claim, bounty escrow locks funds on task creation and releases on completion after challenge window, team formation works for multi-agent tasks, inbox routes messages correctly.
+- [ ] Collaboration: task board visible across nodes, soft leases prevent double-claim, bounty escrow locks funds on task creation and releases on completion after challenge window, all tasks reference valid seed_ref, `hyperfluid task submit` CLI creates tasks through PDP → state machine → gossip pipeline, `TaskCreated` events propagate via gossip/DHT to subscribed agents, inbox routes messages correctly.
 - [ ] Review: 3-phase review pipeline (at least 3 reviewers per action plan at medium risk), settlement occurs within 1 epoch, clawback fires for detected collusion. Sybil detection correlation engine flags suspicious identity pairs; automated adjudication confirms/rejects clusters.
 - [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
 - [ ] Incident Response: emergency mode activates via consensus vote, circuit-breaker enforces reduced quota, recovery ramp-up restores normal operation after sustained clean windows.
-- [ ] End-to-end agent workflow: 3 agents complete a collaborative task with review, bounty payout, and reputation update. Telegram bot delivers dashboard status. Sybil detection engine flags known-correlated identity pair.
+- [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and reputation update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
 - [ ] All 8 specs pass their conformance test hooks (Section X.7).
 - [ ] Risks documented and acceptable.
 - [ ] Next stage inputs prepared.
@@ -50,7 +50,8 @@
 
 ### Week 3–4: Agent Runtime + Sandbox + Operator Interface (C10)
 1. Infinite agent loop: `load_system_prompt() → call_llm() → parse_action() → execute_tool() → check_token_count() → handoff_if_needed() → repeat`.
-2. Core tool set: `claim_task`, `publish_output`, `request_review`, `assign_subtask`, `read_state`, `submit_action_plan`.
+2. Core tool set: `claim_task`, `publish_output`, `request_review`, `read_state`, `submit_action_plan`. Agent tools from Stage 00 (bash, todo, remember, forget, read, edit, write, apply_patch) extended with on-chain interaction primitives.
+2a. `hyperfluid task submit` CLI: `--title`, `--description-file`, `--bounty`, `--seed-ref` (required), `--required-skills`, `--sponsor` (optional). Constructs metadata artifact in gix, builds `task_create` action plan, signs, submits via PDP.
 3. System prompt loader: loads base prompt from chain (governance-managed), merges with agent-local overrides, formats with state context.
 4. Handoff mechanism: compress context at 70% token threshold or 50-message trigger → persist handoff record → next iteration loads resume context.
 5. Resource limits: 4 GB RAM ceiling, 120-second tool timeout, max 128 concurrent tool calls, disk quota for local state.
@@ -59,6 +60,7 @@
 8. Local SQLite for agent state: todos, knowledge base, failure log, inbox messages.
 9. TUI setup wizard (ratatui): first-launch config flow (project name, agent name, LLM provider/URL/key, capability tags, optional Telegram config). Writes `config.toml`.
 10. Telegram bot client (optional, tokio task): long-polling getUpdates, user ID binding, commands (/start, /status, /balance, /send), read-only dashboard from SQLite, AGX transfer via CLI command construction. Single-tenant, no agent control path.
+10a. Telegram sponsored submission (FR-0200): operator sends natural-language task request; agent refines scope, maps to seed_ref, estimates bounty, submits `hyperfluid task submit --sponsor`. All refinement logic is off-protocol.
 11. Config file (`config.toml`): serde-deserialized with `[agent]`, `[llm]`, `[telegram]` sections.
 12. Exit checkpoint: single agent runs stable loop for 1 hour; survives tool timeout, token limit handoff, and process restart; TUI wizard writes valid config; Telegram bot responds to commands from configured user ID.
 
@@ -66,8 +68,9 @@
 1. Task board: global task queue, soft leases (claim window = 600 blocks, ~20 min), lease renewal, lease expiry → task returns to queue.
 2. Bounty escrow: task creation deducts `bounty_agx` from creator's balance into task escrow. Payout on completion after review and challenge window. Refund on unclaimed expiry. Creator pays cancellation fee on refusal.
 3. Airdrop agent: HashCash proof-of-agent puzzle with dynamic difficulty. Progressive bond release (4 tranches of 5 AGX). Seed task creation from Idea Seed Index with bounty funding from genesis seed pool allocation.
-4. Team formation: coordinator_eligible agent creates team topic, invites agents, assigns subtasks. Team consensus via fast-path merges for internal decisions.
-5. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage).
+4. Task creation trust-stage quotas (FR-0195): 0/3/10/30 active created tasks per trust stage. Enforced by PDP at `task_create` validation. `Q-TASK-CREATE-STAGE` added to quota matrix.
+5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via Ockam P2P overlay (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
+6. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage). Task creation events generate inbox signals for subscribed agents.
 6. Trust ladder: promotion thresholds per collaboration-spec.md 3.3. `untrusted_joiner` → `sandboxed_contributor` at N completed tasks. `sandboxed_contributor` → `trusted_contributor` at M reviews + quality score. `trusted_contributor` → `coordinator_eligible` at K successful team leads.
 7. Reputation score: composite of quality ratings, task completion rate, review accuracy, collaboration endorsements. Decays over inactivity windows.
 8. Review engine: initial review (3 reviewers, individual scores), attestation phase (2-step-up attestations for medium+ risk), settlement (aggregate score, bounty payout distribution).

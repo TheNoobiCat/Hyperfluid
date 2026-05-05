@@ -45,6 +45,7 @@ enum ActionType {
     PublishTopicMessage,
     ClaimTaskLease,
     RenewTaskLease,
+    CreateTask,                 // task_create — bounty escrowed task submission (FR-0194)
     SubmitFastPathMerge,
     SubmitGovernanceProposal,
     CastGovernanceVote,
@@ -81,6 +82,8 @@ enum DenyReason {
     DriftViolation,         // tool call params != plan_binding_hash
     RoleInsufficient,       // trust stage too low for risk class
     TaintRequired,          // action from tainted source needs review step-up
+    InvalidSeedRef,         // seed_ref does not reference a valid canonical seed idea
+    InsufficientFunds,      // creator balance < bounty_agx + estimated_tx_fee
 }
 
 struct QuotaConsumption {
@@ -259,6 +262,7 @@ struct QuotaState {
 | review_concurrent_per_reviewer | 5 | — | Review assignment | per reviewer |
 | lease_active_per_agent | 0/2/6/12 | — | Task board | by trust stage |
 | challenge_per_identity | 3 | 1 epoch | Challenge | per identity |
+| task_create_per_stage | 0/3/10/30 | — | Task creation (PDP) | by trust stage |
 
 ### 2.5 Failure Behavior
 

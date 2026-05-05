@@ -75,17 +75,19 @@ Key findings:
 
 1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete. See `docs/08-handoff/latest/checkpoint-2026-05-04.md`.
 2. ~~Bug audit completed. See `docs/01-research/_audit-bugs-2026-05-04.md`.~~ 
-3. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
-4. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-5. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-6. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-7. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
+3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013. See `checkpoint-2026-05-05.md`.~~
+3. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5: 7 FRs, ADR-0014, 4 specs, planning. See `checkpoint-2026-05-05b.md` and `checkpoint-2026-05-05c.md`.~~
+4. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
+5. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+6. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+7. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+8. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 
 | Spec | Covers (Component/FR) | Status |
 |------|----------------------|--------|
-| `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075, FR-0193 Telegram/TUI — Section 5 added) | complete |
+| `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075, FR-0193, FR-0199, FR-0200 — CLI + sponsored submission added) | complete |
 | `runtime/policy-engine-spec.md` | C9 Policy Decision Point (FR-0106-0120) | complete |
 | `runtime/review-engine-spec.md` | C12 Economics - review markets, Sybil adjudication (FR-0161-0175, FR-0191 — Section 2 added) | complete |
 | `runtime/collaboration-spec.md` | C11 Collaboration & Inbox, bounty escrow (FR-0076-0105, FR-0153b — Section 1.4 escrow lifecycle added) | complete |
@@ -121,4 +123,4 @@ Key findings:
 
 ---
 
-*Last updated: 2026-05-04 (Stage 00 complete; 13 crates + node binary; core types in state/consensus/staking following spec data structures with u128 monetary types; testnet scaffold with single-validator config and start/stop scripts; 23 unit tests (+2 added by audit); bug audit completed with 7 fixes across crates and specs; cargo-deny passing; ready for Stage 01 Protocol Core)*
+*Last updated: 2026-05-05 (Stage 00 complete; agent tools expanded 5→9; seed index at `/ideas/`; seed-centric model: seeds=topic buckets, seed_ref required, governance entry, single-agent tasks; user-task-submission pipeline fully propagated through L2-L5: 7 new FRs (FR-0194–FR-0200), ADR-0014, 4 specs updated, planning updated; total 202 requirements (172 FR + 30 NFR); 13 crates + node binary; testnet scaffold; bug audit completed; cargo-deny passing; ready for Stage 01 Protocol Core)*

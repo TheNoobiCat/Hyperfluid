@@ -21,17 +21,18 @@
 
 ---
 
-## FR-0062: Five Core Agent Tools
+## FR-0062: Core Agent Tools
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall provide exactly five core tools for agents: `bash`, `todo_write`, `todo_update`, `remember`, `forget`.
+**Statement:** The system shall provide nine core tools for agents: `bash`, `todo_write`, `todo_update`, `remember`, `forget`, `read`, `edit`, `write`, `apply_patch`.
 
-**Rationale:** Minimal tool surface reduces prompt injection attack surface and cognitive load. See `agent-tools-spec.md` Section 2 (Executive Summary).
+**Rationale:** Minimal tool surface reduces prompt injection attack surface and cognitive load. The original five tools handle local execution and state; the four file-access tools (read/edit/write/apply_patch) enable agents to inspect and modify project files directly. See `agent-tools-spec.md` Section 2 (Executive Summary) and ADR-0013.
 
 **Source Research:**
 - `agent-tools-spec.md` Section 5 (Tool schema definitions)
 - `agent-tools-spec.md` Section 6, Tradeoff 1
+- `docs/03-architecture/decisions/ADR-0013-expanded-agent-tools-and-seed-index.md`
 
 **Acceptance Criteria:**
 - [ ] Tool schemas are fixed JSON with exact field validation.
@@ -40,6 +41,10 @@
 - [ ] `todo_update` schema: array of {id, status, context}.
 - [ ] `remember` schema: {kind, content} where kind is finding|pattern|constraint|decision.
 - [ ] `forget` schema: {id}.
+- [ ] `read` schema: file_path, offset (optional), limit (optional).
+- [ ] `edit` schema: file_path, old_string, new_string.
+- [ ] `write` schema: file_path, content.
+- [ ] `apply_patch` schema: array of {file_path, old_string, new_string}.
 
 **Dependencies:** FR-0061
 **Tags:** must-have
@@ -164,7 +169,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall expose a single `hyperfluid` CLI for all network-mutating actions, with subcommands for tx, query, task, review, governance, stake, and agent self-management.
+**Statement:** The system shall expose a single `hyperfluid` CLI for all network-mutating actions, with subcommands for tx, query, task, review, governance, stake, idea, and agent self-management.
 
 **Rationale:** Reduces tool surface and forces all shared-state changes through typed transactions. See `agent-tools-spec.md` Section 4 (Architecture).
 
@@ -179,6 +184,7 @@
 - [ ] `hyperfluid review` supports: list, submit, challenge, claim-rewards.
 - [ ] `hyperfluid governance` supports: list, get, vote, fetch-bundle, verify.
 - [ ] `hyperfluid agent` supports: list-skills, load-skill, status, key-info.
+- [ ] `hyperfluid idea` supports: list, get.
 
 **Dependencies:** FR-0062
 **Tags:** must-have

@@ -93,6 +93,8 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0010 | Four-Stage Trust Ladder | Accepted |
 | ADR-0011 | Review Sandbox Isolation | Accepted |
 | ADR-0012 | Circuit-Breaker Escalation Hierarchy | Accepted |
+| ADR-0013 | Expanded Agent Tool Set, CLI Seed Index Discovery, and Seed-Centric Task Model | Accepted |
+| ADR-0014 | User Task Submission and Agent Sponsorship | Accepted |
 
 ---
 

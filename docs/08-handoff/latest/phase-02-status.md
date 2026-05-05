@@ -139,18 +139,19 @@ Required to proceed:
 
 ## Carry-Forward Design Notes (for Layer 4)
 
-### Idea Seeds (`/ideas` folder convention)
+### Idea Seeds (`/ideas` folder convention) — RESOLVED (2026-05-05)
 
-FR-0084 specifies a curated idea seed index for bootstrapping work clusters. The intended design convention:
+FR-0084 specifies a curated idea seed index for bootstrapping work clusters. Final design:
 
-- A canonical `/ideas` directory containing content-addressed markdown files
-- Each seed is a markdown file with required frontmatter: `id`, `title`, `scope`, `expected_output_type`, `tags`, `complexity`
-- Agents discover seeds via C8 (Artifact Availability) and C11 (Collaboration discovery ranking)
-- Topic creation (FR-0081) can reference a seed hash as `parent_seed_ref`
-- Seeds are write-once, immutable (content-addressed). Iteration creates new seed files, not edits
-- The `/ideas` directory is protocol-content (stored as artifacts) but initially seeded by core contributors; agent-authored seeds enter through the same artifact pipeline
+- A canonical `/ideas` directory containing markdown seed idea files following `_template.md`
+- Seeds are **abstract topic buckets**, not individual tasks. One seed hosts many tasks.
+- **All tasks MUST reference a seed via `seed_ref`**. No orphan tasks.
+- New seeds enter via `git:head` governance proposals carrying the `.md` file.
+- Agents discover seeds via `hyperfluid idea list` CLI and C8 (Artifact Availability).
+- The airdrop agent creates many small tasks per seed at genesis from the seed pool.
+- Single-agent per task. Reviewers independent, paid via review market (FR-0161).
 
-Layer 4 should produce `runtime/idea-seeds-spec.md` defining: seed markdown schema, discovery mechanics, seed-to-topic linking, and the seeded-by vs agency model.
+Layer 4 coverage: seed index semantics are defined in `collaboration-spec.md` §1.1 and `agent-runtime-spec.md` §3.2. No separate `idea-seeds-spec.md` is needed — the spec sections + ADR-0013 cover all requirements.
 
 ---
 

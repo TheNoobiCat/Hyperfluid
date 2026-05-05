@@ -121,16 +121,20 @@ struct HandoffRecord {
 
 ### 2.1 Purpose
 
-Define the five core agent tools and their schemas.
+Define the nine core agent tools and their schemas.
 
 ### 2.2 Normative Behavior
 
-- The system MUST provide exactly five core tools: `bash`, `todo_write`, `todo_update`, `remember`, `forget`.
+- The system MUST provide nine core tools: `bash`, `todo_write`, `todo_update`, `remember`, `forget`, `read`, `edit`, `write`, `apply_patch`.
 - Tool schemas MUST be fixed JSON with exact field validation.
 - The `bash` tool MUST execute shell commands within cgroup/resource limits.
 - The `remember` tool MUST store knowledge entries with TTL and auto-refresh on read.
 - The `forget` tool MUST allow manual removal of knowledge entries.
 - The `todo_write` and `todo_update` tools MUST manage the task todo list with status tracking.
+- The `read` tool MUST read local file content with optional offset/limit for large files.
+- The `edit` tool MUST modify existing files using exact string replacement (not whole-file rewrite).
+- The `write` tool MUST overwrite existing files or create new files on disk.
+- The `apply_patch` tool MUST apply multiple exact-string replacements across project files in one atomic operation.
 
 ### 2.3 Data Structures
 
@@ -203,6 +207,49 @@ struct KnowledgeEntry {
 struct ForgetInput {
     id: String,                // matches KnowledgeEntry.id
 }
+
+struct ReadToolInput {
+    file_path: String,
+    offset: Option<u64>,       // line number to start from (1-indexed)
+    limit: Option<u64>,        // max lines to read
+}
+
+struct ReadToolOutput {
+    content: Vec<u8>,
+    total_lines: u64,
+    truncated: bool,           // true if file exceeds limit
+}
+
+struct EditToolInput {
+    file_path: String,
+    old_string: String,
+    new_string: String,
+}
+
+struct EditToolOutput {
+    replaced: bool,            // false if old_string not found
+    match_count: u32,
+}
+
+struct WriteToolInput {
+    file_path: String,
+    content: String,
+}
+
+struct WriteToolOutput {
+    bytes_written: u64,
+    created: bool,             // true if file did not exist, false if overwritten
+}
+
+struct ApplyPatchInput {
+    patches: Vec<EditToolInput>,
+}
+
+struct ApplyPatchOutput {
+    patches_applied: u32,
+    patches_failed: u32,
+    errors: Vec<String>,       // per-patch error messages
+}
 ```
 
 ### 2.4 State Transitions
@@ -214,9 +261,13 @@ struct ForgetInput {
 2. Runtime validates against tool schema (exact type checks).
 3. Runtime checks failure guard cache for duplicate/excessive failures.
 4. Bash tool: spawn subprocess in restricted environment (cgroup limits, seccomp).
-5. Other tools: JSON manipulation, SQLite writes.
-6. Tool output sanitized (size limit 100KB, content-type validation, Unicode NFC normalization).
-7. Output appended to messages context.
+5. SQLite tools (todo_write, todo_update, remember, forget): JSON manipulation, SQLite writes.
+6. File-access tools (read, edit, write, apply_patch):
+   - read: filesystem read with bounds checking (no symlink escapes, path traversal blocked).
+   - edit / write: filesystem write within sandbox working directory; UTF-8 encoding enforced.
+   - apply_patch: all patches validated before any write begins (all-or-nothing atomicity).
+7. Tool output sanitized (size limit 100KB, content-type validation, Unicode NFC normalization).
+8. Output appended to messages context.
 
 ### 2.5 Failure Behavior
 
@@ -224,6 +275,11 @@ struct ForgetInput {
 - **Bash output size:** Truncated to 100KB maximum.
 - **Knowledge entry not found (forget):** No-op; returns "not found" message.
 - **Todo item not found (update):** No-op; logged with warning level.
+- **File not found (read):** Returned as structured error: "file not found" with path.
+- **String not found (edit, apply_patch):** Returned as structured error: "old_string not found" with match_count=0. Does not modify the file.
+- **Multiple matches (edit):** If old_string appears multiple times, the tool returns an error: "multiple matches" with match_count. Agent must provide more surrounding context.
+- **Path traversal attempt (read/edit/write):** Rejected at validation; paths containing `..` or absolute paths outside the sandbox working directory are blocked.
+- **apply_patch partial failure:** If any patch fails validation or string-matching, the entire operation is aborted (no partial writes). Returns per-patch error details.
 
 ### 2.6 Versioning and Compatibility
 
@@ -239,6 +295,11 @@ struct ForgetInput {
 - Verify knowledge TTL: 30-day default, +30-day on read.
 - Verify max 100 active knowledge entries; oldest auto-archived.
 - Verify contradiction detection flags same-topic opposite conclusions.
+- Verify read tool: reads file content correctly; offset/limit boundaries respected.
+- Verify edit tool: exact string replacement works; multiple-match returns error.
+- Verify write tool: creates new file; overwrites existing file.
+- Verify apply_patch tool: all-or-nothing atomicity — partial failure aborts entire operation.
+- Verify path traversal attempts are blocked for read/edit/write.
 
 ### 2.8 Trust-Assumption Inventory
 
@@ -264,6 +325,9 @@ Define the system prompt assembly, context window allocation, and token budget m
 - Per-category caps MUST be enforced; overflow triggers deterministic pruning by priority score.
 - The `hyperfluid` CLI specification MUST be embedded verbatim in the system prompt.
 - Runtime command discovery MUST NOT be used; the CLI spec is static in the prompt.
+- The system prompt MUST instruct agents that all tasks require a valid seed idea reference. Agents MUST NOT create tasks without a `seed_ref`. If no suitable seed exists, the agent MUST advise proposing a new seed via `git:head` governance rather than creating an orphan task.
+- If the agent's todo list is empty, the system prompt MUST instruct the agent to browse seed ideas (`hyperfluid idea list`), discover available tasks under matching seeds, or propose a new seed via governance.
+- The system prompt MUST include the full `hyperfluid task submit` CLI specification: arguments `--title`, `--description-file`, `--bounty`, `--seed-ref` (required), `--required-skills`, `--sponsor` (optional). Task submission constructs the metadata artifact in gix, builds the `task_create` action plan, signs it, and submits to the node API via PDP.
 - Token budgets MUST be normalized using the `ptok` unit: `ptok = actual_tokens / model_context_limit * PROTOCOL_NORMALIZER` where `PROTOCOL_NORMALIZER = 100_000`.
 - Per-sender ingress token budgets MUST be enforced by trust stage.
 
@@ -424,6 +488,8 @@ struct ResourceLimits {
 ### 5.1 Purpose
 
 Define two optional operator-facing interfaces: a TUI setup wizard for first-launch configuration and a Telegram bot dashboard for ongoing monitoring. Both run within the agent runtime process (Zone 3). Neither interface can modify agent behavior, task state, or policy decisions.
+
+A third interface — **sponsored task submission** (FR-0200) — is defined in `user-task-submission-and-sponsorship.md` Section 5. In this mode, the agent receives natural-language task requests from the operator via Telegram, refines them into properly-scoped tasks mapped to seed ideas, and submits them as a sponsor using `hyperfluid task submit --sponsor`. This is a separate capability from the read-only dashboard and requires agent-level decision-making.
 
 ### 5.2 Normative Behavior — TUI Setup Wizard
 

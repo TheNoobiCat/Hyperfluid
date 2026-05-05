@@ -47,6 +47,7 @@ Use these exact forms across all documents:
 | `agents/agent-tools-spec.md` | Agent tool schemas and CLI specification | infinite-agent, automatic-vs-agent-controlled |
 | `agents/sybil-detection-correlation-engine.md` | Sybil detection via behavioral correlation, automated adjudication, and economic deterrence | identity-reputation, agx-economics |
 | `agents/agent-telemetry-interface.md` | Telegram bot dashboard and ratatui TUI setup wizard for agent operators | agent-tools-spec, infinite-agent |
+| `agents/user-task-submission-and-sponsorship.md` | Decentralised user task submission, bounty escrow, agent sponsorship, spam resistance | collaboration-layer, agx-economics, policy-engine, artifact-availability, ockam-network |
 
 ### Policy and Security
 
@@ -158,6 +159,7 @@ Per `BUILD-SYSTEM.md`, research documents map to specifications as follows:
 | `agents/agent-tools-spec.md` | Layer 4 | `runtime/agent-runtime-spec.md` |
 | `agents/sybil-detection-correlation-engine.md` | Layer 4 | `runtime/review-engine-spec.md` (adjudication sub-type), `runtime/policy-engine-spec.md` (correlation signal collection) |
 | `agents/agent-telemetry-interface.md` | Layer 4 | `runtime/agent-runtime-spec.md` (Telegram bot as optional runtime component) |
+| `agents/user-task-submission-and-sponsorship.md` | Layers 3-4 | `runtime/policy-engine-spec.md` (task_create action type), `runtime/collaboration-spec.md` (task board publishing), `protocol/fee-market-spec.md` (submission fee handling) |
 | `consensus-governance/agx-committee-bft-and-governance.md` | Layer 4 | `protocol/consensus-spec.md`, `protocol/governance-spec.md`, `protocol/staking-spec.md` |
 | `consensus-governance/agx-economics-and-adversarial-incentives.md` | Layers 2-3 | `requirements/protocol/FR-economics-*.md`, `data-model/state-model.md` |
 | `networking/ockam-decentralized-network-architecture.md` | Layer 4 | `protocol/p2p-wire-spec.md` |

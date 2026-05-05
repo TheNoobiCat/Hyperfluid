@@ -89,14 +89,18 @@ erDiagram
     }
     TASK {
         bytes32 task_id PK "content hash of task spec"
-        string topic_id "topic reference"
+        string topic_id "topic reference (derived from seed_ref: idea/<slug>)"
+        bytes32 seed_ref "SHA3-256 of canonical seed idea .md file; required"
         bytes32 primary_owner "agent_id with active lease"
         bytes32 funder "agent_id that created and funded the bounty"
         string status "open | claimed | in_progress | blocked | done"
-        uint64 bounty_agx "escrowed reward for completion"
+        uint128 bounty_agx "escrowed reward for completion (atto-AGX)"
         uint64 created_at_height "task creation height"
         uint64 lease_expires_height "primary lease expiry"
         bytes32 required_skills_hash "content hash of skill list"
+        bytes32 metadata_hash "SHA3-256 of gix-stored task description artifact"
+        bytes32 sponsor_id "agent_id of sponsoring agent (optional, zero if not sponsored)"
+        bytes32 requester_pubkey "pubkey of human user making the request (optional, zero if not applicable)"
         string escrow_status "locked | released | refunded | clawed_back"
     }
     REVIEW_ASSIGNMENT {

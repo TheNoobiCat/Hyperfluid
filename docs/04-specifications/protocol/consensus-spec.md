@@ -62,6 +62,7 @@ enum TxType {
     StakeRenewTx,
     UnbondRequestTx,
     WithdrawUnbondedTx,
+    TaskCreateTx,            // create bounty-funded task from seed idea (FR-0194)
     GovernanceProposeTx,
     GovernanceVoteTx,
     EvidenceTx,
@@ -201,6 +202,13 @@ struct Account {
 5. Commit state root into block header.
 
 **Account lifecycle:** Created on first inbound transfer or airdrop → Active (perpetual) → Prugable if balance = 0 and nonce = 0 for 100,000 blocks.
+
+**Task creation (TaskCreateTx):**
+1. PDP validates action_plan fields: schema, signature, policy bundle, nonce uniqueness, TTL, creator trust stage >= `sandboxed_contributor`, creator active task count < stage-based cap, creator balance >= `bounty_agx + estimated_tx_fee`, `seed_ref` references valid seed idea, `topic_id` matches seed.
+2. EIP-1559 fee deducted from creator balance (base fee burned, priority fee to block proposer).
+3. State machine: debit `bounty_agx` from creator balance, credit task escrow.
+4. Record `TaskRecord { task_id = SHA3-256(action_plan), topic_id, seed_ref, funder = creator_id, sponsor_id, bounty_agx, metadata_hash, required_skills_hash, status = Open, escrow_status = Locked, created_at_height, expires_at_height }`.
+5. Emit `TaskCreated(task_id, topic_id, bounty_agx, metadata_hash)` event for gossip/DHT propagation (C7).
 
 ### 2.5 Failure Behavior
 

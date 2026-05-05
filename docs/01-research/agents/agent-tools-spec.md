@@ -2,7 +2,7 @@
 - Hyperfluid Agent Tools and CLI Specification: Minimal Surface Area for Autonomous Decision Execution
 
 # 2. Executive Summary
-- Agents require only five core tools: `bash`, `todo_write`, `todo_update`, `remember`, `forget`.
+- Agents require nine core tools: `bash`, `todo_write`, `todo_update`, `remember`, `forget`, `read`, `edit`, `write`, `apply_patch`.
 - All blockchain interaction occurs through a single `hyperfluid` CLI exposed by the node API.
 - Tools are intentionally minimal to reduce prompt size, attack surface, and cognitive load for LLM agents.
 - The CLI provides subcommands for transactions, queries, tasks, reviews, governance, and staking.
@@ -80,7 +80,19 @@ flowchart TD
     - Schema: `{"kind": "finding|pattern|constraint|decision", "content": "string"}`
   - `forget`
     - Schema: `{"id": "number"}`
-
+  - `read`
+    - Schema: `{"file_path": "string", "offset": "int (optional)", "limit": "int (optional)"}`
+    - Core logic: Reads local file content; supports specific line ranges for large files.
+  - `edit`
+    - Schema: `{"file_path": "string", "old_string": "string", "new_string": "string"}`
+    - Core logic: Modifies existing files using exact string replacement rather than rewriting entire files.
+  - `write`
+    - Schema: `{"file_path": "string", "content": "string"}`
+    - Core logic: Overwrites existing or creates new files on disk.
+  - `apply_patch`
+    - Schema: `{"patches": [{"file_path": "string", "old_string": "string", "new_string": "string"}]}`
+    - Core logic: Applies multiple string-replacement patches across project files in one atomic operation.
+ 
 - **CLI command taxonomy**
   - `hyperfluid agent`: self-management and skills (`list-skills`, `load-skill`, `status`, `key-info`).
   - `hyperfluid tx`: all transaction types, auto-signed by the node's agent key.
@@ -90,7 +102,9 @@ flowchart TD
   - `hyperfluid review`: review market (`list`, `submit`, `challenge`, `claim-rewards`).
   - `hyperfluid governance`: governance participation (`list`, `get`, `vote`, `fetch-bundle`, `verify`).
   - `hyperfluid stake`: staking shorthand (`bond`, `renew`, `unbond`, `withdraw`).
-
+  - `hyperfluid idea`: seed idea discovery (`list`, `get`).
+    - Reads from the local `/ideas/` directory. Each idea is a markdown file. Agents use `hyperfluid idea list` to discover work opportunities and `hyperfluid idea get <slug>` to read a specific seed idea.
+ 
 - **System prompt assembly**
   - The complete CLI specification is included verbatim in the agent system prompt.
   - The agent does not discover commands at runtime.
@@ -136,6 +150,20 @@ function execute_tool_call(runtime, call):
     if call.name in ["todo_write", "todo_update", "remember", "forget"]:
         result = mutate_sqlite(runtime.db, call)
         return result
+    if call.name == "read":
+        result = read_file(call.file_path, offset=call.offset, limit=call.limit)
+        return sanitise(result)
+    if call.name == "edit":
+        result = apply_string_replace(call.file_path, call.old_string, call.new_string)
+        return sanitise(result)
+    if call.name == "write":
+        result = write_file(call.file_path, call.content)
+        return sanitise(result)
+    if call.name == "apply_patch":
+        for patch in call.patches:
+            result = apply_string_replace(patch.file_path, patch.old_string, patch.new_string)
+            if result.error: return result
+        return OK
     if call.name.startswith("hyperfluid"):
         tx_or_query = build_node_request(call)
         result = node_api.submit(tx_or_query)
@@ -186,6 +214,14 @@ function sanitise(output):
 - Sacrifice: skill portability and versioning complexity across operators.
 - Scaling risk: unvetted skills could introduce prompt injection or unsafe bash scripts if not sandboxed.
 
+## Tradeoff 5
+- Option A: Keep exactly five core tools (bash, todo_write, todo_update, remember, forget) — all file access goes through bash.
+- Option B: Add four file-access tools (read, edit, write, apply_patch) on top of bash.
+- Chosen: Option B.
+- Why chosen: structured file tools are safer and more efficient than raw bash for common file operations. Exact-string replacement (edit) prevents whole-file rewrite errors. apply_patch reduces token cost for multi-file changes. See ADR-0013.
+- Sacrifice: slightly larger tool surface and system prompt footprint (9 tools vs 5).
+- Scaling risk: tool count increase is bounded; 9 tools is still minimal.
+
 # 7. Failure Modes & Edge Cases
 ## Scenario: Tool schema mismatch
 - What happens: LLM emits malformed JSON or extra fields.
@@ -229,7 +265,7 @@ function sanitise(output):
 - Hard constraints: tool schemas must remain backward-compatible or provide migration paths; system prompt has finite token budget.
 
 # 9. Recommended Architecture
-- Adopt exactly five core tools (`bash`, `todo_write`, `todo_update`, `remember`, `forget`) and one canonical CLI (`hyperfluid`).
+- Adopt exactly nine core tools (`bash`, `todo_write`, `todo_update`, `remember`, `forget`, `read`, `edit`, `write`, `apply_patch`) and one canonical CLI (`hyperfluid`).
 - Embed the complete CLI specification in the agent system prompt; disallow runtime command discovery.
 - Route all network-mutating actions through typed CLI commands to the node API.
 - Use on-demand skill loading for procedural capability (tool APIs, data formats, workflows).
@@ -240,13 +276,14 @@ function sanitise(output):
 - This architecture is optimal because it minimises attack surface while preserving agent autonomy over local execution and high-level decisions.
 
 # 10. Implementation Plan
-1. Finalise tool JSON schemas and canonical serialisation rules.
-2. Implement `hyperfluid` CLI in the node software with all tx, query, task, review, governance, and stake subcommands.
+1. Finalise tool JSON schemas and canonical serialisation rules (9 tools: bash, todo_write, todo_update, remember, forget, read, edit, write, apply_patch).
+2. Implement `hyperfluid` CLI in the node software with all tx, query, task, review, governance, stake, and idea subcommands.
 3. Build agent runtime tool executor with strict schema validation and output sanitisation pipeline.
 4. Implement system prompt assembly logic that injects the full CLI specification.
 5. Define skill format (`SKILL.md`, `scripts/`, `references/`) and load/unload lifecycle.
-6. Add observability for tool call latency, error rates, and schema rejection rates.
-7. Run prompt-injection drills against the tool layer to verify that malformed calls are caught at validation.
+6. Implement seed idea index (`/ideas/` directory) with `hyperfluid idea list` and `hyperfluid idea get` commands reading local markdown files.
+7. Add observability for tool call latency, error rates, and schema rejection rates.
+8. Run prompt-injection drills against the tool layer to verify that malformed calls are caught at validation.
 
 # 11. Future Improvements
 - Add tool result streaming for long-running bash commands that exceed single-response limits.

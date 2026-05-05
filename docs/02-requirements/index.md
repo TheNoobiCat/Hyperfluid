@@ -1,8 +1,8 @@
 # Layer 2: Requirements Master Index
 
 **Status:** COMPLETE  
-**Last updated:** 2026-05-01  
-**Total requirements:** 190 (160 FR + 30 NFR)  
+**Last updated:** 2026-05-05  
+**Total requirements:** 202 (172 FR + 30 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -128,15 +128,15 @@ Located in `docs/02-requirements/runtime/`
   - FR-0077: Proof-Carrying Heartbeats
   - FR-0078: Per-Agent Lease Caps by Trust Stage
   - FR-0079: Auto-Takeover to Best Shadow Claimant
-  - FR-0080: Dynamic Team Formation
-  - FR-0081: Topic Metadata and Lifecycle
+  - FR-0080: Single-Agent Task Claiming
+  - FR-0081: Topic Metadata and Lifecycle (must reference seed)
   - FR-0082: Signal-Only Inbox Injection
   - FR-0083: Communication Types and Routing
   - FR-0084: Idea Seed Index for Work Bootstrapping
   - FR-0085: Swarm Circuit-Breaker Mode
   - FR-0086: Layered Version Control
   - FR-0087: Review Sandbox for Topic Merges
-  - FR-0088: Task Splitting and Subtasks
+  - FR-0088: Single-Agent Task Execution
   - FR-0089: Notification Summarizer
   - FR-0090: Collaboration Output Quality Incentives
 
@@ -272,6 +272,19 @@ Located in `docs/02-requirements/economics/`
   - FR-0188: Parameter Update Governance Path
   - FR-0189: Decentralization Score Computation
   - FR-0190: Adversarial Simulation before Mainnet
+
+### Incentives and Airdrop (continued — recent additions)
+- [`FR-0176-0200-incentives-and-airdrop.md`](economics/FR-0176-0190-incentives-and-airdrop.md)
+  - FR-0191: Sybil Detection via Behavioral Correlation and Automated Adjudication
+  - FR-0192: Airdrop Agent Seed Task Bootstrapping
+  - FR-0193: Agent Telemetry Interface (Telegram Bot + TUI Setup)
+  - FR-0194: `task_create` Action Plan Type
+  - FR-0195: Task Creation Trust-Stage Quotas
+  - FR-0196: Agent Sponsorship Model
+  - FR-0197: Task Discovery via Gossip/DHT
+  - FR-0198: Task Cancellation Fee
+  - FR-0199: `hyperfluid task submit` CLI Command
+  - FR-0200: Telegram Sponsored Task Submission
 
 ### Performance NFRs
 - [`NFR-0001-0015-performance.md`](economics/NFR-0001-0015-performance.md)

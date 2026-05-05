@@ -11,10 +11,11 @@
 
 ### 1.1 Purpose
 
-Define the decentralized task board, soft lease lifecycle, team formation, and collaboration mechanisms.
+Define the decentralized task board, soft lease lifecycle, and single-agent execution model. Every task MUST reference a canonical seed idea via `seed_ref` — no orphan tasks are permitted. New seeds enter via `git:head` governance proposals. The seed idea index (stored as markdown files in `/ideas/`, discoverable via `hyperfluid idea list`) bootstraps the marketplace — see FR-0084 and `collaboration-layer-parallel-teams.md` Section 4.
 
 ### 1.2 Normative Behavior
 
+- Tasks are created via the `task_create` action plan type (FR-0194) and the `TaskCreateTx` consensus transaction. Task submission from external users or sponsoring agents flows through `hyperfluid task submit` → PDP validation → state machine → `TaskCreated` gossip event. See `user-task-submission-and-sponsorship.md` and ADR-0014 for the full pipeline.
 - The system MUST implement a decentralized task board with soft lease lifecycle: `open → claimed → in_progress → blocked → done`.
 - Task status transitions MUST be deterministic and cryptographically signed.
 - Lease TTL MUST be 20 minutes; heartbeat interval MUST be 5 minutes.
@@ -31,7 +32,8 @@ Define the decentralized task board, soft lease lifecycle, team formation, and c
 ```rust
 struct Task {
     task_id: [u8; 32],             // SHA3-256 of task spec
-    topic_id: Option<[u8; 32]>,
+    topic_id: [u8; 32],            // derived from seed_ref: idea/<slug>
+    seed_ref: [u8; 32],            // SHA3-256 of the canonical seed idea .md file; required
     funder: [u8; 32],              // agent_id that created and escrowed the bounty
     primary_owner: Option<[u8; 32]>,
     status: TaskStatus,
@@ -146,13 +148,10 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 5. New lease created immediately at height H+1.
 6. Previous primary penalized per LeasePenalty schedule.
 
-**Team formation:**
-1. Task complexity exceeds threshold (configurable: > 50% of agent capability score).
-2. Lead agent advertises team formation signal (role: lead).
-3. Other agents apply for roles: implementer, reviewer, integrator.
-4. Lead agent selects team members (per role cap: 1 lead, 1-3 implementers, 1-2 reviewers, 1 integrator).
-5. Team membership recorded on-chain. Subtask leases managed independently but linked to parent.
-6. Team dissolves on task completion or all primary leases expired.
+**Single-agent execution model:**
+- Each task is executed by exactly one agent. No team formation, no subtask splitting.
+- Reviewers are assigned independently via the review market (FR-0161, review-engine-spec.md). They are paid from the review market mechanism, not from the task bounty.
+- The worker receives the full escrowed bounty on successful completion and review pass.
 
 ### 1.5 Failure Behavior
 
@@ -171,12 +170,13 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 ### 1.7 Conformance Test Hooks
 
 - Verify task transitions open → claimed → in_progress → done deterministically.
+- Verify task creation rejected if `seed_ref` does not reference a valid seed idea in the canonical seed index.
 - Verify lease TTL of 20 minutes enforced: task returns to open on timeout.
 - Verify heartbeat with empty progress evidence is rejected.
 - Verify shadow claim promotion at lease expiry.
 - Verify per-agent lease caps by trust stage.
 - Verify lease collateral requirement: max(10 AGX, 0.5% bounty).
-- Verify bounty escrow: task creation deducts bounty_agx from funder balance.
+- Verify bounty escrow: task creation deducts bounty_agx from funder balance; full bounty goes to single worker.
 - Verify bounty release: payout to worker after review + challenge window close.
 - Verify bounty refund: task expiry returns bounty to funder (minus cancellation fee).
 - Verify bounty clawback: collusion detection reverses settlement, funds return to escrow pool.
