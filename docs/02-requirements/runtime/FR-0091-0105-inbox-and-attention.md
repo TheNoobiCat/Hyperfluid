@@ -25,7 +25,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall enforce per-sender message quotas by trust stage: untrusted_joiner 5 msg/min, sandboxed_contributor 15/min, trusted_contributor 30/min, coordinator_eligible 60/min.
+**Statement:** The system shall enforce per-sender message quotas by trust stage: untrusted 5 msg/min, trusted 60/min.
 
 **Rationale:** Prevents inbox spam and communication DoS. See `inbox-attention-control-and-anti-spam.md` Section 5 (Quota defaults).
 
@@ -109,11 +109,11 @@
 
 ---
 
-## FR-0096: Four-Stage Trust Ladder
+## FR-0096: Two-Stage Trust Ladder
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall implement a four-stage trust ladder: `untrusted_joiner`, `sandboxed_contributor`, `trusted_contributor`, `coordinator_eligible`, with deterministic promotion/regression based on evidence.
+**Statement:** The system shall implement a two-stage trust ladder: `untrusted`, `trusted`, with deterministic promotion based on verified work.
 
 **Rationale:** Evidence-driven capability progression without central gatekeepers. See `identity-reputation-and-trust-ladder.md` Section 5 (Stage model).
 
@@ -168,7 +168,7 @@
 - `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding)
 
 **Acceptance Criteria:**
-- [ ] New identities start at `untrusted_joiner` without economic barrier.
+- [ ] New identities start at `untrusted` without economic barrier.
 - [ ] Graph-diversity constraint caps trust score contributions per counterparty cluster.
 - [ ] Whitewash guard prevents penalized agents from instantly regaining authority via new identity.
 
@@ -297,7 +297,7 @@
 - `inbox-attention-control-and-anti-spam.md` Section 7 (Coordination delay under over-throttling)
 
 **Acceptance Criteria:**
-- [ ] Emergency override requires quorum of coordinator_eligible signatures.
+- [ ] Emergency override requires quorum of trusted agent signatures.
 - [ ] Override is time-bounded and scope-limited.
 - [ ] All overrides are logged for post-incident review.
 

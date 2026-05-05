@@ -113,7 +113,7 @@ Phase 3: CHALLENGE FINALITY
 ```
 
 **Reviewer assignment algorithm:**
-1. Build eligible reviewer pool: trust_stage >= trusted_contributor, <5 active assignments, no recent abuse flags.
+1. Build eligible reviewer pool: trust_stage >= trusted, <5 active assignments, no recent abuse flags.
 2. Apply independence constraints: operator cluster diversity (min 2), temporal spread (active last 7 days), stake spread (max 30% same tier), pair frequency cap (1 in 10).
 3. If pool >= 50 eligible: deterministic selection by SHA3-256(task_id || epoch_seed).
 4. Fallback 1: relax pool floor to current available size.
@@ -148,7 +148,7 @@ Phase 3: CHALLENGE FINALITY
 - Verify commit-reveal for challenges with 6-block delay.
 - Verify loser-pays: failed challenge burns bond.
 - Verify accurate minority rewards: dissenting reviewer proven correct earns bonus.
-- Verify quality score formula: Q = w1*objective + w2*review + w3*durability.
+- Verify fixed payout: majority approves → bounty split equally among approving reviewers.
 - Verify replay prevention: old artifact with stale nonce rejected.
 
 ### 1.8 Trust-Assumption Inventory
@@ -205,7 +205,7 @@ Define the Sybil detection correlation engine and its adjudication sub-type with
 
 **Adjudication panel selection:**
 
-- Panel members MUST be at `trusted_contributor` trust stage or higher.
+- Panel members MUST be at `trusted` trust stage or higher.
 - Panel members MUST have zero correlation (<0.10) with any identity in the flagged cluster.
 - Panel size: `max(5, cluster_size * 2)`, capped at 11.
 - Panel selection MUST use deterministic sampling from the eligible pool seeded by `SHA3-256(cluster_id || epoch_seed)`.
@@ -225,7 +225,7 @@ Define the Sybil detection correlation engine and its adjudication sub-type with
 
 - On CONFIRM verdict:
   - All probationary bonds (locked tranches not yet released) for cluster members MUST be burned.
-  - All cluster members MUST be demoted by 2 trust stages (floor: `untrusted_joiner`).
+  - All cluster members MUST be reset to `untrusted`.
   - The cluster hash MUST be stored permanently for whitewash detection — new identities with correlation >0.50 to any confirmed cluster within 90 days inherit heightened scrutiny.
 - On DISMISS verdict:
   - Reviewer bonds MUST be returned.
@@ -311,7 +311,7 @@ EpochBoundary ─► CorrelationSweep
 
 ### 2.5 Failure Behavior
 
-- **No eligible panel:** If fewer than 5 uncorrelated `trusted_contributor`+ agents are available, the cluster is deferred to the next epoch. Expands eligibility to `sandboxed_contributor` on second deferral (with increased panel size).
+- **No eligible panel:** If fewer than 5 uncorrelated `trusted`+ agents are available, the cluster is deferred to the next epoch. Expands eligibility to `untrusted` on second deferral (with increased panel size).
 - **Alert flood:** Per-epoch alert cap (default 1,000) prevents review pipeline exhaustion. Alerts above cap are deferred to next epoch, prioritized by correlation score descending.
 - **False positive cluster:** Dismissed clusters increment the false-positive counter. If a panel's false-positive rate exceeds 20% over 100 adjudications, panel selection weights are adjusted to exclude underperforming reviewers.
 - **Stake-graph re-org:** If chain reorganization alters the transaction graph after scoring, the affected alerts are invalidated and rescored at the next epoch boundary.
@@ -324,7 +324,7 @@ EpochBoundary ─► CorrelationSweep
 - Verify cluster aggregation via transitive closure groups all connected pairs.
 - Verify adjudication panel selection enforces <0.10 correlation to all cluster members.
 - Verify confirmed cluster triggers bond burn for probationary tranches only (earned tranches unaffected).
-- Verify confirmed cluster triggers 2-stage trust demotion (floor: untrusted_joiner).
+- Verify confirmed cluster triggers 2-stage trust demotion (floor: untrusted).
 - Verify dismissed cluster returns reviewer bonds and increments false-positive counter.
 - Verify per-epoch alert cap defers overflow alerts to next epoch.
 - Verify weight changes are epoch-bound; historical scores retain original weight vector hash.

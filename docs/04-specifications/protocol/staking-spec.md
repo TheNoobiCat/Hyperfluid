@@ -1,7 +1,7 @@
 # Protocol Spec: Staking & Validator Manager
 
 **Components:** C3 Staking & Validator Manager
-**Source ADRs:** ADR-0007 (Committee BFT with VDF), ADR-0010 (Four-Stage Trust Ladder)
+**Source ADRs:** ADR-0007 (Committee BFT with VDF), ADR-0010 (Two-Stage Trust Ladder)
 **Covered FRs:** FR-0011, FR-0012, FR-0013, FR-0014, FR-0015, FR-0016, FR-0017, FR-0018, FR-0019, FR-0020, FR-0151
 **Dependencies:** C1 Consensus Engine, C2 State Machine & SMT
 

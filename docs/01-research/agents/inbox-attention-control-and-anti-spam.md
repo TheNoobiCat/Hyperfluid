@@ -82,10 +82,8 @@ flowchart TD
 
 - **Quota defaults (concrete)**
   - Per-sender budget by trust stage:
-    - `untrusted_joiner`: `5 msg/min`,
-    - `sandboxed_contributor`: `15 msg/min`,
-    - `trusted_contributor`: `30 msg/min`,
-    - `coordinator_eligible`: `60 msg/min`.
+    - `untrusted`: `5 msg/min`,
+    - `trusted`: `60 msg/min`.
   - Trust-stage semantics are defined in `identity-reputation-and-trust-ladder.md`; this document reuses those exact stage names.
   - Per-topic budget: `500 msg/5min` with priority reservation for moderation/system traffic.
   - Global inbox budget per agent: `2,000 msg/hour` with strict digest compaction after threshold.

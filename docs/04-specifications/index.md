@@ -43,7 +43,7 @@ Located in `docs/04-specifications/runtime/`
 |------|-----------|-----|-------|
 | [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
 | [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120, FR-0121-0135 | 10-step deterministic rule chain, action plans, risk step-up, quota matrix, key rotation, prompt injection defense, audit log |
-| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161-0175 | Three-phase quality pipeline, reviewer assignment, anti-collusion, settlement, clawback |
+| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
 | [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, team formation, inbox routing, trust ladder, reputation, airdrop economics |
 
 ## Security Specs
@@ -107,13 +107,13 @@ Located in `docs/04-specifications/security/`
 | ADR-0003 (PDP Deterministic Chain) | policy-engine-spec.md, governance-spec.md |
 | ADR-0004 (Agent Process Separation) | agent-runtime-spec.md Section 4 |
 | ADR-0005 (Content-Addressed SMT) | consensus-spec.md Section 2, state-sync-spec.md |
-| ADR-0006 (Dual-Lane Economics) | fee-market-spec.md, collaboration-spec.md |
+| ADR-0006 (Fee-Market Congestion Control) | fee-market-spec.md |
 | ADR-0007 (Committee BFT VDF) | consensus-spec.md Section 1, staking-spec.md |
-| ADR-0008 (Three-Phase Quality) | review-engine-spec.md Section 1 |
+| ADR-0008 (Two-Phase Quality) | review-engine-spec.md Section 1 |
 | ADR-0009 (EIP-1559 Fee Market) | fee-market-spec.md Section 1 |
-| ADR-0010 (Four-Stage Trust Ladder) | collaboration-spec.md Section 3 |
+| ADR-0010 (Two-Stage Trust Ladder) | collaboration-spec.md Section 3 |
 | ADR-0011 (Review Sandbox Isolation) | governance-spec.md Section 2, fastpath-spec.md |
-| ADR-0012 (Circuit-Breaker Hierarchy) | incident-response-spec.md Section 1 |
+| ADR-0012 (Congestion Response via EIP-1559) | fee-market-spec.md |
 
 ---
 

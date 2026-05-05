@@ -1,8 +1,8 @@
 # Runtime Spec: Agent Runtime
 
 **Component:** C10 Agent Runtime
-**Source ADRs:** ADR-0004 (Agent Process Separation), ADR-0010 (Four-Stage Trust Ladder)
-**Covered FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075, FR-0136, FR-0137, FR-0138, FR-0193, FR-0196, FR-0199, FR-0200
+**Source ADRs:** ADR-0004 (Agent Process Separation), ADR-0010 (Two-Stage Trust Ladder)
+**Covered FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0136, FR-0137, FR-0138, FR-0193, FR-0196, FR-0199, FR-0200
 **Dependencies:** C9 Policy Decision Point, C11 Collaboration & Inbox Layer
 
 ---
@@ -342,18 +342,6 @@ struct ContextEnvelope {
     tool_specs: Vec<u8>,           // 10%
     reserve: Vec<u8>,              // 15% (dynamic overflow buffer)
 }
-
-struct IngressTokenBudget {
-    sender_stage: TrustStage,
-    max_ptok_per_msg: u64,
-    max_ptok_per_hour: u64,
-}
-
-// Default budgets per stage (ptok):
-// untrusted_joiner:       500/msg,   2000/hr
-// sandboxed_contributor: 1000/msg,   8000/hr
-// trusted_contributor:   2000/msg,  20000/hr
-// coordinator_eligible:  4000/msg,  50000/hr
 ```
 
 ### 3.4 State Transitions

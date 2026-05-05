@@ -51,6 +51,7 @@ Every claim is traceable: Research → Requirement → Architecture Decision →
 | FR-0198 | user-task-submission-and-sponsorship.md | FR-0176-0190 | C11 | collaboration-spec.md | 1 | complete |
 | FR-0199 | user-task-submission-and-sponsorship.md | FR-0176-0190 | C10 | agent-runtime-spec.md | 3 | complete |
 | FR-0200 | user-task-submission-and-sponsorship.md | FR-0176-0190 | C10 | agent-runtime-spec.md | 5 | complete |
+| FR-0201 | collaboration-layer-parallel-teams.md, collaboration-spec.md | FR-0076-0090 | C11 | collaboration-spec.md | 1 | complete (pending code implementation) |
 
 ## NFR Traceability
 

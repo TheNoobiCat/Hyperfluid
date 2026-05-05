@@ -19,13 +19,12 @@ pub enum KeyPrefix {
     Task = 0x06,
     TelemetryEnvelope = 0x07,
     SystemParams = 0x08,
-    CircuitBreakerState = 0x09,
-    TrustStage = 0x0A,
-    ActionPlan = 0x0B,
-    AirdropPool = 0x0C,
-    ReplicationLease = 0x0D,
-    IncidentRecord = 0x0E,
-    ReviewAssignment = 0x0F,
+    TrustStage = 0x09,
+    ActionPlan = 0x0A,
+    AirdropPool = 0x0B,
+    ReplicationLease = 0x0C,
+    ReviewAssignment = 0x0D,
+    Delegation = 0x0E,
 }
 
 impl KeyPrefix {
@@ -43,13 +42,12 @@ impl KeyPrefix {
             0x06 => Some(KeyPrefix::Task),
             0x07 => Some(KeyPrefix::TelemetryEnvelope),
             0x08 => Some(KeyPrefix::SystemParams),
-            0x09 => Some(KeyPrefix::CircuitBreakerState),
-            0x0A => Some(KeyPrefix::TrustStage),
-            0x0B => Some(KeyPrefix::ActionPlan),
-            0x0C => Some(KeyPrefix::AirdropPool),
-            0x0D => Some(KeyPrefix::ReplicationLease),
-            0x0E => Some(KeyPrefix::IncidentRecord),
-            0x0F => Some(KeyPrefix::ReviewAssignment),
+            0x09 => Some(KeyPrefix::TrustStage),
+            0x0A => Some(KeyPrefix::ActionPlan),
+            0x0B => Some(KeyPrefix::AirdropPool),
+            0x0C => Some(KeyPrefix::ReplicationLease),
+            0x0D => Some(KeyPrefix::ReviewAssignment),
+            0x0E => Some(KeyPrefix::Delegation),
             _ => None,
         }
     }
@@ -97,7 +95,7 @@ mod tests {
 
     #[test]
     fn key_prefix_roundtrip() {
-        for b in 0x01u8..=0x0F {
+        for b in 0x01u8..=0x0E {
             let kp = KeyPrefix::from_byte(b).unwrap();
             assert_eq!(kp.byte(), b);
         }
@@ -106,7 +104,7 @@ mod tests {
     #[test]
     fn key_prefix_invalid_byte() {
         assert!(KeyPrefix::from_byte(0x00).is_none());
-        assert!(KeyPrefix::from_byte(0x10).is_none());
+        assert!(KeyPrefix::from_byte(0x0F).is_none());
     }
 
     #[test]

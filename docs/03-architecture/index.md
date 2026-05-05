@@ -86,13 +86,14 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0003 | Policy Decision Point as Deterministic Rule Chain | Accepted |
 | ADR-0004 | Agent Runtime Process Separation from Node | Accepted |
 | ADR-0005 | Content-Addressed State with SMT | Accepted |
-| ADR-0006 | Dual-Lane Economics (Collaboration + Control) | Accepted |
+| ADR-0006 | Fee-Market Congestion Control | Accepted |
 | ADR-0007 | Committee BFT with VDF Randomness | Accepted |
-| ADR-0008 | Three-Phase Quality Pipeline | Accepted |
+| ADR-0008 | Two-Phase Quality Pipeline | Accepted |
 | ADR-0009 | EIP-1559 Fee Market | Accepted |
-| ADR-0010 | Four-Stage Trust Ladder | Accepted |
+| ADR-0010 | Four-Stage Trust Ladder | Superseded (see ADR-0010-two-stage-trust-ladder) |
+| ADR-0010 (two-stage) | Two-Stage Trust Ladder | Accepted |
 | ADR-0011 | Review Sandbox Isolation | Accepted |
-| ADR-0012 | Circuit-Breaker Escalation Hierarchy | Accepted |
+| ADR-0012 | Congestion Response via EIP-1559 Base Fee | Accepted |
 | ADR-0013 | Expanded Agent Tool Set, CLI Seed Index Discovery, and Seed-Centric Task Model | Accepted |
 | ADR-0014 | User Task Submission and Agent Sponsorship | Accepted |
 

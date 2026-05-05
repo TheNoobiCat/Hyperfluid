@@ -318,7 +318,7 @@
 
 **Category:** Economics / Security
 
-**Statement:** The system shall implement a continuous Sybil detection correlation engine that computes pairwise correlation scores across five behavioral signals (vote alignment, task co-claiming, temporal activity overlap, stake-graph distance, cross-review failure rate) at each epoch boundary. Identity pairs above a configurable threshold (default 0.70) shall trigger automated adjudication by an independent review panel of `trusted_contributor`+ agents.
+**Statement:** The system shall implement a continuous Sybil detection correlation engine that computes pairwise correlation scores across five behavioral signals (vote alignment, task co-claiming, temporal activity overlap, stake-graph distance, cross-review failure rate) at each epoch boundary. Identity pairs above a configurable threshold (default 0.70) shall trigger automated adjudication by an independent review panel of `trusted`+ agents.
 
 **Rationale:** Post-entry behavioral correlation makes sustained Sybil farming economically irrational — detection and bond burn cascade across the operator's entire identity cluster. See `sybil-detection-correlation-engine.md`.
 
@@ -330,7 +330,7 @@
 - [ ] Default weights: vote alignment 0.25, co-claiming 0.20, temporal overlap 0.15, stake distance 0.25, cross-review failure 0.15.
 - [ ] Default threshold: 0.70. Emergency threshold: 0.50. Governance-adjustable within bounded ranges.
 - [ ] Cluster aggregation via transitive closure groups connected pairs.
-- [ ] Adjudication panel: 5 `trusted_contributor`+ reviewers with zero correlation (<0.10) to flagged cluster.
+- [ ] Adjudication panel: 5 `trusted`+ reviewers with zero correlation (<0.10) to flagged cluster.
 - [ ] Confirmed cluster: bond burn for probationary bonds, 2-stage trust demotion for all members, permanent cluster annotation for whitewash detection.
 - [ ] Rejected cluster: bond returned, cluster marked dismissed, false-positive counter incremented.
 - [ ] Minimum signal sample sizes enforced (3+ co-reviews for vote alignment, 3+ co-topics for co-claiming).
@@ -422,7 +422,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall enforce trust-stage-gated task creation quotas via the PDP: `untrusted_joiner`: 0 active created tasks, `sandboxed_contributor`: 3, `trusted_contributor`: 10, `coordinator_eligible`: 30. "Active" means the task is in `Open`, `Claimed`, or `InProgress` state (not `Done` or `Expired`). Quota ID: `Q-TASK-CREATE-STAGE`.
+**Statement:** The system shall enforce trust-stage-gated task creation quotas via the PDP: `untrusted`: 0 active created tasks, `trusted`: 10. "Active" means the task is in `Open`, `Claimed`, or `InProgress` state (not `Done` or `Expired`). Quota ID: `Q-TASK-CREATE-STAGE`.
 
 **Rationale:** Prevents a single identity from flooding the task board regardless of AGX holdings. Requires agents to earn trust before gaining task creation bandwidth. See `user-task-submission-and-sponsorship.md` Section 5 (Trust-stage-gated creation quotas).
 
@@ -431,10 +431,8 @@
 - `network-policy-engine-spec.md` Section 5 (Quota matrix)
 
 **Acceptance Criteria:**
-- [ ] `untrusted_joiner` cannot create tasks (cap: 0).
-- [ ] `sandboxed_contributor` max 3 active created tasks.
-- [ ] `trusted_contributor` max 10 active created tasks.
-- [ ] `coordinator_eligible` max 30 active created tasks.
+- [ ] `untrusted` cannot create tasks (cap: 0).
+- [ ] `trusted` max 10 active created tasks.
 - [ ] "Active" = `Open`, `Claimed`, or `InProgress` state.
 - [ ] Quota enforced by PDP at `task_create` validation time.
 

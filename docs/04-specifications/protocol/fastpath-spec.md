@@ -1,7 +1,7 @@
 # Protocol Spec: Fast-Path Topic Protocol
 
 **Component:** C6 Fast-Path Topic Protocol
-**Source ADRs:** ADR-0008 (Three-Phase Quality Pipeline)
+**Source ADRs:** ADR-0008 (Two-Phase Quality Pipeline)
 **Covered FRs:** FR-0031, FR-0032, FR-0033, FR-0034, FR-0035, FR-0036, FR-0037, FR-0038, FR-0039, FR-0040
 **Dependencies:** C1 Consensus Engine, C2 State Machine, C4 Governance Engine
 

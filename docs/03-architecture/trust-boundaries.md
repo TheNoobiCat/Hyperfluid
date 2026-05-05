@@ -40,7 +40,7 @@ flowchart TD
     PDP -->|typed transaction| CONSENSUS
     PDP -->|policy decision| AUDIT_LOG
     PDP -.->|quota query| QUOTA_TRACK
-    PDP -.->|taint query| TAINT_TRACK
+    (taint tracking removed — runtime-local only)
 
     CONSENSUS --> STATE_MACHINE
     STATE_MACHINE --> STAKING
@@ -139,8 +139,7 @@ The only path from untrusted to policy-gated.
 | nonce monotonicity | PDP | Replay detected |
 | TTL validity | PDP | TTL expired |
 | quota availability | PDP | Quota exhausted |
-| taint flag check | PDP | Step-up required |
-| plan_binding_hash match | PDP | Drift violation |
+| (removed — taint and plan binding are runtime-local concerns) | | |
 
 ### Zone 2 → Zone 1: Transaction Submission
 

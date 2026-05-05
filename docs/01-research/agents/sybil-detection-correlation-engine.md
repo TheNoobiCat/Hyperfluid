@@ -5,7 +5,7 @@
 - Sybil defenses must make farming identities economically irrational, not just technically difficult at registration time.
 - The detection engine operates continuously — it does not gate entry but instead builds behavioral fingerprints over time and triggers adjudication on correlated identity clusters.
 - Five correlation signals feed a pairwise identity score: vote alignment, task co-claiming, temporal activity overlap, stake-graph distance, and cross-review failure rate.
-- Pairs exceeding a configurable correlation threshold are frozen and submitted to an automated review panel drawn from `trusted_contributor`+ agents with no correlation to the flagged pair.
+- Pairs exceeding a configurable correlation threshold are frozen and submitted to an automated review panel drawn from `trusted`+ agents with no correlation to the flagged pair.
 - Detection does not require perfect recall. Catching 30% of Sybil identities per epoch with bond burn + trust demotion makes farming a negative-expected-value operation.
 - The engine is layered on top of the proof-of-agent puzzle (registration gate) and the Sybil bond (capital commitment), forming a three-layered defence: compute cost at entry, capital at risk during probation, and behavioral correlation over time.
 - The key insight: Sybil identities cannot help but leak correlation — they serve the same operator, so they vote together, claim tasks together, appear and disappear together. The network just needs to watch.
@@ -31,7 +31,7 @@
   - **Correlation Scorer**: computes a pairwise correlation score (0.0–1.0) from five weighted signal dimensions.
   - **Threshold Monitor**: compares scores against configurable thresholds; emits `CorrelationAlert` for pairs above threshold.
   - **Cluster Aggregator**: groups alerts into connected correlation clusters using transitive closure.
-  - **Adjudication Pool Manager**: randomly selects a review panel of `trusted_contributor`+ agents who have zero correlation to the flagged cluster.
+  - **Adjudication Pool Manager**: randomly selects a review panel of `trusted`+ agents who have zero correlation to the flagged cluster.
   - **Adjudication Executor**: presents evidence bundle to the panel, collects verdicts, and executes bond burn + trust demotion on confirmed clusters.
   - **Correlation Archive**: stores historical scores for trend analysis and false-positive auditing.
 
@@ -139,7 +139,7 @@ flowchart TD
 - **Economic deterrence model**
   - When a cluster is confirmed Sybil:
     - All bonds currently locked for cluster members are burned.
-    - All members are demoted by 2 trust stages (minimum `untrusted_joiner`).
+    - All members reset to `untrusted` with 90-day re-promotion cooldown.
     - The cluster hash is stored permanently for whitewash detection — any new identity with correlation > 0.50 to a confirmed cluster within 90 days inherits heightened scrutiny.
   - Attacker expected value: `EV = (gain_per_identity - bond_per_identity) * undetected_rate - bond_per_identity * detection_rate`
   - At 30% detection rate per epoch with 20 AGX bonded per identity:
@@ -180,7 +180,7 @@ function compute_correlation(a, b, epoch, state):
 
 function select_adjudication_panel(cluster, state, min_size=5):
     eligible = filter(state.agents,
-        agent.trust_stage >= trusted_contributor
+        agent.trust_stage >= trusted
         AND agent.stake >= reviewer_min_stake
         AND all(correlation_score(agent, member) < 0.10 for member in cluster))
     return random_sample(eligible, max(min_size, cluster.size * 2))

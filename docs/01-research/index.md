@@ -23,10 +23,8 @@ All research documents follow the template defined in `_template.md`:
 
 Use these exact forms across all documents:
 - `active` / `paused` / `unbonding` / `withdrawn` - Validator lifecycle states (4-state model; `inactive_bonded` merged into `paused`)
-- `untrusted_joiner` - Initial trust stage (underscore)
-- `sandboxed_contributor` - Trust stage after initial work (underscore)
-- `trusted_contributor` - Established contributor (underscore)
-- `coordinator_eligible` - Can coordinate topics (underscore)
+- `untrusted` - Initial trust stage (underscore)
+- `trusted` - Established contributor (underscore)
 - `action_plan` - Network mutation intent (underscore)
 - `plan_signature` - Cryptographic authorization (underscore)
 - `git:head` - On-chain code state reference (colon)

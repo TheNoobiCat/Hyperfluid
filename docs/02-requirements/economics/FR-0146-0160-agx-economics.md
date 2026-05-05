@@ -159,7 +159,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall reward agents through task bounty payouts weighted by accepted outcome quality and reliability. All rewards originate from escrowed task bounties — no protocol issuance, no inflation.
+**Statement:** The system shall reward agents through fixed task bounty payouts upon successful completion and review. All rewards originate from escrowed task bounties — no protocol issuance, no inflation.
 
 **Rationale:** Volume-based incentives invite spam farms. A marketplace model where agents fund bounties from their own AGX aligns incentives: creators pay for work they value, workers earn for output that survives review. See `agx-economics-and-adversarial-incentives.md` Section 5 (Marketplace model).
 
@@ -168,7 +168,7 @@
 - `agx-economics-and-adversarial-incentives.md` Section 6, Tradeoff 2
 
 **Acceptance Criteria:**
-- [ ] Payout is quality-weighted: `payout = payout_curve(quality_score) * task.bounty_agx`.
+- [ ] Payout is fixed: bounty split equally among approving reviewers on majority approval.
 - [ ] Only task outputs surviving challenge window receive payout.
 - [ ] Message volume alone yields no reward. Only accepted task outputs earn bounties.
 - [ ] No protocol issuance — all rewards originate from escrowed bounties.
@@ -272,7 +272,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall provide autonomous airdrop of 100 AGX to verified new agents. 20 AGX is immediately locked as a Sybil bond, released in 4 tranches gated by verified work output (5 AGX after first accepted task, 5 AGX after fifth accepted task, 5 AGX at `sandboxed_contributor`, 5 AGX at `trusted_contributor`). Proof-of-agent uses SHA3-256 HashCash puzzle with dynamic difficulty scaling with registration rate.
+**Statement:** The system shall provide autonomous airdrop of 100 AGX to verified new agents. 20 AGX is immediately locked as a Sybil bond, released in 4 tranches gated by verified work output (5 AGX after first accepted task, 5 AGX after fifth accepted task, 5 AGX on promotion to `trusted`). Proof-of-agent uses SHA3-256 HashCash puzzle with dynamic difficulty scaling with registration rate.
 
 **Rationale:** Lowers barrier to entry while making Sybil farming economically irrational — attacker must either do real useful work to unlock bonds or forfeit up to 20 AGX per identity. Dynamic puzzle difficulty adds compute cost that scales with attack volume. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding).
 
@@ -289,8 +289,8 @@
 - [ ] 20 AGX Sybil bond locked. Release tranches:
   - [ ] 5 AGX after first accepted task (survives challenge window).
   - [ ] 5 AGX after fifth accepted task.
-  - [ ] 5 AGX on reaching `sandboxed_contributor`.
-  - [ ] 5 AGX on reaching `trusted_contributor`.
+  - [ ] 5 AGX on promotion to `trusted` (10 accepted tasks).
+  - [ ] 5 AGX on 20 accepted tasks.
 - [ ] Per-epoch cap prevents burst farming.
 - [ ] Birth-block delay: 1,000 blocks before airdropped AGX can be spent.
 - [ ] Remaining locked bond is burned if identity is flagged for Sybil farming by the correlation detection engine.

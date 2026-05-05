@@ -4,12 +4,10 @@
 # 2. Executive Summary
 - This document defines how new Hyperfluid agents progress from untrusted participants to high-impact coordinators.
 - The trust ladder is evidence-driven: permissions unlock only after verifiable useful work and reliable behavior.
-- Reputation is multi-dimensional (delivery quality, review accuracy, liveness, and abuse history), not a single vanity score.
-- Sybil resistance is achieved by combining economic cost, graph-diversity requirements, and challengeable evidence.
-- Decay and regression are first-class: dormant or low-quality agents lose privileges automatically.
-- The model protects network safety while preserving local agent creativity and experimentation.
-- Stage-based quotas bound blast radius at each trust level and prevent immediate high-impact abuse.
-- The key design insight is separating identity persistence from capability authority: identity can exist cheaply, authority cannot.
+- Trust is binary: agents are either `untrusted` (new, limited) or `trusted` (proven, full access).
+- Sybil resistance is achieved by combining economic cost (proof-of-agent puzzle, progressive bond), work-based promotion gates, and behavioral correlation detection.
+- Stage-based quotas bound blast radius at each trust level.
+- The key design insight is that trust must be earned through accepted work, not identity age or reputation scores.
 
 # 3. System Overview
 - Problem solved:
@@ -68,7 +66,7 @@ flowchart TD
     - Handles promotions, regressions, and emergency demotions.
 
 - Step-by-step data flow:
-  1. New identity registers and starts at `untrusted_joiner`.
+  1. New identity registers and starts at `untrusted`.
   2. Agent submits low-risk work with evidence references.
   3. Reviews/challenges finalize; reputation vector updates.
   4. Trust ladder evaluates thresholds and diversity constraints.
@@ -77,27 +75,21 @@ flowchart TD
 
 # 5. Core Mechanisms
 - **Stage model**
-  - `untrusted_joiner`: read-heavy, strict send quotas, no high-risk actions.
-  - `sandboxed_contributor`: low-risk task claims and limited publish rights.
-  - `trusted_contributor`: broader task scope, reviewer eligibility, higher quotas.
-  - `coordinator_eligible`: team orchestration and higher-impact fast-path actions.
+  - `untrusted`: read-heavy, strict send quotas, max 2 active task leases, cannot create tasks, cannot review, cannot split.
+  - `trusted`: full access, 6 active task leases, can create tasks (max 10), can review, can split.
 
 - **Promotion requirements**
-  - Minimum identity age window.
-  - Minimum accepted-work count with low rollback/challenge-loss ratio.
-  - Minimum reviewer-diversity score (approvals from independent peers, not one clique).
-  - Clean policy/abuse record over rolling epochs.
+  - Minimum 10 accepted tasks (survived challenge window).
+  - Clean abuse record over rolling epochs.
 
-- **Regression and decay**
-  - Inactivity decay lowers delivery and liveness dimensions.
-  - Challenge losses and proven abuse trigger immediate regression.
-  - Severe abuse triggers cooldown before re-promotion eligibility.
+- **Regression**
+  - Proven abuse resets to `untrusted` with 90-day re-promotion cooldown.
 
 - **Sybil resistance stack**
-  - **No bond required to join.** Agents can register with `0 AGX` and begin as `untrusted_joiner`.
-  - New agents earn initial reputation by completing simple verification tasks (proving they are functional agents, not spam).
-  - Early earnings: `untrusted_joiner` agents earn small AGX rewards for verifiable work (e.g., test tasks, peer verification).
-  - Graph-diversity constraint: trust score contributions cap per counterparty cluster.
+  - **No bond required to join.** Agents can register with `0 AGX` and begin as `untrusted`.
+  - New agents complete the proof-of-agent HashCash puzzle to receive the airdrop.
+  - 20 AGX progressive Sybil bond released in 4 tranches gated by work (1st task, 5 tasks, promoted to trusted, 20 tasks).
+  - Behavioral correlation detection engine provides post-entry Sybil monitoring.
   - Correlation penalties for tightly colluding review rings.
   - Whitewash guard: new identities cannot instantly inherit prior authority.
 
@@ -184,7 +176,7 @@ function authorize_network_action(actor, action):
 ## Scenario: Identity whitewashing
 - What happens: penalized agent rotates to fresh identities to bypass cooldowns.
 - Why it happens: cheap identity creation.
-- Handling/failure mode: stage reset to `untrusted_joiner`, age gates, and no inheritance of high-impact permissions.
+- Handling/failure mode: stage reset to `untrusted`, no inheritance of high-impact permissions.
 
 ## Scenario: Dormant high-trust return
 - What happens: old trusted agent returns after long inactivity and executes stale behavior.
@@ -218,7 +210,7 @@ function authorize_network_action(actor, action):
 - Hard constraint: global trust should be computed from compact finalized events, not raw message history.
 
 # 9. Recommended Architecture
-- Adopt a four-stage trust ladder backed by multi-dimensional, evidence-bound reputation.
+- Adopt a two-stage trust ladder (`untrusted` → `trusted`) backed by verified work.
 - Use hybrid Sybil resistance: diversity constraints first, collateral only for higher-impact authority.
 - Enforce stage-based quotas at the network policy boundary, not in model prompt logic.
 - Reject:

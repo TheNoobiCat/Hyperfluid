@@ -14,7 +14,7 @@ Before implementing ANY Stage 01 code, apply these 5 code changes. See `checkpoi
 | 2 | VDF fallback using immutable entropy | `hyperfluid-consensus/` (new module) | MUST fix before Week 3-4 |
 | 3 | Committee stall 3-tier thresholds | `hyperfluid-consensus/types.rs` | MUST fix before Week 3-4 |
 | 4 | Stake-graph clustering implementation | `hyperfluid-staking/src/graph.rs` (NEW) | MUST fix before Week 3-4 |
-| 5 | Delegation subsystem (TxType sub-enums instead of 16 types, DelegationRecord, commission, slash propagation) | `hyperfluid-staking/src/lib.rs`, `hyperfluid-consensus/src/types.rs`, `hyperfluid-state/src/state_machine.rs` | MUST fix before Week 3-4 |
+| 5 | Delegation subsystem + TxType collapse (7 generalized types with sub-enums, DelegationRecord, commission, slash propagation) | `hyperfluid-staking/src/lib.rs`, `hyperfluid-consensus/src/types.rs`, `hyperfluid-state/src/state_machine.rs`, `hyperfluid-consensus/tests/conformance_consensus_spec.rs` | MUST fix before Week 3-4 |
 
 ## Overengineering Fixes Applied (2026-05-06 — Round 2)
 

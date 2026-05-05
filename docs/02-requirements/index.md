@@ -1,8 +1,8 @@
 # Layer 2: Requirements Master Index
 
 **Status:** COMPLETE  
-**Last updated:** 2026-05-05  
-**Total requirements:** 202 (172 FR + 30 NFR)  
+**Last updated:** 2026-05-06  
+**Total requirements:** 203 (173 FR + 30 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -121,7 +121,7 @@ Located in `docs/02-requirements/runtime/`
   - FR-0072: Node API Stateless and Cacheable
   - FR-0073: Token Budget Normalization (ptok)
   - FR-0074: Deterministic Context Envelope Allocation
-  - FR-0075: Ingress Token Budgets by Sender Stage
+  - FR-0075: (removed — token budget is local runtime concern, not protocol-enforceable)
 
 ### Collaboration Layer
 - [`FR-0076-0090-collaboration-layer.md`](runtime/FR-0076-0090-collaboration-layer.md)
@@ -134,12 +134,13 @@ Located in `docs/02-requirements/runtime/`
   - FR-0082: Signal-Only Inbox Injection
   - FR-0083: Communication Types and Routing
   - FR-0084: Idea Seed Index for Work Bootstrapping
-  - FR-0085: Swarm Circuit-Breaker Mode
+  - FR-0085: Swarm Anti-Abuse Mode
   - FR-0086: Layered Version Control
   - FR-0087: Review Sandbox for Topic Merges
   - FR-0088: Single-Agent Task Execution
   - FR-0089: Notification Summarizer
   - FR-0090: Collaboration Output Quality Incentives
+  - FR-0201: Task Splitting with Dependency DAG
 
 ### Inbox and Attention
 - [`FR-0091-0105-inbox-and-attention.md`](runtime/FR-0091-0105-inbox-and-attention.md)
@@ -354,7 +355,7 @@ Per `PROJECT-STATUS.md` Research Gaps, the following were converted to explicit 
 
 | Gap | Requirement |
 |-----|-------------|
-| Token budget resource model | FR-0073, FR-0074, FR-0075 |
+| Token budget resource model | FR-0073, FR-0074 |
 | VDF-based committee randomness | FR-0003 |
 | Reviewer independence / operator-cluster diversity | FR-0099, FR-0033 |
 | No-vote timeout fairness proof | FR-0029 |

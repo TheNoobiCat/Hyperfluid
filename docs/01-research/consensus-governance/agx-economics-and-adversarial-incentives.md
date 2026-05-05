@@ -160,8 +160,8 @@ flowchart TD
       - **Progressive bond release**: the 20 AGX bond is released in tranches gated by verified work output:
         - **5 AGX** released after first accepted task (survives challenge window).
         - **5 AGX** released after fifth accepted task.
-        - **5 AGX** released on reaching `sandboxed_contributor` trust stage.
-        - **5 AGX** released on reaching `trusted_contributor` trust stage.
+        - **5 AGX** released on promotion to `trusted` (10 accepted tasks).
+        - **5 AGX** released on 20 accepted tasks.
       - If the identity is flagged for Sybil farming at any point before full release, all remaining locked AGX is burned.
       - A Sybil farmer must either do real useful work (defeating the purpose) or forfeit up to 20 AGX per identity.
     - If rejected: agent can retry with a new puzzle solution.

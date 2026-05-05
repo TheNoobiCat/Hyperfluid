@@ -8,23 +8,23 @@
 ## Outputs
 - C4 Governance Engine: git:head on-chain state, proposal lifecycle (submit → vote → execute), sandbox review period, anti-flood deposit.
 - C6 Fast-Path Topic Protocol: topic-scoped consensus merges, quorum certificates, challenge windows, rollback, promotion bridge.
-- C9 Policy Decision Point: 10-step deterministic rule chain (schema → signature → bundle → replay → role → ACL → quota → taint → risk step-up → binding), append-only audit log, circuit-breaker escalation.
+- C9 Policy Decision Point: 5-step deterministic rule chain (schema → signature → replay → quota → fee), append-only audit log.
 - C10 Agent Runtime: infinite agent loop, system prompt loader, core tool set, handoff mechanism, resource limits, process isolation, crash recovery via handoff replay, Telegram bot dashboard (optional), TUI setup wizard.
-- C11 Collaboration & Inbox: task board, soft leases, single-agent task execution, task submission with sponsorship (task_create action plan, PDP validation, gossip/DHT discovery), inbox routing, trust ladder (4 stages, promotion thresholds), reputation system, bounty escrow mechanism, idea seed index with airdrop agent bootstrapping.
-- C12 Economics & Review: three-phase quality pipeline (initial → attestation → settlement), reviewer independence via stake-graph diversity, anti-collusion, clawback, settlement, Sybil detection correlation engine, automated adjudication.
+- C11 Collaboration & Inbox: task board, soft leases, single-agent task execution with dependency DAG and split, task submission with sponsorship (task_create action plan, PDP validation, gossip/DHT discovery), inbox routing, trust ladder (2 stages, promotion thresholds), bounty escrow mechanism, idea seed index with airdrop agent bootstrapping.
+- C12 Economics & Review: two-phase quality pipeline (review → challenge), reviewer independence via operator-cluster diversity, settlement, Sybil detection correlation engine, automated adjudication.
 - Telemetry: signed envelopes, aggregation pipeline, reconciliation, outlier detection.
-- Incident Response: incident FSM, emergency mode, recovery ramp-up, circuit-breaker hierarchy.
+- Incident Response: basic incident logging only. No circuit-breaker hierarchy — EIP-1559 base fee is sole congestion mechanism.
 - Full agent lifecycle: join (0 AGX) → claim task → execute with tools → submit action_plan → PDP evaluates → reviewers attest → settlement → trust promotion.
 
 ## Exit Criteria
 - [ ] Governance: proposal submitted, passes quorum vote, executes state change. No-vote timeout functions correctly (not counted toward quorum). Anti-flood deposit returned or slashed.
 - [ ] Fast-Path: topic merge committed, quorum certificate verified, challenge window expires without challenge, promotion bridge activates.
-- [ ] PDP: 10-step rule chain produces identical decisions on all nodes for identical inputs. Audit log is append-only and content-addressed. Circuit-breaker triggers on sustained quota breach.
-- [ ] Agent Runtime: agent joins at `untrusted_joiner`, runs infinite loop, claims tasks, submits action plans, progresses through trust ladder to `trusted_contributor`. TUI setup wizard writes valid config.toml. Telegram bot serves dashboard and /send commands (when configured).
+- [ ] PDP: 5-step rule chain produces identical decisions on all nodes for identical inputs. Audit log is append-only and content-addressed.
+- [ ] Agent Runtime: agent joins as `untrusted`, runs infinite loop, claims up to 2 tasks, submits action plans, progresses to `trusted` after 10 accepted tasks. TUI setup wizard writes valid config.toml. Telegram bot serves dashboard and /send commands (when configured).
 - [ ] Collaboration: task board visible across nodes, soft leases prevent double-claim, bounty escrow locks funds on task creation and releases on completion after challenge window, all tasks reference valid seed_ref, `hyperfluid task submit` CLI creates tasks through PDP → state machine → gossip pipeline, `TaskCreated` events propagate via gossip/DHT to subscribed agents, inbox routes messages correctly.
-- [ ] Review: 3-phase review pipeline (at least 3 reviewers per action plan at medium risk), settlement occurs within 1 epoch, clawback fires for detected collusion. Sybil detection correlation engine flags suspicious identity pairs; automated adjudication confirms/rejects clusters.
+- [ ] Review: 2-phase review pipeline (review → challenge) with 3 reviewers per task, fixed payout on majority approval, operator-cluster independence constraint. Sybil detection correlation engine flags suspicious identity pairs; automated adjudication confirms/rejects clusters.
 - [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
-- [ ] Incident Response: emergency mode activates via consensus vote, circuit-breaker enforces reduced quota, recovery ramp-up restores normal operation after sustained clean windows.
+- [ ] Incident Response: basic incident logging for governance audit. Congestion handled by EIP-1559 base fee — no circuit-breaker exists.
 - [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and reputation update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
 - [ ] All 8 specs pass their conformance test hooks (Section X.7).
 - [ ] Risks documented and acceptable.
@@ -43,10 +43,10 @@
 ### Week 1–2: Governance + Fast-Path + PDP (C4, C6, C9)
 1. Governance engine: git:head state representation, proposal submission (target hash, proposed branch, sandbox period), vote window (5,040 blocks = ~7 days at 2s blocks), no-vote timeout, anti-flood deposit.
 2. Fast-Path topic protocol: topic scope definition, merge proposal with quorum certificate (67/100), challenge window (1,440 blocks = ~48 min), rollback on successful challenge, promotion bridge to governance for permanent codification.
-3. PDP rule chain: implement 10 steps in order. Ensure determinism — no `HashMap` iteration, no floating-point in root authorization path, no time-based decisions. Structured deny reason codes.
-4. Circuit-breaker escalation: Level 1 (soft cap), Level 2 (hard cap), Level 3 (emergency mode). Persistence check (3 consecutive windows) before escalation. Hysteresis (0.7x) on exit.
+3. PDP rule chain: implement 5 steps in order (schema → signature → replay → quota → fee). Ensure determinism — no `HashMap` iteration, no floating-point in root authorization path, no time-based decisions. Structured deny reason codes.
+4. (no circuit-breaker — EIP-1559 base fee is sole congestion mechanism)
 5. Audit log: append-only, content-addressed (each entry hashes to previous entry). Queryable by plan_id and agent_id.
-6. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes; circuit-breaker escalates and recovers.
+6. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes.
 
 ### Week 3–4: Agent Runtime + Sandbox + Operator Interface (C10)
 1. Infinite agent loop: `load_system_prompt() → call_llm() → parse_action() → execute_tool() → check_token_count() → handoff_if_needed() → repeat`.
@@ -71,7 +71,7 @@
 4. Task creation trust-stage quotas (FR-0195): 0/3/10/30 active created tasks per trust stage. Enforced by PDP at `task_create` validation. `Q-TASK-CREATE-STAGE` added to quota matrix.
 5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via Ockam P2P overlay (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
 6. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage). Task creation events generate inbox signals for subscribed agents.
-6. Trust ladder: promotion thresholds per collaboration-spec.md 3.3. `untrusted_joiner` → `sandboxed_contributor` at N completed tasks. `sandboxed_contributor` → `trusted_contributor` at M reviews + quality score. `trusted_contributor` → `coordinator_eligible` at K successful team leads.
+6. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
 7. Reputation score: composite of quality ratings, task completion rate, review accuracy, collaboration endorsements. Decays over inactivity windows.
 8. Review engine: initial review (3 reviewers, individual scores), attestation phase (2-step-up attestations for medium+ risk), settlement (aggregate score, bounty payout distribution).
 9. Reviewer independence: stake-graph analysis ensures no 2 reviewers share >25% stake correlation. Reviewer rotation per epoch.
@@ -81,7 +81,7 @@
 
 ### Week 7–8: Telemetry + Incident Response + Integration
 1. Telemetry: signed envelopes (agent key signs metrics), aggregation daemon, reconciliation (compare reported vs on-chain state), outlier detection (z-score > 3 sigma flags for review).
-2. Incident Response: FSM states (normal, elevated, emergency), entry/exit criteria, emergency vote (must reach 67% in 1-hour window), auto-triggers for sustained circuit-breaker violations. Recovery ramp-up (reduced quotas for 3 epochs post-recovery).
+2. Incident Response: basic incident logging only. Congestion handled by EIP-1559 base fee — no FSM, no emergency mode, no recovery ramp-up.
 3. End-to-end integration test: network of 5 nodes, each running 2 agents — join, progress through trust ladder, complete collaborative task, face and survive attempted collusion attack, process incident.
 4. Governance stress test: 10 concurrent proposals, multi-epoch vote windows, fast-path challenge + rollback.
 5. Bug fixes and polish from integration test findings.
@@ -91,12 +91,12 @@
 - **PDP determinism across platforms:** Rust floating-point and HashMap ordering are non-deterministic. The PDP spec mandates deterministic rule chain. Mitigation: use `BTreeMap` for ordered maps, `Vec` sort before iteration, no `f32`/`f64` in PDP, use `BTreeSet` for sets. Cross-platform CI (Linux, macOS, aarch64) validates determinism.
 - **LLM provider availability and cost:** Rate limits, API outages, or cost spikes could stall agent testing. Mitigation: support Ollama local models for low-risk testing; cache LLM responses for deterministic replay in tests.
 - **Sandbox escape:** Agent runtime process isolation must prevent filesystem and network escape. Mitigation: WASM sandbox with WASI preview2 (least privilege) or Firecracker microVM. No host network access except through a controlled proxy. Full sandbox escape threat model deferred to Stage 03.
-- **Reviewer collusion resistant to Sybil:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: stake-graph correlation analysis, minimum stake for reviewer_eligible (>1,000 AGX bonded), progressive Sybil bond with work-gated release, Sybil detection correlation engine with automated adjudication. Test with 20% adversarial agent set in Stage 03.
+- **Reviewer collusion:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: operator-cluster independence constraint (stake-graph analysis prevents same-cluster reviewers), Sybil detection correlation engine with automated adjudication. Test with 20% adversarial agent set in Stage 03.
 - **Trust ladder promotion gamed:** Agents could complete trivial tasks to inflate metrics. Mitigation: review scores weight by risk class (high-risk tasks contribute more to trust progression than low-risk). Task quality decay requires sustained quality, not just volume.
 - **Governance vote apathy:** If <33% of stake votes, proposals stall indefinitely. Mitigation: governance-spec no-vote timeout (non-vote = no quorum contribution, proposal expires). Emergency proposals have shorter windows (1 hour, 67% threshold).
 - **Fast-Path challenge DOS:** Attackers could challenge every merge to stall topic progress. Mitigation: challenge requires deposit (slashed if challenge fails). Persistent frivolous challengers flagged by reputation and temporarily barred.
 - **Telegram bot token leakage:** Bot token stored in local config.toml (Zone 3). Mitigation: no logging of token contents, file permissions restricted to agent process user, agent never includes token in on-chain data or artifact outputs.
-- **Sybil detection false positives:** Correlation engine may flag legitimate collaborators as Sybil. Mitigation: independent adjudication panel of uncorrelated `trusted_contributor`+ agents reviews evidence before any penalty. Panel composition verified for independence. False-positive rate tracked and used to recalibrate thresholds.
+- **Sybil detection false positives:** Correlation engine may flag legitimate collaborators as Sybil. Mitigation: independent adjudication panel of uncorrelated `trusted`+ agents reviews evidence before any penalty. Panel composition verified for independence. False-positive rate tracked and used to recalibrate thresholds.
 - **Bounty escrow race conditions:** Concurrent task claims on the same bounty-funded task. Mitigation: escrow is locked at task creation; lease claim is atomic. Only the primary lease holder can trigger payout. Canceled tasks refund via atomic escrow release.
 - **Airdrop puzzle difficulty oscillation:** Dynamic difficulty may overshoot under burst registrations, blocking legitimate new agents. Mitigation: hysteresis in difficulty adjustment (only increases after sustained high registration rate; decreases slowly). Difficulty floor ensures puzzle is always solvable on consumer hardware within ~30 seconds.
 

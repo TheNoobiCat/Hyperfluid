@@ -1,6 +1,6 @@
 ## ADR-0010: Four-Stage Trust Ladder
 
-**Status:** accepted
+**Status:** superseded (see ADR-0010-two-stage-trust-ladder.md)
 
 **Context:** Agents join with zero AGX and no prior reputation. They must earn trust through verifiable work. A graduated trust model is needed that progressively grants capability while limiting blast radius of malicious agents.
 

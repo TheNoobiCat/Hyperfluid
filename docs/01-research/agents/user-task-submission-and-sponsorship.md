@@ -108,10 +108,8 @@ flowchart TD
 
 - **Trust-stage-gated creation quotas**
   - Task creation is a network-mutating action subject to trust-stage constraints:
-    - `untrusted_joiner`: **0** active created tasks (cannot create tasks).
-    - `sandboxed_contributor`: **3** active created tasks.
-    - `trusted_contributor`: **10** active created tasks.
-    - `coordinator_eligible`: **30** active created tasks.
+    - `untrusted`: **0** active created tasks (cannot create tasks).
+    - `trusted`: **10** active created tasks.
   - "Active" means the task is in `Open`, `Claimed`, or `InProgress` state (has not reached `Done` or `Expired`).
   - Quota ID for task creation: `Q-TASK-CREATE-STAGE-*` (per-stage, enforced by PDP per `network-policy-engine-spec.md` Section 5 quota matrix).
   - This prevents a single identity from flooding the task board regardless of AGX holdings.
@@ -226,7 +224,7 @@ flowchart TD
 - Handling/failure mode: review markets require independent reviewers (`reviewer_eligible` role). Challenge windows (144 blocks) allow any agent to contest outputs. Commit-reveal challenges prevent front-running. Behavioral correlation detection flags creator-worker identity clusters. These are existing mechanisms from `proof-of-work-quality-and-review-markets.md` and `sybil-detection-correlation-engine.md`. No new mechanism needed for task submission specifically.
 
 ## Scenario: Task board flood
-- What happens: attacker with many `trusted_contributor` identities (10 active tasks each) floods a topic with low-bounty, low-effort tasks to bury legitimate tasks.
+- What happens: attacker with many `trusted` identities floods a topic with low-bounty, low-effort tasks to bury legitimate tasks.
 - Why it happens: per-identity caps exist but Sybil identities multiply the cap.
 - Handling/failure mode: (a) each identity requires 20 AGX Sybil bond — flooding requires substantial locked capital, (b) behavioral correlation detects cluster behavior, (c) low-bounty tasks are naturally deprioritized by workers, (d) topic quality controls (trust-weighted discovery, decay) push low-engagement tasks down, (e) circuit-breaker tightens task creation quotas during flood conditions.
 
@@ -269,7 +267,7 @@ flowchart TD
 - Critical bottlenecks:
   - Task state in consensus: the number of active tasks grows with network size. State compaction (pruning expired/done tasks to historical archive) is necessary.
   - DHT lookup latency under high query volume: requires DHT sharding and local caching of frequently-queried task records.
-  - Sponsor agent concentration: if a small number of agents sponsor most tasks, their per-identity quotas become a bottleneck. Mitigation: quotas scale with trust stage; coordinator_eligible agents get 30 active tasks.
+  - Sponsor agent concentration: if a small number of agents sponsor most tasks, their per-identity quotas become a bottleneck. Mitigation: quotas scale with trust stage; trusted agents get 10 active tasks.
 - Hard constraints:
   - Per-identity task cap limits the throughput of any single sponsoring agent. This is intentional — it forces distribution of task creation authority.
   - Consensus block gas limits bound the number of task_create transactions per block. At 50% target utilization, with task_create being a lightweight tx (~500 bytes), a block can fit hundreds of task creations.
@@ -292,7 +290,7 @@ flowchart TD
 # 10. Implementation Plan
 1. **Extend action_plan schema**: add `action_type = task_create` to the canonical action taxonomy with the fields defined in Section 5. Add to `network-policy-engine-spec.md` action taxonomy table.
 2. **Add PDP validation rules for task_create**:
-   - Validator: creator trust stage >= `sandboxed_contributor`.
+   - Validator: creator trust stage >= `trusted`.
    - Validator: creator active task count < stage-based cap.
    - Validator: creator balance >= `bounty_agx + estimated_tx_fee`.
    - Validator: `seed_ref` references a valid seed idea in the canonical seed index.

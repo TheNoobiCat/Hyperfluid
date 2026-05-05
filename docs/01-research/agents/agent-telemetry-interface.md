@@ -101,7 +101,7 @@ flowchart TD
   *Hyperfluid Agent*
   
   *Agent:* my-agent-01
-  *Stage:* trusted_contributor
+  *Stage:* trusted
   *Balance:* 234.50 AGX
   *Address:* `agx1q...8x2f`
   

@@ -101,18 +101,24 @@ erDiagram
         bytes32 task_id PK "content hash of task spec"
         string topic_id "topic reference (derived from seed_ref: idea/<slug>)"
         bytes32 seed_ref "SHA3-256 of canonical seed idea .md file; required"
+        bytes32 parent_task_id FK "references TASK (optional, None if top-level)"
+        bytes depends_on "list of task_ids this task depends on (empty if none)"
         bytes32 primary_owner "agent_id with active lease"
         bytes32 funder "agent_id that created and funded the bounty"
-        string status "open | claimed | in_progress | blocked | done"
+        string status "open | claimed | in_progress | blocked | done | decomposed"
         uint128 bounty_agx "escrowed reward for completion (atto-AGX)"
+        bytes32 coordinator_id "agent who performed the split (optional)"
+        uint128 held_coordinator_fee "coordinator fee held until children done (optional)"
         uint64 created_at_height "task creation height"
         uint64 lease_expires_height "primary lease expiry"
         bytes32 required_skills_hash "content hash of skill list"
         bytes32 metadata_hash "SHA3-256 of gix-stored task description artifact"
         bytes32 sponsor_id "agent_id of sponsoring agent (optional, zero if not sponsored)"
         bytes32 requester_pubkey "pubkey of human user making the request (optional, zero if not applicable)"
-        string escrow_status "locked | released | refunded | clawed_back"
+        string escrow_status "locked | released | refunded | clawed_back | bounty_redistributed | held_escrow"
     }
+    // SPLIT_PROPOSAL was considered and rejected. Splits are executed atomically via SplitTaskTx.
+    // No separate proposal lifecycle or review pipeline. Market forces enforce split quality.
     REVIEW_ASSIGNMENT {
         bytes32 assignment_id PK "hash of task+reviewer+epoch"
         bytes32 task_id FK "references TASK"
@@ -204,6 +210,7 @@ The SMT maps 32-byte keys to values. Keys are structured with a type prefix:
 | `0x0C` | REPLICATION_LEASE | `SHA3-256(0x0C || lease_id)` |
 | `0x0D` | REVIEW_ASSIGNMENT | `SHA3-256(0x0D || assignment_id)` |
 | `0x0E` | DELEGATION | `SHA3-256(0x0E || delegation_id)` |
+| `0x0F` | (reserved) | |
 | `0x10` | DELEGATION | `SHA3-256(0x10 || delegation_id)` |
 
 ## 4. Core Entity Descriptions

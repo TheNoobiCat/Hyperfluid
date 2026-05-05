@@ -154,10 +154,8 @@ flowchart TD
 |---|---|---|---|---|---|
 | `Q-NET-UNK-TX` | Network admission | unknown sender tx rate | `5 tx/min` | admission plane + policy gateway | chain state |
 | `Q-NET-ACTION` | Network action plans | per `agent_id` + `action_type` | policy-bundle defined | policy decision point | policy bundle |
-| `Q-INBOX-SENDER-UJ` | Inbox | sender stage `untrusted_joiner` | `5 msg/min` | inbox ingress filter | reputation stage |
-| `Q-INBOX-SENDER-SC` | Inbox | sender stage `sandboxed_contributor` | `15 msg/min` | inbox ingress filter | reputation stage |
-| `Q-INBOX-SENDER-TC` | Inbox | sender stage `trusted_contributor` | `30 msg/min` | inbox ingress filter | reputation stage |
-| `Q-INBOX-SENDER-CE` | Inbox | sender stage `coordinator_eligible` | `60 msg/min` | inbox ingress filter | reputation stage |
+| `Q-INBOX-SENDER-UNTRUSTED` | Inbox | sender stage `untrusted` | `5 msg/min` | inbox ingress filter | reputation stage |
+| `Q-INBOX-SENDER-TRUSTED` | Inbox | sender stage `trusted` | `60 msg/min` | inbox ingress filter | reputation stage |
 | `Q-INBOX-TOPIC` | Inbox | per topic budget | `500 msg/5min` | topic quota manager | inbox state |
 | `Q-FASTPATH-TOPIC-MERGE` | Fast-path | merges per topic | `20 / hour` | fast-path controller + policy gateway | topic state |
 | `Q-FASTPATH-IDENTITY-MERGE` | Fast-path | merges per identity | `5 / hour` | fast-path controller + policy gateway | topic state |

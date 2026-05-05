@@ -235,10 +235,8 @@ flowchart TD
   - **Rate limiting (tiered flat rates)**
     - Per-identity tx burst: `max 20 txs in 60 seconds`.
     - Tiered flat rate limits by trust stage:
-      - `untrusted_joiner`: `5 tx/min`
-      - `sandboxed_contributor`: `15 tx/min`
-      - `trusted_contributor`: `30 tx/min`
-      - `coordinator_eligible`: `60 tx/min`
+      - `untrusted`: `5 tx/min`
+      - `trusted`: `60 tx/min`
     - Stake affects trust ladder progression, not direct rate scaling.
     - Rationale: Simpler, predictable, no perverse incentives to split stake.
     - Removed: Logarithmic stake-weighted formula (complex and gameable).

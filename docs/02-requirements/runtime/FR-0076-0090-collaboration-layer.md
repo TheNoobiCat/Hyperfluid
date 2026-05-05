@@ -47,7 +47,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall cap active primary leases by trust stage: untrusted_joiner 0, sandboxed_contributor 2, trusted_contributor 6, coordinator_eligible 12.
+**Statement:** The system shall cap active primary leases by trust stage: untrusted 0, trusted 6.
 
 **Rationale:** Bounds blast radius of lease hoarding attacks. See `collaboration-layer-parallel-teams.md` Section 5 (Lease and task defaults).
 
@@ -333,3 +333,31 @@
 
 **Dependencies:** FR-0076, FR-0161
 **Tags:** should-have
+
+---
+
+## FR-0201: Task Splitting with Dependency DAG
+
+**Category:** Agent Runtime
+
+**Statement:** The system shall allow task splitting via a `SplitTaskTx` transaction. The task owner may split if the task is claimed; any `trusted` agent may split if the task is Open. The split atomically redistributes the parent's escrowed bounty to child subtasks and holds a coordinator fee (max 5%). No separate review pipeline is needed — the market enforces split quality.
+
+**Rationale:** Enables unbounded parallel work without multi-agent teams. Agents autonomously decompose large tasks into independently claimable subtasks. The coordinator fee compensates the decomposition work without creating permanent hierarchy. Split quality is enforced by natural market incentives: bad splits sit unclaimed, coordinator fee is never released.
+
+**Source Research:**
+- `collaboration-spec.md` Section 1 (Decentralized Task Board)
+- `collaboration-layer-parallel-teams.md` Section 5 (Single-agent execution model)
+
+**Acceptance Criteria:**
+- [ ] `SplitTaskTx` includes: parent_task_id, children (title_hash, bounty_share_pct, depends_on, required_skills_hash), coordinator_fee_pct (0-5%).
+- [ ] Sum of child bounty shares + coordinator_fee_pct MUST equal 100%.
+- [ ] Dependency graph MUST be acyclic (cycles rejected at transaction validation).
+- [ ] Authorization: if parent is Claimed/InProgress, only primary_owner may split. If Open, any trusted agent may split.
+- [ ] On execution: parent → Decomposed, children created with status Open, escrow redistributed atomically.
+- [ ] A child with non-empty `depends_on` is NOT claimable until all dependencies are Done.
+- [ ] Coordinator fee is released when the last child reaches Done.
+- [ ] If all children expire/are abandoned, split is voided, coordinator fee forfeited, parent reopens.
+- [ ] No separate proposal lifecycle or review approval exists for splits.
+
+**Dependencies:** FR-0076, FR-0087
+**Tags:** must-have

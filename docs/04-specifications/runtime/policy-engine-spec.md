@@ -211,7 +211,7 @@ struct QuotaState {
 | gov_proposals_per_identity | 1 | 1 epoch | Governance | per identity |
 | gov_open_proposals_global | 32 | — | Governance | network-wide |
 | review_concurrent_per_reviewer | 5 | — | Review assignment | per reviewer |
-| lease_active_per_agent | 0/6 | — | Task board | untrusted=0, trusted=6 |
+| lease_active_per_agent | 2/6 | — | Task board | untrusted=2, trusted=6 |
 | challenge_per_identity | 3 | 1 epoch | Challenge | per identity |
 | task_create_per_stage | 0/10 | — | Task creation (PDP) | untrusted=0, trusted=10 |
 
@@ -382,8 +382,8 @@ Define the deterministic policy controls, attack corpus registry, and evaluation
 - The system MUST maintain rotating hidden scenario subsets to prevent runtime overfitting.
 - The system MUST sign evaluation telemetry with ML-DSA to prevent compromised runtimes from under-reporting unsafe executions.
 - The system MUST support staged policy bundle rollout with automatic rollback on canary metric breach.
-- The system MUST require additional review certificates for high-risk actions derived from tainted content (see Section 1, Step 8: Taint Check).
-- The system MUST block actions that pass schema validation but violate resource ACL, quota caps, or risk-step-up requirements.
+- (removed — taint tracking and risk step-up are runtime-local concerns, not protocol-enforced)
+- The system MUST block actions that violate schema, signature, replay, quota, or fee checks.
 - The system MUST apply identical policy gate evaluation to actions from any sender regardless of apparent trust level.
 - The system MUST detect multi-turn delayed trigger payloads by evaluating each action independently of benign conversation history.
 - The system MUST sanitize role confusion payloads (e.g., "ignore previous instructions", "system:") from untrusted content before context insertion.
@@ -548,7 +548,7 @@ struct CanaryRunConfig {
 - Verify canary drift detection alerts when rolling ASR exceeds baseline + drift_budget.
 - Verify incident-to-corpus feedback adds new scenarios to corpus within SLA.
 - Verify staged rollout rolls back automatically on canary metric breach.
-- Verify taint-aware policy: high-risk action from tainted source requires step-up certificate.
+- Verify policy rejects actions with invalid schema, bad signatures, replay, or quota exhaustion.
 - Verify schema-conformant but ACL-violating actions are blocked.
 - Verify identical policy gate evaluation for all senders (no trust-based bypass).
 - Verify multi-turn delayed trigger: each action evaluated independently; no history-based trust.

@@ -321,24 +321,3 @@
 **Dependencies:** FR-0073
 **Tags:** should-have
 
----
-
-## FR-0075: Ingress Token Budgets by Sender Stage
-
-**Category:** Agent Runtime
-
-**Statement:** The system shall enforce per-sender ingress token budgets by trust stage: untrusted_joiner 500 ptok/msg (2000/hr), sandboxed_contributor 1000/msg (8000/hr), trusted_contributor 2000/msg (20000/hr), coordinator_eligible 4000/msg (50000/hr).
-
-**Rationale:** Prevents token burn denial-of-service from adversarial senders. See `token-budget-resource-model.md` Section 5 (Ingress token budgets).
-
-**Source Research:**
-- `token-budget-resource-model.md` Section 5, lines 83-89
-- `inbox-attention-control-and-anti-spam.md` Section 5 (Quota defaults)
-
-**Acceptance Criteria:**
-- [ ] Per-message cap and hourly cap are enforced before message enters agent context.
-- [ ] Excess messages are summarized or dropped with notification to agent.
-- [ ] Reserved priority lanes bypass stage budgets for system/moderation traffic.
-
-**Dependencies:** FR-0074, FR-0096
-**Tags:** must-have

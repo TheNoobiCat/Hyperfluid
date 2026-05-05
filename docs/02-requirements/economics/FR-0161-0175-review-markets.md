@@ -21,67 +21,21 @@
 
 ---
 
-## FR-0162: Objective Verification Pipeline
+## FR-0162: (removed — objective verification was Phase 1 of old three-phase pipeline; reviewers verify work directly)
+
+## FR-0164: Reviewer Collateral
 
 **Category:** Economics
 
-**Statement:** The system shall execute deterministic objective checks (tests, reproducibility, policy conformance) for each submission, producing a normalized pass/fail vector signed by verifier.
+**Statement:** The system shall bond reviewer collateral per review batch.
 
-**Rationale:** Evidence first, opinion second. See `proof-of-work-quality-and-review-markets.md` Section 5 (Verification pipeline).
-
-**Source Research:**
-- `proof-of-work-quality-and-review-markets.md` Section 5, lines 80-97
-
-**Acceptance Criteria:**
-- [ ] Submission includes artifact_root_hash, input_refs, execution_profile_hash, policy_profile_hash.
-- [ ] Node-side verification pulls artifact chunks by hash and recomputes root hash.
-- [ ] Deterministic checker set is pinned per epoch (`checker_bundle_hash`).
-- [ ] `ObjectiveCheckRecord` includes checker_bundle_hash, pass_fail_vector, metrics_hash, verifier_sig.
-
-**Dependencies:** FR-0051
-**Tags:** must-have
-
----
-
-## FR-0163: Three-Phase Quality Pipeline
-
-**Category:** Economics
-
-**Statement:** The system shall implement a three-phase pipeline: objective checks -> independent review market -> challenge finality, with provisional settlement before challenge window.
-
-**Rationale:** Preserves throughput while forcing adversaries to beat multiple verification layers. See `proof-of-work-quality-and-review-markets.md` Section 9 (Recommended Architecture).
-
-**Source Research:**
-- `proof-of-work-quality-and-review-markets.md` Section 9 (Recommended Architecture)
-- `proof-of-work-quality-and-review-markets.md` Section 5 (State diagram)
-
-**Acceptance Criteria:**
-- [ ] Phase 1: objective verification produces pass/fail vector.
-- [ ] Phase 2: independent reviewers submit scored verdicts.
-- [ ] Phase 3: challenge window allows fraud correction.
-- [ ] Final payout only after challenge window closes unchallenged.
-
-**Dependencies:** FR-0162, FR-0161, FR-0148
-**Tags:** must-have
-
----
-
-## FR-0164: Reviewer Collateral and Accurate Minority Rewards
-
-**Category:** Economics
-
-**Statement:** The system shall bond reviewer collateral per review batch and pay higher rewards for accurate minority calls that later prove correct.
-
-**Rationale:** Incentivizes honest dissent instead of lazy consensus voting. See `proof-of-work-quality-and-review-markets.md` Section 5 (Review market design).
+**Rationale:** Prevents frivolous reviewing without economic stake. See `proof-of-work-quality-and-review-markets.md` Section 5 (Review market design).
 
 **Source Research:**
 - `proof-of-work-quality-and-review-markets.md` Section 5, lines 110-112
-- `proof-of-work-quality-and-review-markets.md` Section 6, Tradeoff 4
 
 **Acceptance Criteria:**
 - [ ] Reviewer must bond collateral before accepting assignment.
-- [ ] Minority call that is later validated earns bonus reward.
-- [ ] Incorrect reviewers are penalized proportionally to stake.
 - [ ] Collateral is released after challenge window closes.
 
 **Dependencies:** FR-0161
@@ -89,13 +43,13 @@
 
 ---
 
-## FR-0165: Anti-Collusion Pair-Frequency Cap
+## FR-0165: Reviewer Independence via Operator-Cluster Diversity
 
 **Category:** Economics
 
-**Statement:** The system shall enforce a deterministic pair-frequency cap: same reviewer-author pair maximum 1 review in every 10 tasks, tracked per rolling 10-task window.
+**Statement:** The system shall enforce one reviewer independence constraint: no reviewer shares an operator cluster with any other reviewer or the worker (detected via stake-graph analysis, see `stake-graph-analysis-spec.md`).
 
-**Rationale:** Simple deterministic rules are auditable and don't create false positives from statistical noise. See `proof-of-work-quality-and-review-markets.md` Section 5 (Anti-collusion controls).
+**Rationale:** Prevents reviewer collusion via same-operator coordination. Operator-cluster analysis is simpler and more robust than temporal/stake/pair-frequency constraints.
 
 **Source Research:**
 - `proof-of-work-quality-and-review-markets.md` Section 5, lines 122-131
@@ -216,7 +170,7 @@
 - [ ] Reviewers execute against pinned `execution_profile_hash`.
 - [ ] `ReviewRecord` includes submission_id, score, verdict, reason_hash, reviewer_sig.
 
-**Dependencies:** FR-0053, FR-0162
+**Dependencies:** FR-0053
 **Tags:** must-have
 
 ---
@@ -324,5 +278,5 @@
 - [ ] Artifact hash is bound to task_id + nonce.
 - [ ] Replay submission with old nonce is rejected.
 
-**Dependencies:** FR-0162
+**Dependencies:** (none)
 **Tags:** must-have

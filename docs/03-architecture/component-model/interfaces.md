@@ -37,13 +37,8 @@ ActionPlanRequest {
   agent_id: bytes32 (SHA3-256 of agent pubkey)
   action_type: enum (publish_topic_message | claim_task_lease | renew_task_lease | submit_fast_path_merge | submit_governance_proposal | cast_governance_vote)
   resource_id: bytes32
-  risk_class: enum (low | medium | high)
-  reason_hash: bytes32
-  evidence_refs: [bytes32]
-  policy_bundle_hash: bytes32
-  nonce: uint64 (monotonically increasing)
-  expires_at_height: uint64
-  plan_binding_hash: bytes32 (canonical hash of tool call params)
+    nonce: uint64 (monotonically increasing)
+    expires_at_height: uint64
   agent_signature: bytes (ML-DSA-65)
 }
 ```

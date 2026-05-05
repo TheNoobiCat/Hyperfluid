@@ -10,7 +10,7 @@
 - C2 State Machine & SMT: sparse Merkle tree state, transaction execution, block finalisation, deterministic state transitions.
 - C3 Staking & Validator Manager: four-state validator lifecycle (active, paused, unbonding, withdrawn), bonding/unbonding, slashing conditions, downtime tracking.
 - C5 Fee Market: EIP-1559 base fee, validator rebates, front-running protection, fee-burning logic (off-chain only — see FR-0073 for runtime burn), fee adjustment formula.
-- C7 P2P Networking: peer discovery, connection state machine, gossip protocol, mempool transaction relay, lane reservation.
+- C7 P2P Networking: peer discovery, connection state machine, gossip protocol, mempool transaction relay, fee-ordered priority queue.
 - C8 Artifact Availability & Storage: content-addressed storage via gix, proof-of-possession, retention tiers, repair coordinator.
 - Single-node chain fully functional; multi-node network booting with gossip consensus between 3+ validators.
 - State sync implementation (snap sync and full sync).
@@ -59,7 +59,7 @@
 
 ### Week 5–6: P2P Networking + Artifact Storage (C7 + C8)
 1. Peer discovery: bootstrap nodes, Kademlia DHT for validator discovery, connection state machine (outbound/inbound, keepalive, backoff).
-2. Gossip protocol: transaction gossip (push), block gossip (push), mempool lane reservation per transaction type.
+2. Gossip protocol: transaction gossip (push), block gossip (push), mempool fee-ordered priority queue.
 3. Relay mechanism: nodes behind NAT connect via relay nodes; relay transmits consensus messages.
 4. Content-addressed storage: gix-based blob store, hash verification on write, proof-of-possession challenge on read.
 5. Retention tiers: hot (all nodes, 30 days), warm (sample of nodes, 180 days), cold (archive nodes, indefinite).
@@ -80,7 +80,7 @@
 - **Ockam P2P version compatibility:** Ockam APIs may change between versions. Mitigation: pin Ockam dependency to a specific git commit hash. Re-evaluate at the start of each week.
 - **State sync correctness:** Snap-sync reconstructed state must match SMT root exactly; divergence = network split risk. Mitigation: automated differential fuzzing: replay same transaction stream via full-sync and snap-sync; assert identical state roots.
 - **gix repository-scale performance:** Content-addressed blob store may become a bottleneck at scale. Mitigation: benchmark with 100k+ blobs in Week 5; if performance degrades, add RocksDB-backed blob index.
-- **Mempool lane starvation:** Priority transactions (governance votes) must not be starved by cheaper transactions. Mitigation: EIP-1559-like lane reservation per `p2p-wire-spec.md` Section 2; test with adversarial cheap-transaction flood.
+- **Mempool congestion:** Cheaper transactions must not starve governance/evidence transactions. Mitigation: evidence/governance fee discounts per `p2p-wire-spec.md` Section 2; test with adversarial cheap-transaction flood.
 - **Validator set churn instability:** Rapid bonding/unbonding of many validators could cause committee oscillation. Mitigation: epoch-boundary-only validator set updates (stake changes apply at epoch+2); test with 50% churn simulation.
 
 ## Spec References

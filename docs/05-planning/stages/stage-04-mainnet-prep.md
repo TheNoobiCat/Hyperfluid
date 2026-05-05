@@ -7,12 +7,12 @@
 
 ## Outputs
 - SLO definitions: uptime, block finality latency, transaction inclusion latency, artifact availability, review pipeline latency.
-- Monitoring dashboards: chain health (block height, finality, validator set), agent metrics (active agents, trust ladder distribution, task throughput), economics (fee market, staking distribution, reward distribution), security (incident FSM state, circuit-breaker level, telemetry reconciliation drift).
-- Alerting rules: alerts for block stall (>10s without block), validator churn spike (>20% in epoch), circuit-breaker activation, incident FSM state change, telemetry reconciliation drift >1%.
+- Monitoring dashboards: chain health (block height, finality, validator set), agent metrics (active agents, trust stage distribution, task throughput), economics (fee market, staking distribution, reward distribution), security (telemetry reconciliation drift).
+- Alerting rules: alerts for block stall (>10s without block), validator churn spike (>20% in epoch), telemetry reconciliation drift >1%.
 - Runbooks: genesis ceremony, validator onboarding, validator offboarding, incident response (per incident FSM state), state sync recovery, artifact repair, key rotation, governance emergency upgrade.
 - Launch checklist: genesis block ceremony, initial validator set bootstrapping, airdrop challenge distribution, monitoring verification, smoke test, public announcement.
 - Private testnet: 20+ node simulated mainnet with realistic geography (latency emulation), 7-day pre-launch soak.
-- Incident drill: simulated emergency mode (circuit-breaker Level 3), 1-hour governance vote, recovery ramp-up, post-incident review.
+- Incident drill: simulated vote, post-incident review.
 - Backup & disaster recovery plan: SMT state snapshots, artifact replication strategy, validator key backup procedure.
 
 ## Exit Criteria
@@ -47,7 +47,7 @@
    - Artifact availability: >99.9% successful reads within 1s.
    - Review pipeline latency: p99 < 1 epoch (14,400 blocks).
    - State sync: full-sync < 1 hour; snap-sync < 5 minutes.
-2. Instrument code with Prometheus metrics: block height, block time, finality time, validator count, mempool depth, PDP evaluation duration, review pipeline stage counts, incident FSM state, circuit-breaker level, telemetry drift.
+2. Instrument code with Prometheus metrics: block height, block time, finality time, validator count, mempool depth, PDP evaluation duration, review pipeline stage counts, telemetry drift.
 3. Build Grafana dashboards: Chain Health, Agent Activity, Economics, Security.
 4. Configure alerting rules with thresholds from SLOs. Test alert delivery to test channel.
 5. Exit checkpoint: dashboards populated from local testnet; test alerts fire on kill-switch.
@@ -76,7 +76,7 @@
 7. Exit checkpoint: 7-day soak complete; SLO targets met or documented exceptions; failure injections handled correctly.
 
 ### Week 5: Incident Drill + Disaster Recovery
-1. Incident drill scenario: large-scale review collusion detected (20+ agents with correlated scores) → circuit-breaker Level 2 activates → sustained breach → Level 3 (emergency mode) → governance emergency vote → reduced quotas → recovery ramp-up → return to normal.
+1. Incident drill scenario: large-scale review collusion detected (20+ agents with correlated scores) → governance vote to adjust constraints → normal operation resumed.
 2. Time the full cycle: target <4 hours from detection to normal operation.
 3. Post-incident review: document timeline, decisions, SLO violations during incident, improvement recommendations.
 4. Disaster recovery test:

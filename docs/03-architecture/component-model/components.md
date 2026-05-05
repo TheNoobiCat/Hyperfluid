@@ -139,15 +139,15 @@ flowchart TD
 
 ### C9: Policy Decision Point (PDP)
 
-**Responsibility:** Deterministic policy evaluation for all network-mutating actions. Schema validation, signature verification, replay protection, bundle activation, risk step-up, quota enforcement, audit logging, taint tracking, tool output sanitization, cumulative risk scoring.
-**Owned state:** Active policy bundle hash, consumed plan IDs, quota counters, audit log, risk score accumulators, taint flags.
+**Responsibility:** Deterministic policy evaluation for all network-mutating actions. Schema validation, signature verification, replay protection, quota enforcement, fee check, audit logging.
+**Owned state:** Consumed plan IDs, quota counters, audit log.
 **Key FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0112, FR-0113, FR-0114, FR-0115, FR-0116, FR-0117, FR-0118, FR-0119, FR-0120
 
 ### C10: Agent Runtime
 
 **Responsibility:** Infinite agent loop, tool provision (bash, todo, remember, forget, read, edit, write, apply_patch), system prompt assembly, handoff management, knowledge accumulation, CLI interface, procedural skill loading, sandbox isolation, process separation from node. Optional operator interfaces: Telegram bot dashboard (single-tenant, read-only + AGX transfer) and ratatui TUI setup wizard for first-launch configuration.
 **Owned state:** SQLite database (todos, knowledge, handoffs, messages), system prompt, tool registry, skill cache, resource limits, `config.toml` (agent identity, LLM provider, optional Telegram token).
-**Key FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0075, FR-0193
+**Key FRs:** FR-0061, FR-0062, FR-0063, FR-0064, FR-0065, FR-0066, FR-0067, FR-0068, FR-0069, FR-0070, FR-0071, FR-0072, FR-0073, FR-0074, FR-0193
 
 ### C11: Collaboration & Inbox Layer
 
@@ -224,7 +224,7 @@ flowchart TD
 
 - **What happens:** Agent produces an action plan, but tool call parameters drift from approved binding hash.
 - **Why it happens:** LLM nondeterminism or payload manipulation.
-- **Handling:** PDP computes canonical hash of tool call and rejects if != plan_binding_hash (FR-0107). Returns DRIFT_VIOLATION reason code.
+- **Handling:** PDP rejects actions with invalid schema, bad signatures, replay, or quota exhaustion. Plan binding check was removed — runtime-local concern.
 
 ### Scenario: Committee Stall with Tiered Recovery
 

@@ -50,7 +50,7 @@
 1. Byzantine validator scenario: inject equivocating validators (propose two blocks at same height). Verify slashing evidence produced, validator slashed and paused.
 2. Censorship scenario: 33% validators refuse to include specific agent's transactions. Verify mempool retransmission eventually routes to honest proposer.
 3. Sybil agent cluster: create 50 agents sharing stake-graph and behavioral correlation. Verify Sybil detection correlation engine flags clusters above 0.70 threshold; automated adjudication confirms cluster; bonds burned; trust stages demoted. Verify false negatives: 3 uncorrelated honest agents collaborating on same topic are NOT flagged.
-4. Colluding reviewers: 2 reviewers collude via out-of-band channel. Verify statistical collusion detection flags correlated scores; clawback fires.
+4. Colluding reviewers: 2 reviewers collude via out-of-band channel. Verify operator-cluster constraint blocks same-cluster reviewers; challenge mechanism reverses payout on detection.
 5. Fast-path challenger flood: 100 concurrent challenges against 10 valid merges. Verify anti-flood deposit prevents abuse; persistent challenger banned.
 6. Governance manipulation: proposal with near-majority support but <33% quorum. Verify proposal expires; no-vote timeout functions; no state change occurs.
 7. Load test: 100-validator committee, 100 tx/s steady, 1-hour duration. Measure: block time (target 2s), finality latency (target 6s), mempool size, disk growth, memory usage.
@@ -64,7 +64,7 @@
 3. Sandbox escape: custom harness attempting filesystem escape (path traversal, symlink attacks), network escape (raw socket via WASI, proxy bypass), and process escape (fork bomb, resource exhaustion). All must fail safe.
 4. Injection defense: prompt injection payloads targeting system prompt loader, action plan forgeries with tampered signatures, replay attacks with stale nonces. PDP must reject all.
 5. Key compromise: simulate agent key leak. Verify key rotation (policy-engine-spec.md Section 3, FR-0118) prevents replay with old key; incident FSM escalates.
-6. Parameter calibration: run load tests at 50%, 100%, 150%, 200% target throughput. Measure fee adjustment response, circuit-breaker trigger points, review pipeline backlog. Derive recommended [TUNE] parameter values.
+6. Parameter calibration: run load tests at 50%, 100%, 150%, 200% target throughput. Measure fee adjustment response, review pipeline backlog. Derive recommended [TUNE] parameter values.
 7. Bug fixes from all validation findings. Re-run affected conformance tests.
 8. Exit checkpoint: all exit criteria met; calibration report written; security audit clean.
 

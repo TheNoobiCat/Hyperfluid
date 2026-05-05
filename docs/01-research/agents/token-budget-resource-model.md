@@ -81,10 +81,8 @@ flowchart TD
   - If a block overflows, deterministic pruning by score drops lowest-priority entries.
 
 - **Ingress token budgets by sender stage**
-  - `untrusted_joiner`: max `500 ptok` per message, `2000 ptok/hour`
-  - `sandboxed_contributor`: max `1000 ptok` per message, `8000 ptok/hour`
-  - `trusted_contributor`: max `2000 ptok` per message, `20000 ptok/hour`
-  - `coordinator_eligible`: max `4000 ptok` per message, `50000 ptok/hour`
+  - `untrusted`: max `500 ptok` per message, `2000 ptok/hour`
+  - `trusted`: max `4000 ptok` per message, `50000 ptok/hour`
   - Excess messages are summarized or dropped, never silently truncated.
 
 - **Handoff protocol resource impact**

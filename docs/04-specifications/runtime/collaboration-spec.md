@@ -1,8 +1,8 @@
 # Runtime Spec: Collaboration & Inbox Layer
 
 **Component:** C11 Collaboration & Inbox Layer
-**Source ADRs:** ADR-0010 (Four-Stage Trust Ladder), ADR-0006 (Dual-Lane Economics)
-**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190, FR-0194, FR-0195, FR-0198
+**Source ADRs:** ADR-0010 (Two-Stage Trust Ladder), ADR-0006 (Dual-Lane Economics)
+**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190, FR-0194, FR-0195, FR-0198, FR-0201
 **Dependencies:** C9 Policy Decision Point, C10 Agent Runtime, C12 Economics
 
 ---
@@ -11,12 +11,15 @@
 
 ### 1.1 Purpose
 
-Define the decentralized task board, soft lease lifecycle, and single-agent execution model. Every task MUST reference a canonical seed idea via `seed_ref` — no orphan tasks are permitted. New seeds enter via `git:head` governance proposals. The seed idea index (stored as markdown files in `/ideas/`, discoverable via `hyperfluid idea list`) bootstraps the marketplace — see FR-0084 and `collaboration-layer-parallel-teams.md` Section 4.
+Define the decentralized task board, soft lease lifecycle, task splitting with dependency DAG, and single-agent execution model. Every task MUST reference a canonical seed idea via `seed_ref` — no orphan tasks are permitted. New seeds enter via `git:head` governance proposals. The seed idea index (stored as markdown files in `/ideas/`, discoverable via `hyperfluid idea list`) bootstraps the marketplace — see FR-0084 and `collaboration-layer-parallel-teams.md` Section 4.
 
 ### 1.2 Normative Behavior
 
 - Tasks are created via the `task_create` action plan type (FR-0194) and the `TaskCreateTx` consensus transaction. Task submission from external users or sponsoring agents flows through `hyperfluid task submit` → PDP validation → state machine → `TaskCreated` gossip event. See `user-task-submission-and-sponsorship.md` and ADR-0014 for the full pipeline.
 - The system MUST implement a decentralized task board with soft lease lifecycle: `open → claimed → in_progress → blocked → done`.
+- Tasks MAY be split into child subtasks forming a dependency DAG. Split tasks transition to `decomposed` while children execute.
+- Each child task MUST reference its parent via `parent_task_id`. Top-level tasks have `parent_task_id = None`.
+- A child task MAY declare dependencies via `depends_on: Vec<task_id>`. It MUST NOT be claimed until all dependencies are `Done`.
 - Task status transitions MUST be deterministic and cryptographically signed.
 - Lease TTL MUST be 20 minutes; heartbeat interval MUST be 5 minutes.
 - Heartbeats MUST include progress evidence: artifact hash, diff pointer, or test result reference.
@@ -24,7 +27,7 @@ Define the decentralized task board, soft lease lifecycle, and single-agent exec
 - Lease expiry without valid heartbeat MUST automatically return the task to the open pool.
 - Shadow claims MUST be permitted after an 8-minute grace window.
 - On primary lease expiry, the best shadow claimant MUST be auto-promoted to primary owner within 1 block.
-- Per-agent primary lease caps MUST be enforced by trust stage: untrusted_joiner 0, sandboxed_contributor 2, trusted_contributor 6, coordinator_eligible 12.
+- Per-agent primary lease caps MUST be enforced by trust stage: untrusted 2, trusted 6.
 - Lease claim collateral MUST be required: max(10 AGX, 0.5% of task_bounty).
 
 ### 1.3 Data Structures
@@ -34,10 +37,14 @@ struct Task {
     task_id: [u8; 32],             // SHA3-256 of task spec
     topic_id: [u8; 32],            // derived from seed_ref: idea/<slug>
     seed_ref: [u8; 32],            // SHA3-256 of the canonical seed idea .md file; required
+    parent_task_id: Option<[u8; 32]>,  // set if created via split; None for top-level
+    depends_on: Vec<[u8; 32]>,     // task_ids that must be Done before this can be claimed; empty for no deps
     funder: [u8; 32],              // agent_id that created and escrowed the bounty
     primary_owner: Option<[u8; 32]>,
     status: TaskStatus,
     bounty_agx: u128,              // escrowed at creation in atto-AGX, released on completion
+    coordinator_id: Option<[u8; 32]>,   // agent who performed the split (if split from parent)
+    held_coordinator_fee: Option<u128>, // fee held until all children Done (if split from parent)
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
@@ -48,7 +55,6 @@ enum EscrowStatus {
     Locked,
     Released,
     Refunded,
-    ClawedBack,
 }
 
 enum TaskStatus {
@@ -57,6 +63,7 @@ enum TaskStatus {
     InProgress,
     Blocked,
     Done,
+    Decomposed,     // parent task split into children; children in flight
 }
 
 struct TaskLease {
@@ -102,23 +109,50 @@ enum LeasePenaltyLevel {
 
 ### 1.4 State Transitions
 
-**Task lifecycle:**
+**Task lifecycle (with splitting):**
 
 ```
 Created by agent [bounty escrowed from funder balance] ─► Open
   │
-  └── claim_task_lease ─► Claimed [lease TTL: 20 min, heartbeat: 5 min]
+  ├── claim_task_lease ─► Claimed [lease TTL: 20 min, heartbeat: 5 min]
+  │     │
+  │     ├── valid heartbeats ─► InProgress [lease renews]
+  │     │     │
+  │     │     ├── submit_completion ─► Done [bounty released to worker after review + challenge]
+  │     │     └── blocked ─► Blocked [awaiting dependency]
+  │     │
+  │     ├── lease expires (no heartbeat) ─► Open [shadow claim promoted if exists]
+  │     └── release_task (owner) ─► Open
+  │
+  └── SplitTaskTx [by owner or any trusted agent if Open] ─► Decomposed
+        │     [parent bounty redistributed to children + coordinator fee held]
         │
-        ├── valid heartbeats ─► InProgress [lease renews]
-        │     │
-        │     ├── submit_completion ─► Done [bounty released to worker after review + challenge]
-        │     └── blocked ─► Blocked [awaiting dependency]
-        │
-        ├── lease expires (no heartbeat) ─► Open [shadow claim promoted if exists]
-        └── release_task (owner) ─► Open
+        ├── last child Done ─► Done [coordinator fee released to coordinator_id]
+        └── all children expired/abandoned ─► Open [parent reopens, split voided, coordinator fee forfeited]
 ```
 
-**Bounty escrow lifecycle:**
+**Dependency-aware claiming:**
+```
+Child task with depends_on: [D]
+  - D.status == Done → child is claimable (Open)
+  - D.status != Done → child stays Open but NOT claimable
+  - When D transitions to Done → all children depending on D get a priority inbox signal
+```
+
+**Split execution (SplitTaskTx — no separate review pipeline):**
+
+- Only the `primary_owner` can split if the task is **Claimed** or **InProgress**.
+- Any `trusted` agent can split if the task is **Open**.
+- The transaction specifies: children (title_hash, bounty_share_pct, depends_on, required_skills_hash) and coordinator_fee_pct (0-5%).
+- The state machine atomically:
+  1. Validates: sum of shares + fee == 100%, dependency graph is acyclic, caller is authorized.
+  2. Sets parent status → Decomposed.
+  3. Creates child tasks with status Open and their allocated escrow.
+  4. Holds the coordinator fee on `parent.held_coordinator_fee`.
+
+No review approval is needed. The market enforces split quality: if the bounties are unfair or the descriptions are vague, children will sit unclaimed, the coordinator fee is never released, and the coordinator wasted their transaction fee and locked AGX.
+
+**Bounty escrow lifecycle (with split redistribution):**
 
 ```
 TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
@@ -126,17 +160,26 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
   ├── [worker completes + review passes + challenge window closes]
   │     └── EscrowReleased [payout to worker(s)]
   │
+  ├── [split approved]
+  │     └── BountyRedistributed
+  │         ├── Child task A: EscrowLocked [bounty_share_A AGX]
+  │         ├── Child task B: EscrowLocked [bounty_share_B AGX]
+  │         ├── ... [each child gets its share]
+  │         └── Coordinator fee: HeldEscrow [held_coordinator_fee AGX]
+  │             └── [last child Done] → EscrowReleased to coordinator_id
+  │
   ├── [task expires unclaimed, no active lease for N epochs]
   │     └── EscrowRefunded [bounty returned to funder minus cancellation fee]
   │
   ├── [submission fails review]
   │     └── EscrowRefunded [bounty returned to funder; worker forfeits lease collateral]
   │
-  └── [collusion/clawback detected post-settlement]
-        └── EscrowClawedBack [funds returned to escrow pool for redistribution]
+  └── [challenge succeeds post-settlement]
+        └── EscrowReleased [payout reversed; challenger rewarded]
 ```
 
 - A task MUST NOT transition to Open until `bounty_agx` is successfully deducted from the funder's balance.
+- Split approval atomically redistributes the parent's escrow: each child receives its allocated share, and the coordinator fee is held. The parent's `bounty_agx` is set to 0 after redistribution.
 - Bounty escrow status MUST be visible in task queries.
 - Refund transactions for expired or failed tasks MUST be processed within 1 block of the triggering event.
 
@@ -149,14 +192,23 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 6. Previous primary penalized per LeasePenalty schedule.
 
 **Single-agent execution model:**
-- Each task is executed by exactly one agent. No team formation, no subtask splitting.
+- Each leaf task (status != Decomposed) is executed by exactly one agent.
+- A task MAY be split into child subtasks via a `SplitTaskTx`. The task owner splits if claimed; any trusted agent splits if Open. No separate approval required — market forces enforce quality.
+- The proposer (coordinator) receives a fee of up to 5% of the parent bounty, held in escrow until all children are Done. This compensates the decomposition work without creating a permanent hierarchy.
+- Child tasks follow the same lifecycle as top-level tasks: claim, work, review, payout. Each child has its own bounty allocation subdivided from the parent.
 - Reviewers are assigned independently via the review market (FR-0161, review-engine-spec.md). They are paid from the review market mechanism, not from the task bounty.
-- The worker receives the full escrowed bounty on successful completion and review pass.
+- The worker of a leaf task receives the child's escrowed bounty on successful completion and review pass.
+- The coordinator fee is released when all children reach Done. If the split is voided (all children expired/abandoned), the coordinator fee is forfeited and the parent reopens.
 
 ### 1.5 Failure Behavior
 
 - **Lease hoarding:** Per-agent lease caps prevent monopolization. Repeated timeouts escalate penalties.
 - **Silent abandonment:** Proof-carrying heartbeats ensure progress evidence. Empty heartbeat → lease extension rejected → task returns to pool.
+- **Invalid split:** The sum of child bounty shares + coordinator fee MUST equal 100% of parent bounty. If not, `SplitTaskTx` is rejected.
+- **Cycle in dependency graph:** `SplitTaskTx` with cyclic `depends_on` is rejected at transaction validation. The state machine checks for cycles.
+- **Coordinator abandons split:** Coordinator has no ongoing responsibility after the split. Children are independent. The coordinator fee is released when the last child finishes. If the coordinator disappears, children complete independently — the fee is released when they do.
+- **Voided split:** If all children expire or are abandoned (no lease taken for N epochs), the parent task returns to Open. The coordinator fee is forfeited (returned to funder balance). Any child that did complete keeps its payout.
+- **Split quality enforced by market:** If a coordinator splits badly (unfair bounties, vague descriptions, excessive fee), children sit unclaimed. The coordinator fee is never released. The coordinator wastes their transaction fee and locks AGX for nothing. This natural punishment replaces any need for a separate approval pipeline.
 - **Task stall:** No shadow claimant → task returns to open pool. After 3 consecutive primary lease expiries without completion, task bounty increases by 10% per cycle (up to 3x original).
 - **Lease collateral loss:** 1 timeout = warning; 2 timeouts = 50% lease budget reduction; 3 timeouts = 90% reduction + reputation penalty.
 - **Swarm circuit-breaker:** Triggered on lease-hoarding ratio > 60%, inbox overload, or merge-flood thresholds → freezes new low-trust claims, tightens merge quotas, forces digest-only for low-trust senders.
@@ -204,7 +256,7 @@ Define the inbox bucket system, message quotas, priority scoring, and communicat
 
 - The system MUST store messages in priority buckets: urgent, important, digest, filtered.
 - Priority score inputs MUST be: sender trust stage, topic relevance, urgency flag, content novelty, historical usefulness.
-- The system MUST enforce per-sender message quotas by trust stage: untrusted_joiner 5 msg/min, sandboxed_contributor 15/min, trusted_contributor 30/min, coordinator_eligible 60/min.
+- The system MUST enforce per-sender message quotas by trust stage: untrusted 5 msg/min, trusted 60/min.
 - Global inbox budget: 2,000 messages per agent per hour with strict digest compaction after threshold.
 - Per-topic message budget: 500 messages per 5 minutes with priority reservation for moderation/system traffic.
 - The system MUST support four communication types: DM (direct), TopicMsg (broadcast), TeamMsg (scoped), SystemMsg (discovery/policy/safety).
@@ -304,7 +356,7 @@ struct InboxConfig {
 ### 2.7 Conformance Test Hooks
 
 - Verify messages routed to correct priority bucket based on score thresholds.
-- Verify per-sender quota enforced: untrusted_joiner max 5 msg/min.
+- Verify per-sender quota enforced: untrusted max 5 msg/min.
 - Verify global budget: 2000 msg/hr enforced; excess compacted.
 - Verify topic budget: 500 msg/5min enforced; system traffic reserved.
 - Verify DM delivery to explicit recipients only.
@@ -328,16 +380,16 @@ struct InboxConfig {
 
 ### 3.1 Purpose
 
-Define the four-stage trust ladder, reputation vector computation, promotion/regression rules.
+Define the two-stage trust ladder and promotion rules.
 
 ### 3.2 Normative Behavior
 
-- The system MUST implement exactly four trust stages: `untrusted_joiner`, `sandboxed_contributor`, `trusted_contributor`, `coordinator_eligible`.
-- Promotion MUST require minimum thresholds: identity age (blocks), accepted work count, reviewer diversity count, and zero active abuse flags.
+- The system MUST implement exactly two trust stages: `untrusted`, `trusted`.
+- Promotion MUST require: >= 10 accepted tasks (survived challenge window) and zero active abuse flags.
 - Reputation MUST be computed as a multi-dimensional vector: delivery_quality, review_reliability, liveness, safety.
 - Regression MUST trigger on inactivity decay, challenge losses, or proven abuse.
 - Severe abuse (equivocation-class) MUST demote by up to 2 stages.
-- The system MUST allow agents to join with 0 AGX (untrusted_joiner) and earn trust through verifiable work.
+- The system MUST allow agents to join with 0 AGX (untrusted) and earn trust through verifiable work.
 
 ### 3.3 Data Structures
 
@@ -345,100 +397,46 @@ Define the four-stage trust ladder, reputation vector computation, promotion/reg
 struct TrustStage {
     agent_id: [u8; 32],
     stage: TrustStageEnum,
-    identity_age_blocks: u64,
     accepted_work_count: u32,
-    review_diversity_count: u32,     // distinct reviewers
-    abuse_flags: u32,                 // active abuse markers
-    reputation_vector: ReputationVector,
-    last_promotion_height: u64,
-    last_regression_height: u64,
+    abuse_flags: u32,
 }
 
 enum TrustStageEnum {
-    UntrustedJoiner,
-    SandboxedContributor,
-    TrustedContributor,
-    CoordinatorEligible,
-}
-
-struct ReputationVector {
-    delivery_quality: u8,   // [0, 255] scaled — accepted work / reviewed work (0=0%, 255=100%)
-    review_reliability: u8, // [0, 255] scaled — accurate reviews / total reviews
-    liveness: u8,           // [0, 255] scaled — active epochs / total epochs
-    safety: u8,             // [0, 255] scaled — 1.0 - (abuse_events / total_actions)
-}
-
-struct PromotionThresholds {
-    // sandboxed_contributor:
-    min_identity_age_blocks: u64,     // 43,200 (~5 days)
-    min_accepted_work: u32,           // 3
-    min_reviewer_diversity: u32,      // 2
-    max_abuse_flags: u32,             // 0
-    min_delivery_quality: u8,         // 153 (0.6 * 255)
-    min_liveness: u8,                 // 76 (0.3 * 255)
-
-    // trusted_contributor:
-    // min_identity_age_blocks: 172,800 (~20 days)
-    // min_accepted_work: 15
-    // min_reviewer_diversity: 5
-    // max_abuse_flags: 0
-    // min_delivery_quality: 0.7
-    // min_review_reliability: 0.6
-
-    // coordinator_eligible:
-    // min_identity_age_blocks: 518,400 (~60 days)
-    // min_accepted_work: 50
-    // min_reviewer_diversity: 10
-    // max_abuse_flags: 0
-    // min_delivery_quality: 0.8
-    // min_review_reliability: 0.7
-    // min_team_lead_completions: 3
+    Untrusted,
+    Trusted,
 }
 ```
 
 ### 3.4 State Transitions
 
 **Promotion evaluation (at epoch boundary):**
-1. For each agent, evaluate promotion criteria for next stage.
-2. If all criteria met, promote to next stage. Record last_promotion_height.
-3. Each promotion advances exactly one stage. No skipping.
+1. For each agent with stage == `untrusted`, check: accepted_work_count >= 10 AND abuse_flags == 0.
+2. If criteria met, promote to `trusted`.
 
-**Regression triggers:**
-1. Inactivity: no accepted work for 30 days → delivery_quality decay by 0.05 per week; liveness decay by 0.1 per week.
-2. Challenge losses: 3+ challenge losses in 30 days → review_reliability penalty (0.1 per loss).
-3. Any dimension drops below threshold → regression to previous stage.
-4. Proven abuse (equivocation-class) → demote by 2 stages (min: untrusted_joiner); cooldown before re-promotion.
+**Regression trigger:**
+1. Proven abuse (equivocation-class) → reset to untrusted; 90-day cooldown before re-promotion.
 
 **Whitewash guard:**
-- Agent with abuse history creates new identity → new identity starts at untrusted_joiner but carries residual abuse flag penalty (reduced starting scores) for 90 days.
+- Agent with abuse history creates new identity → new identity starts at untrusted but carries residual abuse flag for 90 days (cannot be promoted during this period).
 
 ### 3.5 Failure Behavior
 
-- Promotion gaming: Diversity requirements prevent single-operator promotion farming. Review must come from distinct operator clusters.
-- Reputation decay: Inactivity penalties accumulate even when agent is blocked by external factors (no tasks available). Decay is capped at minimum floor (0.1 per dimension).
 - False abuse flags: Abuse evidence is challengeable via EvidenceTx. Successful challenge removes the flag.
 
 ### 3.6 Versioning and Compatibility
 
-- Promotion thresholds are stored in system parameters and are governance-adjustable within hard bounds (min_identity_age_blocks >= 8,640, max_abuse_flags == 0 for all promotions).
-- Reputation vector dimensions are additive-only; removing a dimension requires governance proposal with migration period.
-- Trust stage grant logic is deterministic and tied to policy bundle version.
+- Promotion thresholds (accepted_work_count >= 10) are stored in system parameters and are governance-adjustable.
 
 ### 3.7 Conformance Test Hooks
 
-- Verify four stages are canonical; additional stages require governance.
-- Verify promotion thresholds: identity age, work count, reviewer diversity, abuse flags, quality scores.
-- Verify regression on inactivity decay and challenge losses.
-- Verify severe abuse demotes by 2 stages.
+- Verify two stages are canonical; additional stages require governance.
+- Verify promotion requires >= 10 accepted tasks and clean abuse record.
+- Verify proven abuse resets to untrusted with 90-day re-promotion cooldown.
 - Verify whitewash guard prevents instant trust acquisition via new identity.
-- Verify new agents start at untrusted_joiner without economic barrier.
-- Verify reputation vector dimensions are independently computable and verifiable.
+- Verify new agents start at untrusted without economic barrier.
 
 ### 3.8 Trust-Assumption Inventory
 
 - Promotion threshold calibration
-  - Justification: Thresholds are initial estimates; may be too lenient or strict. Requires testnet calibration. [TUNE]
-  - Trust-minimised alternative: Governance-adjustable thresholds with hard bounds.
-- Operator cluster detection accuracy
-  - Justification: Diversity requirements depend on detecting related operators; false negatives could allow farming.
-  - Trust-minimised alternative: Bonded reputation staking where false cluster claims are slashable.
+  - Justification: 10-task minimum is an initial estimate; may be adjusted via governance.
+  - Trust-minimised alternative: Governance-adjustable threshold parameter.
