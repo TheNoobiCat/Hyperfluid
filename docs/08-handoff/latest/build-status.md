@@ -1,8 +1,36 @@
-# Build Status — Stage 00 (Foundation) COMPLETE
+# Build Status — Stage 01 (Protocol Core) IN PROGRESS
 
 **Last updated:** 2026-05-05
-**Stage:** 00 — Foundation — **COMPLETE**
-**Amendment:** Agent tools expanded (5→9), seed index created, ADR-0013
+**Stage:** 01 — Protocol Core — **IN PROGRESS**
+**Week 1-2 (Consensus + State Machine):** COMPLETE
+
+## Stage 01: Week 1-2 — Consensus + State Machine (C1 + C2) — COMPLETE
+
+| Task | Status |
+|------|--------|
+| TxType: added TaskCreateTx (missing amendment) | Complete |
+| parity-scale-codec added to workspace, consensus + state crates | Complete |
+| BlockHeader::block_hash() via SHA3-256 of SCALE-encoded header | Complete |
+| Committee::sample() — deterministic stake-weighted sampling | Complete |
+| Committee::sample_with_rotation() — max 33% overlap enforced | Complete |
+| Committee::safety_threshold() + can_produce() — halt at <67 | Complete |
+| SparseMerkleTree: insert, root, inclusion proof, proof verification | Complete |
+| StateMachine: transfer, task_create, nonce enforcement, replay protection | Complete |
+| Conformance tests: 7 C1 hooks + 8 C2 hooks all PASS | Complete |
+| 56/56 workspace tests pass | Complete |
+| clippy zero warnings, fmt clean, docs build | Complete |
+
+## Verification (after Week 1-2)
+
+| Check | Result |
+|-------|--------|
+| `cargo build --workspace` | PASS (13 crates) |
+| `cargo test --workspace` | PASS (56/56) |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
+| `cargo doc --workspace --no-deps` | PASS |
+
+## Stage 00 (Foundation) COMPLETE
 
 ## Week 1: Complete (2026-05-02)
 

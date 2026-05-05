@@ -2,6 +2,10 @@
 //
 // Source: specs/protocol/consensus-spec.md Section 2, state-model.md
 
+pub mod smt;
+pub mod state_machine;
+
+use parity_scale_codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 
@@ -70,7 +74,7 @@ pub fn state_key(prefix: KeyPrefix, id_bytes: &[u8]) -> Hash32 {
 }
 
 /// Account entity. Source: consensus-spec.md Section 2.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Account {
     pub account_id: Hash32,
     pub balance: u128,

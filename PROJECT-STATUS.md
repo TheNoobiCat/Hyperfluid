@@ -92,11 +92,14 @@ Systemic patterns identified: incomplete migration propagation, f64 in determini
 3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013. See `checkpoint-2026-05-05.md`.~~
 4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5: 7 FRs, ADR-0014, 4 specs, planning. See `checkpoint-2026-05-05b.md` and `checkpoint-2026-05-05c.md`.~~
 5. ~~Documentation-layer bug audit completed. See `docs/01-research/_audit-bugs-2026-05-05.md`.~~
-7. Stage 01 (Protocol Core): Build Minimum Viable Chain — C1 Consensus, C2 State Machine, C3 Staking, C5 Fee Market, C7 P2P Networking, C8 Artifact Storage.
-8. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-9. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-10. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-11. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
+6. ~~Stage 01 Week 1-2 (C1 + C2): Consensus Engine + State Machine & SMT. See `checkpoint-2026-05-05d.md`.~~
+7. Stage 01 Week 3-4 (C3 + C5): Staking & Validator Manager + Fee Market.
+8. Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.
+9. Stage 01 Week 7-8: Integration, soak test, polish.
+10. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+11. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+12. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+13. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -138,4 +141,4 @@ Systemic patterns identified: incomplete migration propagation, f64 in determini
 
 ---
 
-*Last updated: 2026-05-05 (Stage 00 complete; agent tools expanded 5→9; seed index at `/ideas/`; seed-centric model: seeds=topic buckets, seed_ref required, governance entry, single-agent tasks; user-task-submission pipeline fully propagated through L2-L5: 7 new FRs (FR-0194–FR-0200), ADR-0014, 4 specs updated, planning updated; total 202 requirements (172 FR + 30 NFR); 13 crates + node binary; testnet scaffold; 8 documentation-layer bugs found and fixed across architecture/specs/handoff; traceability-matrix.md created; f64 removed from deterministic spec data structures; cargo-deny passing; ready for Stage 01 Protocol Core)*
+*Last updated: 2026-05-05 (Stage 01 Week 1-2 complete: C1 Consensus + C2 State Machine & SMT; 56 workspace tests passing)*

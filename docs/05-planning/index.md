@@ -1,7 +1,7 @@
 # Layer 5: Planning
 
 **Status:** COMPLETE
-**Last updated:** 2026-05-02
+**Last updated:** 2026-05-05
 **Total stages:** 5 (00–04)
 **Estimated total duration:** 28–30 weeks
 
@@ -133,6 +133,6 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 | Layer | Artifact | Link |
 |-------|----------|------|
 | L4 Specs | 14 specs across 4 domains | `docs/04-specifications/index.md` |
-| L3 Architecture | 12 components, 12 ADRs | `docs/03-architecture/index.md` |
-| L2 Requirements | 190 FR/NFR | `docs/02-requirements/index.md` |
+| L3 Architecture | 12 components, 14 ADRs | `docs/03-architecture/index.md` |
+| L2 Requirements | 202 (172 FR + 30 NFR) | `docs/02-requirements/index.md` |
 | L8 Handoff | Phase 03 handoff | `docs/08-handoff/latest/phase-03-status.md` |

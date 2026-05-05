@@ -85,6 +85,16 @@ Located in `docs/04-specifications/security/`
 | FR-0156, FR-0157, FR-0158 | collaboration-spec.md | Section 3 |
 | FR-0161-0175 | review-engine-spec.md | Section 1 |
 | FR-0176-0190 | collaboration-spec.md | Section 3 |
+| FR-0191 | collaboration-spec.md | Section 3 |
+| FR-0192 | collaboration-spec.md | Section 3 |
+| FR-0193 | agent-runtime-spec.md | Section 2 |
+| FR-0194 | consensus-spec.md, policy-engine-spec.md | Sections 2, 1 |
+| FR-0195 | policy-engine-spec.md, collaboration-spec.md | Sections 2, 1 |
+| FR-0196 | agent-runtime-spec.md | Section 5 |
+| FR-0197 | p2p-wire-spec.md | Section 2 |
+| FR-0198 | collaboration-spec.md | Section 1 |
+| FR-0199 | agent-runtime-spec.md | Section 3 |
+| FR-0200 | agent-runtime-spec.md | Section 5 |
 | NFR-0001-0015 | (cross-cutting, referenced per spec) | — |
 | NFR-0016-0030 | (cross-cutting, referenced per spec) | — |
 
