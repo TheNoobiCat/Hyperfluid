@@ -23,7 +23,7 @@ pub struct Committee {
     pub epoch: u64,
     pub seed: Hash32,
     pub members: Vec<Hash32>,
-    pub weights: Vec<u64>,
+    pub weights: Vec<u128>,
 }
 
 impl Committee {
@@ -55,18 +55,19 @@ impl Committee {
         epoch: u64,
         seed: Hash32,
         validators: &[Hash32],
-        stakes: &[u64],
+        stakes: &[u128],
         committee_size: usize,
     ) -> Self {
         Self::sample_with_rotation(epoch, seed, validators, stakes, committee_size, &[])
     }
 
     /// Sample committee with rotation constraint against previous members.
+    /// Uses integer arithmetic for determinism across all platforms.
     pub fn sample_with_rotation(
         epoch: u64,
         seed: Hash32,
         validators: &[Hash32],
-        stakes: &[u64],
+        stakes: &[u128],
         committee_size: usize,
         previous_members: &[Hash32],
     ) -> Self {
@@ -83,7 +84,8 @@ impl Committee {
         let mut used = std::collections::HashSet::new();
 
         let previous_set: std::collections::HashSet<_> = previous_members.iter().collect();
-        let max_overlap = (committee_size as f64 * 0.33).ceil() as usize;
+        // Integer arithmetic: ceil(committee_size * 33 / 100) — deterministic across all platforms
+        let max_overlap = (committee_size * 33).div_ceil(100);
 
         for seat_index in 0..committee_size {
             let mut hasher = Sha3_256::new();
@@ -93,14 +95,15 @@ impl Committee {
             let mut entropy = [0u8; 32];
             entropy.copy_from_slice(&hasher.finalize());
 
-            let total_stake: u64 = stakes.iter().sum();
+            let total_stake: u128 = stakes.iter().sum();
             let selector = if total_stake > 0 {
-                u64::from_le_bytes(entropy[..8].try_into().unwrap()) % total_stake
+                let selector_bytes: [u8; 16] = entropy[..16].try_into().unwrap();
+                u128::from_le_bytes(selector_bytes) % total_stake
             } else {
-                0
+                0u128
             };
 
-            let mut cumulative = 0u64;
+            let mut cumulative = 0u128;
             let mut chosen_idx = 0usize;
             for (i, stake) in stakes.iter().enumerate() {
                 cumulative += stake;
@@ -239,7 +242,7 @@ mod tests {
             epoch: 0,
             seed: [0; 32],
             members: vec![[1; 32]; 100],
-            weights: vec![1000; 100],
+            weights: vec![1000u128; 100],
         };
         assert_eq!(c.members.len(), 100);
         assert_eq!(c.weights.len(), 100);

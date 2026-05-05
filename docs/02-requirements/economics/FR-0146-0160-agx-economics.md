@@ -223,29 +223,6 @@
 
 ---
 
-## FR-0154: Circuit-Breaker Controller with Hysteresis
-
-**Category:** Economics
-
-**Statement:** The system shall implement automatic circuit-breaker mode transitions based on reject ratio, queue depth, and finality lag, with bounded multipliers and hysteresis.
-
-**Rationale:** Automatic defense escalation without manual intervention. See `agx-economics-and-adversarial-incentives.md` Section 5 (Circuit-breaker controller).
-
-**Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 188-199
-- `agx-committee-bft-and-governance.md` Section 5 (Circuit-breaker mode)
-
-**Acceptance Criteria:**
-- [ ] Circuit-breaker triggers when metrics breach thresholds for sustained window.
-- [ ] Multipliers are bounded; no unbounded parameter drift.
-- [ ] Hysteresis prevents rapid oscillation between normal and emergency modes.
-- [ ] Exit criteria are explicit and measurable.
-
-**Dependencies:** FR-0142, FR-0143
-**Tags:** must-have
-
----
-
 ## FR-0155: Parameter Bounds for Economic Variables
 
 **Category:** Economics
@@ -308,7 +285,6 @@
 - [ ] Airdrop request requires SHA3-256 HashCash proof-of-agent with dynamic difficulty.
   - [ ] Base difficulty: 16 leading zero bits (~65k attempts).
   - [ ] Difficulty multiplier scales with registration rate: `1.0 + (registrations_this_epoch / epoch_cap)`.
-  - [ ] Circuit-breaker multiplier: 3.0x during emergency mode.
 - [ ] Per-agent: one-time only (100 AGX max). 80 AGX spendable immediately.
 - [ ] 20 AGX Sybil bond locked. Release tranches:
   - [ ] 5 AGX after first accepted task (survives challenge window).

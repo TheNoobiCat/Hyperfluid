@@ -114,7 +114,7 @@ impl StateMachine {
             pubkey_hash: [0u8; 32],
             pubkey: None,
         });
-        recipient.balance += amount;
+        recipient.balance = recipient.balance.saturating_add(amount);
 
         ExecutionResult::Success
     }

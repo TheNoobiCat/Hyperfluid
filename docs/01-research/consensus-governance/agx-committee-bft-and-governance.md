@@ -65,10 +65,14 @@ flowchart TD
 # 5. Core Mechanisms
 - **Transaction types**
   - `TransferTx`: AGX transfer; first outbound transfer must include pubkey reveal.
-  - `StakeBondTx`: lock AGX to enter validator candidate pool.
-  - `StakeRenewTx`: extend active stake before/at expiry, or reactivate `paused` stake after 1-epoch wait. This is the canonical transaction type for resuming from `paused`; no separate `ResumeTx` exists.
-  - `UnbondRequestTx`: begin unbonding timer (funds still slashable during window).
-  - `WithdrawUnbondedTx`: withdraw after unbonding delay.
+- `StakeBondTx`: lock AGX to enter validator candidate pool (minimum self-bond 1,000 AGX).
+- `StakeRenewTx`: extend active stake before/at expiry, or reactivate `paused` stake after 1-epoch wait. This is the canonical transaction type for resuming from `paused`; no separate `ResumeTx` exists.
+- `UnbondRequestTx`: begin unbonding timer (funds still slashable during window).
+- `WithdrawUnbondedTx`: withdraw after unbonding delay.
+- `DelegateTx`: delegate AGX to an active validator (minimum 1 AGX). Deducted from delegator balance, recorded as DelegationRecord.
+- `UndelegateTx`: begin 7-day delegation unbonding timer. Funds remain slashable during window.
+- `WithdrawDelegationTx`: withdraw delegation after 7-day unbonding delay expires.
+- `SetCommissionTx`: validator sets commission rate (0-20%, max). Effective after 2 epochs.
   - `GovernanceProposeTx`: propose candidate `git:head` + deposit.
   - `GovernanceVoteTx`: vote yes/no during governance window, with optional `reason_hash` (content-addressed review rationale).
   - `EvidenceTx`: submit equivocation or protocol-fault evidence.
@@ -89,8 +93,12 @@ flowchart TD
   - First outbound tx must reveal pubkey and prove hash binding.
   - All txs use strict account nonce sequencing and chain-domain separation.
 
-- **Staking and validator lifecycle (simplified to 4 states)**
-  - Keep minimum stake threshold but add anti-split logic in committee sampling.
+- **Staking and validator lifecycle (simplified to 4 states with delegation)**
+  - Keep minimum self-bond threshold (1,000 AGX) and anti-split logic in committee sampling.
+  - Add delegation: any agent may delegate AGX to any active validator via `DelegateTx`. Delegated stake counts toward committee selection weight.
+  - Validators earn commission (0-20%, max capped) on fee revenue distributed to delegators.
+  - Delegation unbonding: 7 days (faster than validator's 14-day unbonding).
+  - Slashing propagates proportionally to delegators.
   - 48h lock alone is insufficient; use longer unbonding delay for stronger economic accountability.
   - Add slashing:
     - strong slash for equivocation,
@@ -107,18 +115,22 @@ flowchart TD
     - Paused → Active: Submit `StakeRenewTx`, wait 1 epoch.
     - Active/Paused → Unbonding: Submit UnbondRequestTx.
     - Unbonding → Withdrawn: After 14-day unbonding delay.
-  - Slashing: Deduct stake from any state, continue from same state (not a separate state).
+  - Slashing: Deduct stake from any state, continue from same state (not a separate state). Slash propagates proportionally to delegators.
   - Governance voting eligibility: only `active` validators at governance snapshot block can submit `GovernanceVoteTx`.
+  - Commission rate changes take effect after 2 epochs (buffer for delegator reaction).
 
 - **Default protocol parameters (recommended launch values)**
-  - `min_validator_stake`: `1,000 AGX`.
+  - `min_validator_self_bond`: `1,000 AGX` (plus delegated stake for committee weight).
+  - `min_delegation`: `1 AGX`.
   - `bonding_delay`: `24 hours` (stake is locked, but validator is not committee-eligible yet).
   - `unbonding_delay`: `14 days` (funds are locked and still slashable before withdrawal).
   - `equivocation_slash`: `10% of bonded stake` per proven event.
   - `downtime_slash`: `0.1%` per liveness window breach; escalate to `1%` on repeated breaches.
   - `equivocation_jail`: `30 days` minimum before re-entry eligibility.
   - `governance_proposal_deposit`: `500 AGX` (burn on invalid/non-deterministic proposal).
-  - `committee_overlap`: `33%` retained members between consecutive epochs.
+  - `committee_overlap`: `20%` retained members between consecutive epochs (max 2 consecutive).
+  - `max_commission_rate`: `20%` (governance-adjustable 5-50%).
+  - `delegation_unbond_delay`: `7 days` (60,480 blocks).
   - `resume_delay`: `1 epoch` before `paused` validators can resume to `active`.
 
 - **Plain-language definitions**
@@ -153,21 +165,21 @@ flowchart TD
     - The VDF **output** is the epoch seed used for committee sampling.
     - Reveals are invalid if they do not match the prior commitment; invalid reveals are excluded from the VDF input.
     - Grinding is infeasible because computing the VDF output sequentially takes longer than the reveal window; no validator can evaluate enough candidate inputs to search for a favourable committee.
-    - Fallback: if insufficient valid reveals are available, use `SHA3-256(previous_seed + block_hash_chain + epoch_number)` as the VDF input.
+    - Fallback: if insufficient valid reveals are available, compute the VDF input as `SHA3-256(previous_vdf_output || hash_of_epoch_N_minus_1_all_headers || epoch_number || concatenated_valid_reveals)`. The previous epoch's block headers are immutable — no proposer can grind them. Any valid reveals that did arrive still contribute entropy. This eliminates the grinding attack surface present in the original block_hash_chain fallback.
     - VDF parameters:
       - Difficulty target: sequential evaluation time `> 2x reveal_window`.
       - Proof verification: `O(1)` per epoch using Wesolowski evaluation.
       - Any validator can submit a VDF proof; the first valid proof accepted by the committee becomes the canonical seed.
-  - Sample committee by stake-weighted VRF-like draw with per-operator cap.
+  - Sample committee by stake-weighted VRF-like draw with anti-split clustering.
     - Committee size: `100 validators` at genesis.
-    - Operator cap: `max 15% of committee` per operator identity.
-    - Anti-split: detect correlated validator keys via stake graph analysis, apply cap to clusters.
+    - No per-operator seat cap — committee influence is stake-proportional.
+    - Anti-split: detect correlated validator keys via stake-graph analysis (see `stake-graph-analysis-spec.md`); merge cluster weight for committee draw.
   - Committee size chosen for target safety probability and latency budget.
     - Target: `99.9%` safety against `f < 33%` Byzantine.
     - Latency budget: `< 3 seconds` finality at median.
   - Rotate committees each epoch with partial overlap to avoid abrupt liveness loss.
     - Epoch length: `8192 blocks` (~1 day).
-    - Overlap: `33%` retained, `67%` rotated maximum.
+    - Overlap: `20%` retained, `80%` rotated maximum. No validator may serve more than 2 consecutive epochs.
 
 - **Governance determinism**
   - Proposal must be fast-forward or deterministic clean merge.
@@ -261,7 +273,7 @@ stateDiagram-v2
 ```text
 function select_committee(epoch, validator_pool, seed):
     candidates = filter(validator_pool, status == active and stake >= min_stake)
-    weighted = apply_stake_weights_with_operator_cap(candidates)
+    weighted = apply_stake_weights_clustered(candidates)
     committee = deterministic_weighted_sample(weighted, seed, committee_size(epoch))
     return committee
 
@@ -370,7 +382,7 @@ function admit_network_action(actor, action, state):
 ## Scenario: Committee capture event
 - What happens: attacker wins too much committee weight in one epoch.
 - Why it happens: concentrated stake, weak anti-split rules, or predictable randomness.
-- Handling/failure mode: operator caps, delayed randomness reveal, rapid epoch rotation, and slashable evidence paths.
+- Handling/failure mode: anti-split clustering, delayed randomness reveal, rapid epoch rotation, and slashable evidence paths.
 
 ## Scenario: Mass validator churn
 - What happens: committee quality degrades and block production stalls.
@@ -450,7 +462,7 @@ function admit_network_action(actor, action, state):
 # 10. Implementation Plan
 1. Specify transaction schemas and canonical signing domains.
 2. Implement simplified staking state machine with unbonding, slashing, and paused/active transitions (4 states).
-3. Implement committee selection module with stake-weighted sampling and operator caps.
+3. Implement committee selection module with stake-weighted sampling and anti-split clustering (see `stake-graph-analysis-spec.md`).
 4. Integrate Malachite consensus for committee operation and epoch rotation.
 5. Implement admission controls (PoW retargeting, quotas, peer budgets).
 6. Implement deterministic governance sandbox, proposer bundle fetch protocol, precheck-gated review subagent flow, and `git:head` transition checks.

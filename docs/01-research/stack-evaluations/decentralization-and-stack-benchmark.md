@@ -122,7 +122,7 @@ function committee_entry_rules(candidate):
     require candidate.stake >= min_stake
     require candidate.not_jailed
     require candidate.uptime_score >= min_uptime
-    require operator_effective_weight(candidate.operator) <= operator_cap
+    require operator_not_in_quarantine(candidate)
     return ELIGIBLE
 
 function swarm_readiness_gate(metrics):
@@ -170,8 +170,8 @@ function swarm_readiness_gate(metrics):
 # 7. Failure Modes & Edge Cases
 ## Scenario: Economic centralization over epochs
 - What happens: same operators dominate committees repeatedly.
-- Why it happens: weak operator caps or stake-splitting loopholes.
-- Handling/failure mode: operator identity aggregation, effective stake caps, and diversity-aware sampling weights.
+- Why it happens: weak anti-split rules or stake-splitting via undetected correlated keys.
+- Handling/failure mode: stake-graph cluster analysis merges correlated validators; committee influence is stake-proportional with Sybil clustering only (see `stake-graph-analysis-spec.md`). No per-operator seat cap.
 
 ## Scenario: Relay market concentration
 - What happens: network routing depends on a small relay subset.
@@ -237,7 +237,7 @@ function swarm_readiness_gate(metrics):
 
 # 10. Implementation Plan
 1. Define measurable decentralization SLOs and governance safety invariants.
-2. Implement committee sampling with operator cap logic and auditable randomness.
+2. Implement committee sampling with anti-split clustering logic and auditable randomness.
 3. Implement staking economics (unbonding, slashing, paused/active transitions, resume delay).
 4. Implement EIP-1559 style fee market with base fee adjustment, priority fees, and fee burn mechanism.
 5. Implement hermetic governance execution package format and runtime hash pinning.

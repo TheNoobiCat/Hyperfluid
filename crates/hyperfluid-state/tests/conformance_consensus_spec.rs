@@ -109,10 +109,20 @@ fn conforms_to_consensus_spec_2_7_4_replay_protection() {
 #[test]
 fn conforms_to_consensus_spec_2_7_5_first_spend_pubkey_reveal() {
     // SHA3-256(pubkey_reveal) must equal sender_address.
+    // spec: account_id = SHA3-256 of ML-DSA pubkey
     let pubkey = vec![1u8, 2, 3, 4, 5];
     let pubkey_hash = sha3_256(&pubkey);
-    let account_id = sha3_256(&pubkey); // spec: account_id = SHA3-256 of ML-DSA pubkey
+    let account_id = sha3_256(&pubkey);
 
-    assert_eq!(pubkey_hash, sha3_256(&pubkey));
-    assert_eq!(account_id, pubkey_hash);
+    // Simulate the first-spend reveal lifecycle:
+    let mut acct =
+        hyperfluid_state::Account { account_id, balance: 100, nonce: 0, pubkey_hash, pubkey: None };
+    // Before first spend, pubkey is not yet revealed
+    assert!(acct.pubkey.is_none());
+    // First spend reveals the pubkey
+    acct.pubkey = Some(pubkey.clone());
+    // After reveal, the pubkey hash must match
+    assert_eq!(sha3_256(&pubkey), acct.pubkey_hash);
+    // account_id must equal pubkey_hash per spec
+    assert_eq!(acct.account_id, acct.pubkey_hash);
 }

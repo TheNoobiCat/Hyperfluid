@@ -1,41 +1,32 @@
-# Runtime Spec: Review Engine & Quality Pipeline
+# Runtime Spec: Review Engine
 
 **Component:** C12 Economics & Incentives (Review Market)
-**Source ADRs:** ADR-0008 (Three-Phase Quality Pipeline), ADR-0011 (Review Sandbox Isolation)
-**Covered FRs:** FR-0148, FR-0149, FR-0150, FR-0153, FR-0161, FR-0162, FR-0163, FR-0164, FR-0165, FR-0166, FR-0167, FR-0168, FR-0169, FR-0170, FR-0171, FR-0172, FR-0173, FR-0174, FR-0175, FR-0191
+**Source ADRs:** ADR-0008 (Two-Phase Quality Pipeline)
+**Covered FRs:** FR-0148, FR-0149, FR-0150, FR-0161, FR-0162, FR-0163, FR-0164, FR-0165, FR-0168, FR-0169, FR-0170, FR-0171, FR-0191
 **Dependencies:** C1 Consensus Engine, C8 Artifact Availability, C9 Policy Decision Point
 
 ---
 
-## Section 1: Three-Phase Quality Pipeline
+## Section 1: Two-Phase Quality Pipeline
 
 ### 1.1 Purpose
 
-Define the review market and three-phase quality verification pipeline for work output evaluation.
+Define the two-phase quality pipeline for task output verification: independent review followed by challenge window. No objective verification phase exists — reviewers verify the work directly.
 
 ### 1.2 Normative Behavior
 
-- The system MUST implement a three-phase quality pipeline: Phase 1 (objective checks) → Phase 2 (independent review) → Phase 3 (challenge finality).
+- The system MUST implement a two-phase quality pipeline: Phase 1 (independent review) → Phase 2 (challenge finality).
 - Reviewers MUST be assigned by protocol, not self-selected.
-- Reviewer assignment MUST enforce independence constraints: minimum 2 distinct operator clusters, temporal spread (active within 7 days), stake spread (max 30% from same tier), pair frequency cap (max 1 same reviewer-author pair per 10 tasks).
+- Reviewer assignment MUST enforce one independence constraint: no reviewer shares an operator cluster with any other reviewer or the worker (detected via stake-graph cluster analysis, see `stake-graph-analysis-spec.md`).
+- Minimum 3 reviewers per task. If insufficient eligible reviewers, the task remains in the pool until enough become available.
 - The system MUST cap concurrent review assignments at 5 per reviewer.
 - Review assignments MUST have deadlines: 72 hours standard, 24 hours urgent.
 - Missed deadline MUST count as no-vote (not penalized, does not affect quorum).
-- Provisional settlement MUST be immediate on review completion; final settlement MUST wait until challenge window (144 blocks) closes unchallenged.
+- Payout is fixed: if majority approves, bounty is split equally among approving reviewers. Worker receives a completion reward from the task bounty. If majority denies, worker forfeits claim and task returns to pool.
 
 ### 1.3 Data Structures
 
 ```rust
-struct ObjectiveCheckRecord {
-    task_id: [u8; 32],
-    artifact_root_hash: [u8; 32],
-    checker_bundle_hash: [u8; 32],
-    pass_fail_vector: Vec<bool>,
-    metrics_hash: [u8; 32],
-    verifier_signature: Vec<u8>,
-    height: u64,
-}
-
 struct ReviewAssignment {
     assignment_id: [u8; 32],       // SHA3-256(task_id || reviewer_id || epoch)
     task_id: [u8; 32],
@@ -57,9 +48,7 @@ struct ReviewRecord {
     task_id: [u8; 32],
     reviewer_id: [u8; 32],
     verdict: Verdict,
-    quality_score: u8,            // 0-100 normalized
     reason_hash: [u8; 32],
-    objective_check_ref: [u8; 32],
     reviewer_signature: Vec<u8>,
     submitted_at_height: u64,
 }

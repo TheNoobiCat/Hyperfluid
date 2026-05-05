@@ -202,7 +202,7 @@
 
 **Category:** Security
 
-**Statement:** The system shall sustain DDoS resilience at protocol level through identity-based rate limits, lane reservations, and circuit-breaker mode, without relying on IP blocking.
+**Statement:** The system shall sustain DDoS resilience at protocol level through identity-based rate limits and fee market pricing, without relying on IP blocking.
 
 **Rationale:** Protocol-level resilience is required for permissionless networks. See `ockam-decentralized-network-architecture.md` Section 5 (Swarm-resistant ingress controls).
 

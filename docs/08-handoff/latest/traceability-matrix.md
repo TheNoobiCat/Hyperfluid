@@ -9,7 +9,7 @@ Every claim is traceable: Research → Requirement → Architecture Decision →
 | FR | Research Source | Requirement File | Architecture Component | Spec Document | Spec Section | Status |
 |----|----------------|-----------------|-----------------------|---------------|--------------|--------|
 | FR-0001 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C1 | consensus-spec.md | 1 | complete |
-| FR-0002 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C1 | consensus-spec.md | 1 | complete |
+| FR-0002 | consensus-governance/agx-committee-bft-and-governance.md, stake-graph-analysis-spec.md | FR-0001-0010 | C1, C3 | consensus-spec.md, stake-graph-analysis-spec.md | 1, 1 | complete |
 | FR-0003 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C1 | consensus-spec.md | 1 | complete |
 | FR-0004 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C1 | consensus-spec.md | 1 | complete |
 | FR-0005 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C2 | consensus-spec.md | 2 | complete |
@@ -19,6 +19,7 @@ Every claim is traceable: Research → Requirement → Architecture Decision →
 | FR-0009 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C1 | consensus-spec.md | 1 | complete |
 | FR-0010 | consensus-governance/agx-committee-bft-and-governance.md | FR-0001-0010 | C2 | consensus-spec.md, state-sync-spec.md | 2, 1 | complete |
 | FR-0011–0020 | consensus-governance/agx-committee-bft-and-governance.md | FR-0011-0020 | C3 | staking-spec.md | 1, 2 | complete |
+| FR-0020a | ADR-0015-stake-delegation.md | FR-0011-0020 | C3 | staking-spec.md | 1 | complete (pending code implementation) |
 | FR-0021–0030 | consensus-governance/agx-committee-bft-and-governance.md | FR-0021-0030 | C4 | governance-spec.md | 1, 2 | complete |
 | FR-0031–0040 | agents/collaboration-layer-parallel-teams.md | FR-0031-0040 | C6 | fastpath-spec.md | 1 | complete |
 | FR-0041–0050 | networking/p2p-wire-protocol.md | FR-0041-0050 | C7 | p2p-wire-spec.md | 1, 2 | complete |
@@ -70,7 +71,7 @@ NFRs are cross-cutting and apply to multiple components.
 | ADR-0004 | Agent Process Separation | agent-runtime-spec.md | accepted |
 | ADR-0005 | Content-Addressed SMT | consensus-spec.md, state-sync-spec.md | accepted |
 | ADR-0006 | Dual-Lane Economics | fee-market-spec.md, collaboration-spec.md | accepted |
-| ADR-0007 | Committee BFT VDF | consensus-spec.md, staking-spec.md | accepted |
+| ADR-0007 | Committee BFT VDF | consensus-spec.md, staking-spec.md, stake-graph-analysis-spec.md | accepted (amended 2026-05-06: 15% cap removed, overlap 33%→20%, VDF fallback hardened) |
 | ADR-0008 | Three-Phase Quality | review-engine-spec.md | accepted |
 | ADR-0009 | EIP-1559 Fee Market | fee-market-spec.md | accepted |
 | ADR-0010 | Four-Stage Trust Ladder | collaboration-spec.md | accepted |
@@ -78,3 +79,4 @@ NFRs are cross-cutting and apply to multiple components.
 | ADR-0012 | Circuit-Breaker Hierarchy | incident-response-spec.md | accepted |
 | ADR-0013 | Expanded Agent Tools and Seed Index | agent-runtime-spec.md, collaboration-spec.md | accepted |
 | ADR-0014 | User Task Submission and Sponsorship | policy-engine-spec.md, consensus-spec.md, collaboration-spec.md, agent-runtime-spec.md | accepted |
+| ADR-0015 | Stake Delegation | staking-spec.md, consensus-spec.md, stake-graph-analysis-spec.md | accepted |

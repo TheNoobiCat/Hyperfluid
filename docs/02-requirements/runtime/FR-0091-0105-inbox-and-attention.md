@@ -200,13 +200,11 @@
 
 ---
 
-## FR-0100: Inbox Circuit-Breaker Mode
+## FR-0100: Inbox Rate Limiting
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall trigger inbox circuit-breaker on fill ratio threshold, spam reject ratio, or urgent queue latency breach, switching to digest-only for low-trust senders.
-
-**Rationale:** Protects agent attention under attack conditions. See `inbox-attention-control-and-anti-spam.md` Section 5 (Inbox circuit-breaker mode).
+**Statement:** The agent runtime MAY implement local rate limiting and digest-only mode for overloaded inboxes. This is a local operator concern, not a protocol-enforced circuit breaker. No protocol-level inbox circuit-breaker exists.
 
 **Source Research:**
 - `inbox-attention-control-and-anti-spam.md` Section 5, lines 119-128

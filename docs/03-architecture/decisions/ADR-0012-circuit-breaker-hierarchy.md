@@ -1,30 +1,17 @@
-## ADR-0012: Circuit-Breaker Escalation Hierarchy
+## ADR-0012: Congestion Response via EIP-1559 Base Fee
 
-**Status:** accepted
+**Status:** superseded
 
-**Context:** Under attack or extreme load, the system must automatically restrict non-critical operations to preserve safety-critical ones. Manual intervention is not viable in a decentralized network. Escalation and de-escalation must be deterministic and autonomous.
+**Context:** Originally a three-tier circuit-breaker escalation hierarchy (Normal/Degraded/Emergency) was spec'd. In practice, no major blockchain uses a multi-tier circuit breaker — the complexity of 22+ thresholds, persistence windows, hysteresis, reporter quorums, and sub-circuit-breakers creates oscillation risk and false-positive mode switches without proven benefit. Ethereum's EIP-1559 (single-parameter base fee adjusting 12.5% per block) has been proven in production since 2021.
 
-**Decision:** Implement a three-tier circuit-breaker escalation hierarchy:
-
-- **Normal:** Full functionality. No restrictions.
-- **Degraded:** Freeze new low-trust claims, tighten merge quotas, force digest-only for low-trust senders. Triggered by sustained reject_ratio breach or queue depth spike.
-- **Emergency:** 3x PoW difficulty, 50% unknown-sender budgets, frozen low-trust fast-path, emergency fee floor, reserved control lanes. Triggered by finality_lag > 60s for 3 consecutive blocks + minimum independent reporters + signed evidence validity (FR-0142).
-
-All transitions require:
-1. Metric breach on **multiple metrics simultaneously** (not single metric noise)
-2. **Persistence** across consecutive measurement windows (prevents transients)
-3. **Minimum independent reporter count** (prevents single-source manipulation)
-4. **Signed evidence validity** (prevents fabricated triggers)
-
-De-escalation requires sustained metric normalization with **hysteresis** (exit thresholds stricter than entry thresholds). No manual override required for either direction.
+**Decision:** Remove the circuit-breaker system entirely. Congestion response is handled by the EIP-1559-style base fee adjustment built into the fee market (see `fee-market-spec.md`). No emergency mode, degraded mode, or frozen actions exist at the protocol level. Agent runtimes may implement their own local rate limiting.
 
 **Consequences:**
-- Positive: Automatic defense escalation without central operator. Hysteresis prevents mode flapping. Multi-metric triggers prevent false positives from noisy telemetry. Control lanes always survive. Temporary post-incident quotas prevent recovery backlash.
-- Negative: Emergency mode is restrictive and may degrade legitimate collaboration. Tuning thresholds requires calibration from testnet data. False positives from coordinated telemetry spoofing still possible (mitigated by multi-source corroboration and independent observation reconciliation per FR-0141).
+- Positive: Dramatically simpler. No mode flapping, no hysteresis tuning, no reporter quorums, no staged recovery ramps. One parameter (base fee) is provably sufficient for congestion management.
+- Negative: No protocol-level emergency freeze for coordinated attacks. However, the fee market naturally prices out spam under load — if a spammer can afford to pay, they're economically beneficial to the network.
 
 **Alternatives considered:**
-- **Single tier (normal/emergency):** Rejected because binary escalation is too coarse. Degraded mode provides graduated response for moderate stress.
-- **Manual override for emergency declaration:** Rejected because it introduces a central coordinator single point of failure and contradicts decentralized incident response design.
-- **Per-component circuit-breakers independent:** Rejected because coordinated restrictions are needed during network-wide attacks. Independent breakers could create inconsistent application of restrictions.
+- **Three-tier circuit breaker (original):** Rejected. Overengineered for a problem that EIP-1559 solves with one parameter.
+- **Two-tier (normal/emergency):** Rejected on same grounds — the complexity of defining objective emergency conditions and exit criteria is not justified by the threat model.
 
-**Related:** FR-0085, FR-0100, FR-0142, FR-0143, FR-0154, FR-0187, `failure-model.md` Section 3.
+**Related:** FR-0148, FR-0149, FR-0150, `fee-market-spec.md`.

@@ -13,7 +13,9 @@
 
 **Acceptance Criteria:**
 - [ ] Genesis block initializes committee BFT with Malachite (or equivalent) and a defined committee size of 100.
-- [ ] Block production halts if committee size drops below safety threshold (67 active validators for 2f+1 quorum at f=33).
+- [ ] Normal mode (67-100 validators): full block production with all transaction types.
+- [ ] Degraded mode (50-66 validators): block production continues with critical transactions only (transfers, stake operations, evidence). Governance and fast-path transactions are queued.
+- [ ] Emergency mode (0-49 validators): block production halts. After 500 idle blocks, emergency epoch transition automatically samples a new committee from `active` and `paused` validators using the previous VDF output as seed.
 - [ ] Committee rotation occurs deterministically at each epoch boundary without manual intervention.
 
 **Dependencies:** FR-0011 (validator lifecycle), FR-0041 (P2P networking)
@@ -21,22 +23,22 @@
 
 ---
 
-## FR-0002: Epoch Committee Sampling with Anti-Concentration Caps
+## FR-0002: Epoch Committee Sampling with Anti-Split Clustering
 
 **Category:** Consensus
 
-**Statement:** The system shall sample epoch committees using a stake-weighted draw with a per-operator cap of 15% of committee seats and anti-split detection via correlated key analysis.
+**Statement:** The system shall sample epoch committees using a stake-weighted draw with anti-split clustering via stake-graph analysis. Correlated validator keys detected via stake-graph analysis shall be treated as a single cluster for weight computation. Committee influence is stake-proportional — no per-operator seat cap exists.
 
-**Rationale:** Prevents stake concentration and whale-splitting from capturing committee majority. See `agx-committee-bft-and-governance.md` Section 5 (Committee BFT from day 1), lines 147-170.
+**Rationale:** Prevents Sybil splitting while preserving market-driven stake allocation. Committee influence is proportional to honest stake; anti-split clustering prevents one operator from evading detection by using multiple keys. See `stake-graph-analysis-spec.md`.
 
 **Source Research:**
-- `agx-committee-bft-and-governance.md` Section 5, lines 147-170
+- `agx-committee-bft-and-governance.md` Section 5 (Committee BFT from day 1), lines 147-170
 - `decentralization-and-stack-benchmark.md` Section 7 (Failure Modes)
 
 **Acceptance Criteria:**
-- [ ] A single operator identity cannot hold more than 15% of committee seats in any epoch.
-- [ ] Correlated validator keys detected via stake-graph analysis are treated as a single operator for cap purposes.
+- [ ] Correlated validator keys detected via stake-graph analysis are treated as a single cluster for committee draw weight.
 - [ ] Committee sampling is deterministic given the same epoch seed and validator pool.
+- [ ] No per-operator seat cap is enforced — committee influence is stake-proportional with Sybil clustering only.
 
 **Dependencies:** FR-0001, FR-0011
 **Tags:** must-have
@@ -59,26 +61,27 @@
 - [ ] Validators submit hashed commitments in block N and reveal preimages in block N+k.
 - [ ] VDF sequential evaluation time exceeds 2x the reveal window to prevent grinding.
 - [ ] VDF proof verification is O(1) per epoch.
-- [ ] Fallback seed formula `SHA3-256(previous_seed + block_hash_chain + epoch_number)` is used when insufficient valid reveals exist.
+- [ ] Fallback seed formula `SHA3-256(previous_vdf_output || hash_of_previous_epoch_block_headers || epoch_number || valid_reveals)` is used when insufficient valid reveals exist. The fallback input MUST NOT contain any data from the current epoch that a proposer can manipulate.
 
 **Dependencies:** FR-0001, FR-0002
 **Tags:** must-have
 
 ---
 
-## FR-0004: Committee Partial Overlap Between Epochs
+## FR-0004: Committee Rotation with Overlap Limit
 
 **Category:** Consensus
 
-**Statement:** The system shall retain at most 33% of committee members between consecutive epochs, rotating at least 67% each epoch.
+**Statement:** The system shall retain at most 20% of committee members between consecutive epochs, rotating at least 80% each epoch. No validator shall serve on more than 2 consecutive committees.
 
-**Rationale:** Prevents abrupt liveness loss from mass validator churn while maintaining fresh anti-capture properties. See `agx-committee-bft-and-governance.md` Section 5, lines 169-170.
+**Rationale:** Prevents abrupt liveness loss from mass validator churn while maintaining fresh anti-capture properties. Two-epoch recency limit prevents long-term entrenchment of any single validator. See `agx-committee-bft-and-governance.md` Section 5, lines 169-170.
 
 **Source Research:**
 - `agx-committee-bft-and-governance.md` Section 5, lines 169-170
 
 **Acceptance Criteria:**
-- [ ] Overlap ratio between epoch N and N+1 committees never exceeds 33%.
+- [ ] Overlap ratio between epoch N and N+1 committees never exceeds 20%.
+- [ ] No validator serves on more than 2 consecutive committees.
 - [ ] Committee transition occurs atomically at epoch boundary without consensus stall.
 
 **Dependencies:** FR-0001, FR-0002
@@ -128,21 +131,22 @@
 
 ---
 
-## FR-0007: Transaction Types and Schema
+## FR-0007: Generalized Transaction Types with Action Sub-Enums
 
 **Category:** Consensus
 
-**Statement:** The system shall support the following canonical transaction types with deterministic schemas: TransferTx, StakeBondTx, StakeRenewTx, UnbondRequestTx, WithdrawUnbondedTx, GovernanceProposeTx, GovernanceVoteTx, EvidenceTx, FastPathProposalTx, FastPathReviewTx, FastPathChallengeTx.
+**Statement:** The system shall support 7 canonical transaction types, with related actions grouped under typed sub-enums: TransferTx, StakingTx(StakingAction), DelegationTx(DelegationAction), TaskCreateTx, GovernanceTx(GovernanceAction), EvidenceTx, FastPathTx(FastPathAction).
 
-**Rationale:** Explicit minimal transaction taxonomy prevents ambiguity and enables deterministic state transitions. See `agx-committee-bft-and-governance.md` Section 5 (Transaction types).
+**Rationale:** Generalized types reduce state machine surface (7 dispatch handlers vs 16). Action sub-enums provide type safety without per-action type proliferation. See `consensus-spec.md` Section 1.3.
 
 **Source Research:**
-- `agx-committee-bft-and-governance.md` Section 5, lines 66-75
-- `topic-fastpath-protocol-spec.md` Section 5 (Protocol message types)
+- `consensus-spec.md` Section 1.3
+- `agx-committee-bft-and-governance.md` Section 5 (Transaction types)
 
 **Acceptance Criteria:**
-- [ ] Each transaction type has a canonical JSON/binary schema with required and optional fields documented.
-- [ ] Unknown transaction type bytes are rejected at admission.
+- [ ] 7 base transaction types with action sub-enums are defined.
+- [ ] Unknown transaction types are rejected at admission.
+- [ ] Each sub-action variant has a canonical schema.
 - [ ] Schema changes require governance `git:head` update.
 
 **Dependencies:** FR-0005, FR-0006

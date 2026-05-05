@@ -45,6 +45,7 @@ Located in `docs/02-requirements/protocol/`
   - FR-0018: No-Vote Timeout Semantics
   - FR-0019: Evidence Transaction Pipeline
   - FR-0020: Staking State Machine Determinism
+  - FR-0020a: Stake Delegation
 
 ### Governance and git:head
 - [`FR-0021-0030-governance-and-git-head.md`](protocol/FR-0021-0030-governance-and-git-head.md)
@@ -331,7 +332,7 @@ All 190 requirements were scanned against the decentralisation audit checklist f
 1. **External trust inventory:** No external oracles or mandatory centralized services. All trust assumptions are documented in source research.
 2. **Centralised coordination:** No requirements mandate single dispatcher, scheduler, moderator, or admin override. All coordination is protocol-enforced.
 3. **Verifiable economic signals:** All rewards, slashes, and penalties reference cryptographically verifiable on-chain records. Self-reported metrics are explicitly excluded from reward calculations.
-4. **Single points of failure:** No component whose failure stalls the entire system without fallback. Committee overlap, relay diversity, and circuit-breakers provide redundancy.
+4. **Single points of failure:** No component whose failure stalls the entire system without fallback. Committee overlap and relay diversity provide redundancy. Congestion handled by EIP-1559 base fee.
 5. **Sybil resistance:** IP-based limits were removed from protocol policy (per Decentralisation Audit fixes). Anti-Sybil relies on challenge-response, locked bonds, and stake-graph diversity.
 
 **Result:** PASS. No unresolved `[DECENTRALISATION-RISK]` flags.

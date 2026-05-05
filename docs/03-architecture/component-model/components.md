@@ -103,9 +103,9 @@ flowchart TD
 
 ### C3: Staking & Validator Manager
 
-**Responsibility:** Four-state validator lifecycle, bonding/unbonding, slashing, downtime tracking, evidence validation.
-**Owned state:** Validator registry, stake amounts, slash records, liveness windows, jail timers.
-**Key FRs:** FR-0011, FR-0012, FR-0013, FR-0014, FR-0015, FR-0016, FR-0017, FR-0019
+**Responsibility:** Four-state validator lifecycle, bonding/unbonding, delegation management (DelegateTx, UndelegateTx, WithdrawDelegationTx, SetCommissionTx), commission rate enforcement, proportional slash propagation, downtime tracking, evidence validation.
+**Owned state:** Validator registry, self_bond amounts, total_delegated per validator, DelegationRecord registry (per delegator per validator), slash records, liveness windows, jail timers, commission rates.
+**Key FRs:** FR-0011, FR-0012, FR-0013, FR-0014, FR-0015, FR-0016, FR-0017, FR-0019, FR-0020a
 
 ### C4: Governance Engine
 
@@ -127,8 +127,8 @@ flowchart TD
 
 ### C7: P2P Networking & Connection Manager
 
-**Responsibility:** Direct-first routing, relay fallback, hybrid discovery, gossip, secure channels, NAT traversal, connection state machine, mempool lane management.
-**Owned state:** Peer table, DHT, connection states, relay quotas, gossip Bloom filter, mempool lanes.
+**Responsibility:** Direct-first routing, relay fallback, hybrid discovery, gossip, secure channels, NAT traversal, connection state machine, mempool management.
+**Owned state:** Peer table, DHT, connection states, relay quotas, gossip Bloom filter, mempool state.
 **Key FRs:** FR-0041, FR-0042, FR-0043, FR-0044, FR-0045, FR-0046, FR-0047, FR-0048, FR-0049, FR-0050
 
 ### C8: Artifact Availability & Storage
@@ -151,14 +151,14 @@ flowchart TD
 
 ### C11: Collaboration & Inbox Layer
 
-**Responsibility:** Task board with soft leases, bounty escrow lifecycle (lock on creation, release/refund/clawback on resolution), team formation, topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, circuit-breaker mode, trust ladder, reputation vector.
-**Owned state:** Task board, lease registry, bounty escrow balances, topic metadata, inbox state, reputation vectors, trust stages, abuse records.
+**Responsibility:** Task board with soft leases, bounty escrow lifecycle (lock on creation, release/refund/clawback on resolution), team formation, topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, trust ladder.
+**Owned state:** Task board, lease registry, bounty escrow balances, topic metadata, inbox state, trust stages, abuse records.
 **Key FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b
 
 ### C12: Economics & Incentives
 
-**Responsibility:** Review market operation, quality scoring, challenge/settlement lifecycle, challenger bonds, Sybil detection correlation engine (5-signal pairwise scoring, cluster aggregation, automated adjudication panels), anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, circuit-breaker controller, parameter bounds enforcement, decentralization score computation.
-**Owned state:** Review assignments, quality scores, settlement records, airdrop pool, seed task bounty pool, Sybil correlation scores, adjudication records, circuit-breaker mode, parameter values, decentralization metrics.
+**Responsibility:** Review market operation, quality scoring, challenge/settlement lifecycle, challenger bonds, Sybil detection correlation engine (5-signal pairwise scoring, cluster aggregation, automated adjudication panels), anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, parameter bounds enforcement, decentralization score computation.
+**Owned state:** Review assignments, quality scores, settlement records, airdrop pool, seed task bounty pool, Sybil correlation scores, adjudication records, parameter values, decentralization metrics.
 **Key FRs:** FR-0148-0160, FR-0161-0175, FR-0176-0193
 
 ## 5. Component Dependencies
@@ -176,7 +176,7 @@ flowchart TD
 | C9 Policy Decision Point | C2, C4 | C10, C11 |
 | C10 Agent Runtime | C9 | C11 |
 | C11 Collaboration & Inbox | C9, C10 | C12 |
-| C12 Economics | C1, C2, C3, C6, C8, C11 | (cross-cutting) |
+| C12 Economics & Incentives | C1, C2, C3, C6, C8, C11 | (cross-cutting) |
 
 **No circular dependencies exist.** The dependency graph is acyclic: Protocol Core → Protocol Services → Security Boundary → Agent Runtime, with Economics as a cross-cutting layer that reads from all components but writes only through the State Machine (C2).
 
@@ -226,11 +226,11 @@ flowchart TD
 - **Why it happens:** LLM nondeterminism or payload manipulation.
 - **Handling:** PDP computes canonical hash of tool call and rejects if != plan_binding_hash (FR-0107). Returns DRIFT_VIOLATION reason code.
 
-### Scenario: Committee Stalls with No Fallback
+### Scenario: Committee Stall with Tiered Recovery
 
-- **What happens:** Committee size drops below safety threshold (67 active validators).
+- **What happens:** Committee size drops below safety threshold.
 - **Why it happens:** Mass validator churn or network partition.
-- **Handling:** Consensus halts block production (FR-0001). Recovery requires epoch boundary with refreshed committee from remaining active validators. No governance override possible during stall.
+- **Handling:** Three-tier response: degraded mode (50-66) continues critical transactions; emergency mode (0-49) halts block production but auto-recovers after 500 idle blocks via emergency epoch transition (FR-0001). No governance override possible during stall.
 
 ### Scenario: Review Sandbox Timeout Flood
 
@@ -271,7 +271,7 @@ The 12-component model with three-layer separation is the recommended architectu
 1. **Deterministic core, creative edge:** Protocol Core (C1-C5) is fully deterministic. Agent Runtime (C10-C11) runs LLMs. PDP (C9) bridges them through typed, verified interfaces.
 2. **Process isolation:** Node and agent are separate OS processes. Node crash isolates from agent state. Agent crash does not stall consensus.
 3. **Content-addressed everything:** Artifacts, policy bundles, evidence, and state diffs use content hashes for integrity and deduplication.
-4. **Economic defense-in-depth:** Dual-lane economics (FR-0152), circuit-breakers (FR-0154), and challenge windows (FR-0148) provide layered protection.
+4. **Economic defense-in-depth:** Dual-lane economics (FR-0152) and challenge windows (FR-0148) provide layered protection.
 
 **Rejected alternatives:**
 - Monolithic agent-node process (fails isolation requirements FR-0138, NFR-0028)

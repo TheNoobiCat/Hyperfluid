@@ -2,7 +2,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall require new agents to solve a SHA3-256 HashCash partial preimage puzzle seeded by agent pubkey + current epoch. Difficulty scales with registration rate: base 16 leading zero bits, multiplied by `1.0 + (registrations_this_epoch / epoch_cap)` and 3.0x during circuit-breaker emergency mode.
+**Statement:** The system shall require new agents to solve a SHA3-256 HashCash partial preimage puzzle seeded by agent pubkey + current epoch. Difficulty scales with registration rate: base 16 leading zero bits, multiplied by `1.0 + (registrations_this_epoch / epoch_cap)`.
 
 **Rationale:** Dynamic-difficulty HashCash provides progressively higher compute cost during Sybil floods while remaining cheap for legitimate individual registrations. See `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding).
 
@@ -13,7 +13,6 @@
 - [ ] Puzzle is SHA3-256 HashCash: find nonce such that SHA3-256(pubkey || epoch || nonce) has N leading zero bits.
 - [ ] Base difficulty: 16 leading zero bits (~65,000 attempts).
 - [ ] Difficulty multiplier: `1.0 + (registrations_this_epoch / epoch_cap)`, updated per block.
-- [ ] Circuit-breaker multiplier: 3.0x during emergency mode.
 - [ ] Solution is deterministic and verifiable by any node.
 - [ ] Airdrop agent verifies solution before releasing funds.
 - [ ] Failed solutions can be retried (with new epoch seed if epoch advances).
@@ -159,17 +158,17 @@
 
 **Category:** Economics
 
-**Statement:** The system shall monitor and deter stake concentration through operator caps, overlap limits, and correlated signer set detection.
+**Statement:** The system shall monitor and deter stake concentration through overlap limits, anti-split clustering, and correlated signer set detection.
 
-**Rationale:** Economic centralization degrades decentralization over epochs. See `decentralization-and-stack-benchmark.md` Section 7 (Economic centralization).
+**Rationale:** Economic centralization degrades decentralization over epochs. No per-operator seat cap exists — committee influence is stake-proportional. Anti-split clustering via stake-graph analysis prevents Sybil avoidance (see `stake-graph-analysis-spec.md`). See `decentralization-and-stack-benchmark.md` Section 7 (Economic centralization).
 
 **Source Research:**
 - `decentralization-and-stack-benchmark.md` Section 7 (Economic centralization)
 - `agx-economics-and-adversarial-incentives.md` Section 7 (Stake concentration)
 
 **Acceptance Criteria:**
-- [ ] Committee operator cap: max 15% per operator.
-- [ ] Anti-split detection via stake-graph analysis.
+- [ ] Anti-split detection via stake-graph analysis clusters correlated validators for committee weight computation.
+- [ ] No per-operator committee seat cap exists; committee influence is stake-proportional.
 - [ ] Decentralization score is computed per epoch and published.
 - [ ] Parameter nudges can be governance-proposed when concentration exceeds thresholds.
 
@@ -244,28 +243,6 @@
 - [ ] Detection rate of 30% per epoch makes sustained farming negative-EV.
 
 **Dependencies:** FR-0157, FR-0176, FR-New (Sybil detection)
-**Tags:** must-have
-
----
-
-## FR-0187: Circuit-Breaker Overreaction Defense
-
-**Category:** Economics
-
-**Statement:** The system shall prevent false-positive emergency triggers through multi-metric triggers, hysteresis windows, and capped emergency duration.
-
-**Rationale:** Noisy telemetry can push system into unnecessary emergency mode. See `agx-economics-and-adversarial-incentives.md` Section 7 (Circuit-breaker overreaction).
-
-**Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 7 (Circuit-breaker overreaction)
-- `decentralized-incident-response-and-recovery.md` Section 7 (False positive emergency trigger)
-
-**Acceptance Criteria:**
-- [ ] Emergency trigger requires persistence across multiple windows.
-- [ ] Hysteresis prevents rapid mode flapping.
-- [ ] Fixed safe-mode parameters prevent unbounded escalation.
-
-**Dependencies:** FR-0154
 **Tags:** must-have
 
 ---

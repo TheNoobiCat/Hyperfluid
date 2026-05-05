@@ -42,7 +42,7 @@ fn conforms_to_consensus_spec_1_7_committee_deterministic_sampling() {
     // Given same epoch seed and validator pool, committee MUST be deterministic.
     let seed = [0x42u8; 32];
     let validator_ids: Vec<Hash32> = (0..150u8).map(|i| [i; 32]).collect();
-    let stakes: Vec<u64> = validator_ids.iter().map(|_| 1000u64).collect();
+    let stakes: Vec<u128> = validator_ids.iter().map(|_| 1000u128).collect();
 
     let committee1 = Committee::sample(
         1,
@@ -62,7 +62,7 @@ fn conforms_to_consensus_spec_1_7_committee_deterministic_sampling() {
 fn conforms_to_consensus_spec_1_7_committee_size_is_exactly_100() {
     let seed = [1u8; 32];
     let validator_ids: Vec<Hash32> = (0..200u8).map(|i| [i; 32]).collect();
-    let stakes: Vec<u64> = vec![1000u64; 200];
+    let stakes: Vec<u128> = vec![1000u128; 200];
 
     let committee = Committee::sample(0, seed, &validator_ids, &stakes, 100);
     assert_eq!(committee.members.len(), 100);
@@ -72,7 +72,7 @@ fn conforms_to_consensus_spec_1_7_committee_size_is_exactly_100() {
 fn conforms_to_consensus_spec_1_7_committee_no_duplicate_members() {
     let seed = [2u8; 32];
     let validator_ids: Vec<Hash32> = (0..150u8).map(|i| [i; 32]).collect();
-    let stakes: Vec<u64> = vec![1000u64; 150];
+    let stakes: Vec<u128> = vec![1000u128; 150];
 
     let committee = Committee::sample(0, seed, &validator_ids, &stakes, 100);
     let mut seen = std::collections::HashSet::new();
@@ -86,7 +86,7 @@ fn conforms_to_consensus_spec_1_7_rotation_max_overlap_33_percent() {
     let seed1 = [1u8; 32];
     let seed2 = [2u8; 32];
     let validator_ids: Vec<Hash32> = (0..200u8).map(|i| [i; 32]).collect();
-    let stakes: Vec<u64> = vec![1000u64; 200];
+    let stakes: Vec<u128> = vec![1000u128; 200];
 
     let c1 = Committee::sample(1, seed1, &validator_ids, &stakes, 100);
     let c2 = Committee::sample_with_rotation(2, seed2, &validator_ids, &stakes, 100, &c1.members);

@@ -1,8 +1,33 @@
 # Build Status — Stage 01 (Protocol Core) IN PROGRESS
 
-**Last updated:** 2026-05-05
+**Last updated:** 2026-05-06
 **Stage:** 01 — Protocol Core — **IN PROGRESS**
 **Week 1-2 (Consensus + State Machine):** COMPLETE
+
+## ⚠️ PENDING CODE CHANGES (Architecture Amendments 2026-05-06 — Round 1)
+
+Before implementing ANY Stage 01 code, apply these 5 code changes. See `checkpoint-2026-05-06.md` for exact file-level details.
+
+| # | Change | Components | Priority |
+|---|--------|-----------|----------|
+| 1 | Overlap 33%→20% + two-epoch recency guard | `hyperfluid-consensus/types.rs` | MUST fix before Week 3-4 |
+| 2 | VDF fallback using immutable entropy | `hyperfluid-consensus/` (new module) | MUST fix before Week 3-4 |
+| 3 | Committee stall 3-tier thresholds | `hyperfluid-consensus/types.rs` | MUST fix before Week 3-4 |
+| 4 | Stake-graph clustering implementation | `hyperfluid-staking/src/graph.rs` (NEW) | MUST fix before Week 3-4 |
+| 5 | Delegation subsystem (TxType sub-enums instead of 16 types, DelegationRecord, commission, slash propagation) | `hyperfluid-staking/src/lib.rs`, `hyperfluid-consensus/src/types.rs`, `hyperfluid-state/src/state_machine.rs` | MUST fix before Week 3-4 |
+
+## Overengineering Fixes Applied (2026-05-06 — Round 2)
+
+| Fix | What Changed | Complexity Removed |
+|-----|-------------|-------------------|
+| Circuit breaker killed | Removed 3-tier CB, 22+ thresholds, hysteresis, persistence windows, reporter quorums, sub-circuit-breakers, IncidentRecord, CircuitBreakerState. EIP-1559 base fee is the sole congestion mechanism. | ~15 files, ~250 lines of spec removed |
+| Mempool lanes killed | Removed 4-lane reservation (Evidence 15%, Control 10%, Governance 10%, Transfer 65%). Single fee-ordered pool with evidence/governance fee discounts. | ~10 files |
+| Trust ladder simplified | 4 stages → 2 (untrusted/trusted). Removed identity age, reviewer diversity, reputation vector, inactivity decay, promotion/regression tracking. Progression: 10 accepted tasks + clean record. | ~10 files |
+| PDP simplified | 10-step rule chain → 5 steps. Removed RiskClass, role/trust check, ACL, taint, risk step-up, plan binding hash, policy bundle match. DenyReasons: 12→5. Protocol no longer does LLM safety filtering. | ~15 files |
+| Review engine simplified | 3 phases → 2 (removed objective checks). Fixed payout (no quality-weighted curve). 1 independence constraint (operator cluster, not 4). Removed clawback, reputation decay, quality scoring. | ~10 files |
+| TxType collapsed | 16 variants → 7 base types with action sub-enums (StakingAction, DelegationAction, GovernanceAction, FastPathAction). | ~12 files |
+
+All doc changes complete. Only Rust code changes remain (5 items from Round 1 above).
 
 ## Stage 01: Week 1-2 — Consensus + State Machine (C1 + C2) — COMPLETE
 
@@ -17,7 +42,7 @@
 | SparseMerkleTree: insert, root, inclusion proof, proof verification | Complete |
 | StateMachine: transfer, task_create, nonce enforcement, replay protection | Complete |
 | Conformance tests: 7 C1 hooks + 8 C2 hooks all PASS | Complete |
-| 56/56 workspace tests pass | Complete |
+| 57/57 workspace tests pass | Complete |
 | clippy zero warnings, fmt clean, docs build | Complete |
 
 ## Verification (after Week 1-2)
@@ -25,7 +50,7 @@
 | Check | Result |
 |-------|--------|
 | `cargo build --workspace` | PASS (13 crates) |
-| `cargo test --workspace` | PASS (56/56) |
+| `cargo test --workspace` | PASS (57/57) |
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
 | `cargo doc --workspace --no-deps` | PASS |
@@ -155,6 +180,20 @@ See `docs/01-research/_audit-bugs-2026-05-04.md` for full report.
 | Spec headers missing FR-0194–0200 coverage (DB-08) | Minor | Added missing FRs to consensus-spec.md, agent-runtime-spec.md, collaboration-spec.md headers |
 
 See `docs/01-research/_audit-bugs-2026-05-05.md` for full report.
+
+## Resolved Issues (Bug Audit 2026-05-06)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| SMT verify_proof broken for multi-leaf proofs (B-08) | Major | Added sibling_is_left to InclusionProof; verify_proof now uses correct hash ordering |
+| Committee weights/sample use u64 not u128 (B-09) | Major | Changed to u128; fixed selector entropy width; updated all tests |
+| f64 in deterministic committee sampling (B-10) | Major | Replaced f64*ceil with integer div_ceil |
+| Unchecked addition overflow in recipient balance (B-11) | Minor | Changed to saturating_add |
+| Trivially passing first_spend_pubkey_reveal test (B-12) | Minor | Replaced with full lifecycle test |
+| Dead duplicate InclusionProof struct in lib.rs (B-13) | Minor | Removed dead code |
+| Duplicate Hash32 types across crates (B-14) | Minor | Observation only — no code change needed |
+
+See `docs/01-research/_audit-bugs-2026-05-06.md` for full report.
 
 ## Exit Criteria Status
 

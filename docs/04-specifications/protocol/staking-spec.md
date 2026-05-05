@@ -28,7 +28,9 @@ Define the four-state validator lifecycle, state transitions, bonding/unbonding 
 struct ValidatorRecord {
     validator_id: [u8; 32],         // same as account_id
     state: ValidatorState,
-    bonded_stake: u64,              // total bonded AGX in atto-AGX
+    self_bond: u128,                // validator's own bonded AGX (atto-AGX)
+    total_delegated: u128,          // total AGX delegated by others (atto-AGX)
+    commission_rate: u8,            // 0-100, percent commission on delegation rewards
     bonding_height: u64,
     unbonding_height: u64,
     jail_until_height: u64,         // 0 if not jailed
@@ -36,6 +38,20 @@ struct ValidatorRecord {
     slash_count: u32,
     missed_blocks: u32,
     last_renew_height: u64,
+}
+
+struct DelegationRecord {
+    delegator_id: [u8; 32],         // account delegating AGX
+    validator_id: [u8; 32],         // validator receiving delegation
+    amount: u128,                   // atto-AGX delegated
+    unbonding_at_height: u64,       // 0 if not unbonding, height if unbond init
+    status: DelegationStatus,
+}
+
+enum DelegationStatus {
+    Active,
+    Unbonding,
+    Withdrawn,
 }
 
 enum ValidatorState {
@@ -63,7 +79,10 @@ enum FaultType {
 struct SystemParameters {
     epoch_length: u64,                // 8192 blocks
     committee_size: u64,              // 100
-    min_stake: u128,                  // 1,000 AGX = 1_000_000_000_000_000_000_000 atto-AGX (10^21)
+    min_self_bond: u128,              // 1,000 AGX = 10^21 atto-AGX (validator's own stake)
+    min_delegation: u128,             // 1 AGX = 10^18 atto-AGX (minimum delegation amount)
+    max_commission_rate: u8,          // 20 (20% max; governance-adjustable 5-50%)
+    delegation_unbond_delay: u64,     // 60,480 blocks (7 days)
     bond_delay: u64,                  // 8640 blocks (~24 hrs at 10s/block)
     unbond_delay: u64,                // 120,960 blocks (14 days)
     max_governance_proposals: u64,    // 32
@@ -75,28 +94,38 @@ struct SystemParameters {
 
 ### 1.4 State Transitions
 
-**Canonical transition graph:**
+**Canonical transition graph (using generalized StakingTx and DelegationTx with action sub-enums):**
 
 ```
-StakeBondTx (+1 epoch wait) ──► active
+StakingTx(Bond) (+1 epoch wait) ──► active
 active ──(miss >20% in window)──► paused [0.1% slash]
-paused ──(StakeRenewTx + 1 epoch wait)──► active
-active ──(UnbondRequestTx)──► unbonding [14-day timer]
-paused ──(UnbondRequestTx)──► unbonding [14-day timer]
-unbonding ──(unbond_delay expires + WithdrawUnbondedTx)──► withdrawn
+paused ──(StakingTx(Renew) + 1 epoch wait)──► active
+active ──(StakingTx(Unbond))──► unbonding [14-day timer]
+paused ──(StakingTx(Unbond))──► unbonding [14-day timer]
+unbonding ──(unbond_delay expires + StakingTx(Withdraw))──► withdrawn
 active ──(equivocation proof)──► paused [10% slash + 30-day jail]
+
+--- Delegation transitions ---
+DelegationTx(Delegate) ──► DelegationRecord.active (if validator is active, amount <= delegator balance)
+DelegationTx(Undelegate) ──► DelegationRecord.unbonding (7-day timer)
+DelegationTx(WithdrawDelegation) (after unbonding) ──► DelegationRecord.withdrawn + funds returned
+DelegationTx(SetCommission) ──► ValidatorRecord.commission_rate updated (after 2 epochs)
 ```
 
 **Transition details:**
 
 | Trigger | From | To | Conditions |
 |---------|------|----|------------|
-| StakeBondTx >= 1,000 AGX | (new) | active | After bond_delay (8,640 blocks) |
+| StakingTx(Bond) >= 1,000 AGX (self_bond) | (new) | active | After bond_delay (8,640 blocks) |
 | Miss >20% blocks in liveness window | active | paused | 0.1% slash; repeated within 3 windows escalates to 1% |
-| StakeRenewTx | paused | active | 1 epoch wait (8,192 blocks) after tx inclusion |
-| UnbondRequestTx | active/paused | unbonding | 14-day timer starts at inclusion height |
-| WithdrawUnbondedTx | unbonding | withdrawn | unbond_delay expired; funds released |
+| StakingTx(Renew) | paused | active | 1 epoch wait (8,192 blocks) after tx inclusion |
+| StakingTx(Unbond) | active/paused | unbonding | 14-day timer starts at inclusion height |
+| StakingTx(Withdraw) | unbonding | withdrawn | unbond_delay expired; funds released |
 | Equivocation evidence | active | paused | 10% slash; jailed 30 days (259,200 blocks) |
+| DelegationTx(Delegate) >= 1 AGX | delegator | DelegationRecord.active | Validator must be active; amount deducted from delegator balance |
+| DelegationTx(Undelegate) (any amount) | delegator | DelegationRecord.unbonding | 7-day timer starts; amount still slashable |
+| DelegationTx(WithdrawDelegation) | delegator | DelegationRecord.withdrawn | After delegation_unbond_delay (7 days); funds returned |
+| DelegationTx(SetCommission) (0-20%) | validator | ValidatorRecord.commission_rate | Effective after 2 epochs (buffer for delegator reaction) |
 
 **Liveness tracking:** An 8,192-bit bitmap per validator tracks participation per block in the liveness window. A missed block sets the bit at position (height % 8192) to 1. The count of 1-bits is the missed_block counter. At each epoch boundary, the window slides forward.
 
@@ -104,12 +133,18 @@ active ──(equivocation proof)──► paused [10% slash + 30-day jail]
 
 ### 1.5 Failure Behavior
 
-- **Insufficient stake:** StakeBondTx with amount < 1,000 AGX is rejected at admission.
-- **Double-bind:** StakeBondTx from an account that already has a VALIDATOR in non-withdrawn state is rejected.
+- **Insufficient stake (self-bond):** StakingTx(Bond) with self_bond amount < 1,000 AGX is rejected at admission.
+- **Insufficient delegation:** DelegationTx(Delegate) with amount < 1 AGX is rejected at admission.
+- **Double-bind:** StakingTx(Bond) from an account that already has a VALIDATOR in non-withdrawn state is rejected.
+- **Delegation to inactive validator:** DelegationTx(Delegate) to a validator not in `active` state is rejected.
+- **Self-delegation:** An account cannot delegate to itself; StakingTx(Bond) is the mechanism for self-staking.
 - **Premature withdrawal:** WithdrawUnbondedTx before unbond_delay expiry is rejected.
+- **Premature delegation withdrawal:** WithdrawDelegationTx before delegation_unbond_delay expiry is rejected.
 - **Delayed evidence:** Equivocation evidence submitted more than 8,640 blocks after the event cancels the slash but marks the validator for governance review.
 - **Invalid evidence:** EvidenceTx with non-verifiable proof is rejected; reporter may be penalized for repeated false submissions.
 - **Committee eligibility during unbonding:** Unbonding validators remain committee-eligible until the epoch boundary after unbond initiation, then are excluded.
+- **Slashing propagation:** On validator slash, each delegator's stake is reduced by `delegated_amount * (slash_pct / 100)`. The slash is applied proportionally across all delegators and the self-bond. The slash fires even if the delegator is in unbonding status (same as validator unbonding slashing).
+- **Commission abuse:** A validator setting commission rate > max_commission_rate (20%) is rejected at admission. Rate changes take 2 epochs to allow delegators to undelegate before the new rate applies.
 
 ### 1.6 Versioning and Compatibility
 

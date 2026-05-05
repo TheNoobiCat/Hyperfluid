@@ -1,8 +1,8 @@
 # Runtime Spec: Policy Decision Point
 
 **Component:** C9 Policy Decision Point
-**Source ADRs:** ADR-0003 (PDP Deterministic Rule Chain), ADR-0012 (Circuit-Breaker Hierarchy)
-**Covered FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0112, FR-0113, FR-0114, FR-0115, FR-0116, FR-0117, FR-0118, FR-0119, FR-0120, FR-0121, FR-0122, FR-0123, FR-0124, FR-0125, FR-0126, FR-0127, FR-0128, FR-0129, FR-0130, FR-0131, FR-0132, FR-0133, FR-0134, FR-0135
+**Source ADRs:** ADR-0003 (PDP Deterministic Rule Chain)
+**Covered FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0117, FR-0118, FR-0119, FR-0120
 **Dependencies:** C1 Consensus Engine, C2 State Machine, C4 Governance Engine
 
 ---
@@ -11,17 +11,17 @@
 
 ### 1.1 Purpose
 
-Define the deterministic Policy Decision Point (PDP) that gates all network-mutating actions from the agent runtime into protocol state.
+Define the deterministic Policy Decision Point (PDP) that gates all network-mutating actions. The PDP enforces basic admission: schema validity, signature, replay protection, quota, and fee. It does NOT enforce LLM safety, intent filtering, risk scoring, taint tracking, or policy bundle verification — those are agent runtime local concerns.
 
 ### 1.2 Normative Behavior
 
 - The system MUST evaluate all network-mutating action plans through a deterministic rule chain.
-- The PDP MUST run the rule chain in this exact order: schema validation → signature verification → policy bundle match → replay protection → role/trust check → ACL check → quota check → taint check → risk step-up → plan binding hash verification.
+- The PDP MUST run the rule chain in this exact order: schema validation → signature verification → replay protection → quota check → fee check.
 - The PDP MUST NOT contain probabilistic logic in the root authorization path.
 - The PDP MUST produce identical decisions for identical inputs on all nodes.
 - The rule chain MUST exit early on first failure with a structured deny reason code.
 - The PDP MUST produce an append-only, content-addressed audit log of all policy decisions.
-- Classifier signals (ML-based) MAY only tighten quotas or trigger quarantine; they MUST NOT grant access.
+- The PDP MUST NOT filter, restrict, or reject actions based on content, intent, risk level, trust stage, taint, policy bundle, or plan binding hash. Those checks are the agent runtime's responsibility.
 
 ### 1.3 Data Structures
 
@@ -31,13 +31,10 @@ struct ActionPlanRequest {
     agent_id: [u8; 32],             // SHA3-256 of agent pubkey
     action_type: ActionType,
     resource_id: [u8; 32],
-    risk_class: RiskClass,
     reason_hash: [u8; 32],
     evidence_refs: Vec<[u8; 32]>,
-    policy_bundle_hash: [u8; 32],
     nonce: u64,
     expires_at_height: u64,
-    plan_binding_hash: [u8; 32],    // SHA3-256(canonical tool call params)
     agent_signature: Vec<u8>,       // ML-DSA-65
 }
 
@@ -45,17 +42,14 @@ enum ActionType {
     PublishTopicMessage,
     ClaimTaskLease,
     RenewTaskLease,
-    CreateTask,                 // task_create — bounty escrowed task submission (FR-0194)
+    CreateTask,
     SubmitFastPathMerge,
     SubmitGovernanceProposal,
     CastGovernanceVote,
 }
 
-enum RiskClass {
-    Low,
-    Medium,
-    High,
-}
+// NOTE: RiskClass was removed. Risk assessment is the agent runtime's local concern,
+// not protocol-enforced. The protocol only validates schema, signature, replay, quota, and fee.
 
 struct ActionPlanResponse {
     plan_id: [u8; 32],
@@ -74,16 +68,9 @@ enum Decision {
 enum DenyReason {
     SchemaViolation,        // message fails structural validation
     SignatureInvalid,       // cryptographic verification failed
-    BundleMismatch,         // policy bundle version conflict
     ReplayDetected,         // message nonce/ID already consumed
     TTLExpired,             // plan expired before processing
-    StepUpRequired,         // action requires additional attestation
     QuotaExhausted,         // sender quota depleted
-    DriftViolation,         // tool call params != plan_binding_hash
-    RoleInsufficient,       // trust stage too low for risk class
-    TaintRequired,          // action from tainted source needs review step-up
-    InvalidSeedRef,         // seed_ref does not reference a valid canonical seed idea
-    InsufficientFunds,      // creator balance < bounty_agx + estimated_tx_fee
 }
 
 struct QuotaConsumption {
@@ -100,14 +87,13 @@ struct PolicyAuditEntry {
     decision: Decision,
     deny_reason: Option<DenyReason>,
     height: u64,
-    taint_flags: Vec<String>,
     evaluator_signature: Vec<u8>,
 }
 ```
 
 ### 1.4 State Transitions
 
-**PDP rule chain evaluation:**
+**PDP rule chain evaluation (simplified to 5 steps):**
 
 ```
 Step 1: SCHEMA VALIDATION
@@ -117,52 +103,27 @@ Step 1: SCHEMA VALIDATION
 Step 2: SIGNATURE VERIFICATION
   - Look up agent's key binding in state (see Section 3).
   - If in grace window: verify against active_pubkey; on mismatch, retry against pending_pubkey. Accept if either matches.
-  - If past grace window (rotation finalized): verify only against active_pubkey. Pending_pubkey is now active; old key is revoked.
+  - If past grace window (rotation finalized): verify only against active_pubkey.
   - If no pending rotation: verify against active_pubkey.
   - Invalid → SIGNATURE_INVALID → DENIED.
 
-Step 3: POLICY BUNDLE MATCH
-  - Verify policy_bundle_hash == active_bundle_hash for current epoch.
-  - Mismatch → BUNDLE_MISMATCH → DENIED.
-
-Step 4: REPLAY PROTECTION
+Step 3: REPLAY PROTECTION
   - Verify plan_id not in consumed plan IDs for agent_id.
   - Verify nonce == last_nonce + 1 (strictly monotonic).
   - Verify expires_at_height > current_height AND expires_at_height < current_height + 10000.
   - Failure → REPLAY_DETECTED or TTL_EXPIRED → DENIED.
 
-Step 5: ROLE / TRUST CHECK
-  - Low risk: any trust stage allowed.
-  - Medium risk: requires sandboxed_contributor or higher.
-  - High risk: requires trusted_contributor or higher.
-  - Failure → ROLE_INSUFFICIENT → DENIED.
-
-Step 6: ACL CHECK
-  - Verify agent_id is authorized for action_type on resource_id.
-  - e.g., only task lease owner can renew; only active validators can vote on governance.
-  - Failure → DENIED (specific reason per resource type).
-
-Step 7: QUOTA CHECK
+Step 4: QUOTA CHECK
   - Check cross-layer quota matrix for agent_id + action_type.
   - Reserve quota atomically if sufficient.
   - Failure → QUOTA_EXHAUSTED → DENIED.
 
-Step 8: TAINT CHECK
-  - If action plan derived from tainted content (e.g., untrusted sender input):
-    - Medium/high risk → STEPUP_REQUIRED → DENIED.
-    - Low risk with taint → allowed but audit-flagged.
+Step 5: FEE CHECK
+  - Verify agent has sufficient balance for estimated tx fee.
+  - EIP-1559 base fee + priority fee must be covered.
+  - Failure → DENIED (insufficient funds).
 
-Step 9: RISK STEP-UP
-  - Medium risk: requires secondary reviewer attestation (plan_id, valid for 100 blocks).
-  - High risk: requires quorum certificate (2/3+1 of assigned reviewers) OR 6-block delay window.
-  - Failure → STEPUP_REQUIRED → DENIED.
-
-Step 10: PLAN BINDING HASH
-  - Compute canonical hash of tool call parameters.
-  - Must equal plan_binding_hash in approved plan.
-  - Mismatch → DRIFT_VIOLATION → DENIED.
-
-Step 11: APPROVED
+Step 6: APPROVED
   - Plan state: pending → approved.
   - Quota consumed (atomically reserved).
   - Audit log entry written.
@@ -190,12 +151,9 @@ Step 11: APPROVED
 - Verify schema validation rejects unknown fields and malformed plans.
 - Verify ML-DSA signature verification rejects invalid signatures.
 - Verify replay protection: duplicate plan_id, wrong nonce, or expired TTL → denied.
-- Verify policy bundle mismatch: plans with wrong bundle hash → denied.
-- Verify risk step-up: medium risk without attestation → denied; high risk without quorum/delay → denied.
 - Verify quota exhaustion: plan after quota depleted → denied.
 - Verify atomic quota reservation: no negative balances, release on execution failure.
-- Verify plan binding hash: parameter drift → DRIFT_VIOLATION.
-- Verify taint tracking: medium/high risk action from tainted source requires additional review.
+- Verify fee check: agent with insufficient balance for fee → denied.
 - Verify key rotation: both old and new keys valid during 100-block grace window; old key rejected after grace window finalization.
 - Verify nonce continuity across key rotation (nonce is per agent_id, not per key).
 
@@ -204,13 +162,6 @@ Step 11: APPROVED
 - PDP deterministic execution environment
   - Justification: All nodes must produce identical decisions from identical inputs. Floating-point, time-of-check, or environment-dependent logic breaks this.
   - Trust-minimised alternative: WASM-based PDP with deterministic instruction set; formally verified interpreter.
-- Policy bundle propagation latency
-  - Justification: New bundles take effect at epoch boundary; must be propagated to all nodes before then.
-  - Trust-minimised alternative: 2-epoch grace period with old bundle fallback for nodes still syncing.
-- Classifier auxiliary signal quality
-  - Justification: ML classifier is used for quota tightening only, not for authorization; false positives only degrade throughput.
-  - Trust-minimised alternative: No ML classifier; deterministic rule thresholds only (does not need this assumption).
-
 ---
 
 ## Section 2: Cross-Layer Quota Matrix
@@ -224,7 +175,7 @@ Define the canonical quota matrix enforced at the PDP and all enforcement points
 - The system MUST enforce quotas at designated enforcement points: PDP, inbox router, topic router, P2P ingress, governance gate.
 - Quota conflict resolution MUST follow deterministic order: hard deny quotas first → sender/stage quotas → per-resource quotas → deny on first breach.
 - Quota reservations MUST be atomic at plan approval time with rollback on execution failure.
-- Circuit-breaker mode MUST override quotas with tightened limits per escalation level.
+- Quotas are static per governance configuration. No dynamic mode-based quota tightening exists at protocol level.
 
 ### 2.3 Data Structures
 
@@ -235,7 +186,7 @@ struct QuotaEntry {
     dimension: String,        // "per_agent", "per_topic", "per_hour", etc.
     limit: u64,
     window_blocks: u64,       // window for rolling quota
-    stage_multipliers: [(TrustStage, (u64, u64)); 4],  // rational pair (numerator, denominator), e.g. (1,2) = 0.5x
+    stage_multipliers: [(TrustStage, (u64, u64)); 2],  // rational pair for untrusted/trusted
 }
 
 struct QuotaState {
@@ -249,10 +200,10 @@ struct QuotaState {
 
 | Quota ID | Limit | Window | Applies To | Stage Scaling |
 |---------|-------|--------|------------|---------------|
-| p2p_conn_per_identity | 50 | — | P2P ingress | untrusted=10, sand=20, trust=40, coord=50 |
+| p2p_conn_per_identity | 50 | — | P2P ingress | untrusted=10, trusted=50 |
 | p2p_tx_burst | 20 | 60s | P2P ingress | per identity |
 | p2p_gossip_budget | 100 | 1 min | P2P gossip | per sender |
-| inbox_msg_per_sender | 5/15/30/60 | 1 min | Inbox router | by trust stage |
+| inbox_msg_per_sender | 5/60 | 1 min | Inbox router | untrusted=5, trusted=60 |
 | inbox_global_per_agent | 2000 | 1 hour | Inbox router | per agent |
 | topic_msg_global | 500 | 5 min | Topic router | per topic |
 | fast_merge_per_topic | 20 | 1 hour | Fast-path | per topic |
@@ -260,15 +211,14 @@ struct QuotaState {
 | gov_proposals_per_identity | 1 | 1 epoch | Governance | per identity |
 | gov_open_proposals_global | 32 | — | Governance | network-wide |
 | review_concurrent_per_reviewer | 5 | — | Review assignment | per reviewer |
-| lease_active_per_agent | 0/2/6/12 | — | Task board | by trust stage |
+| lease_active_per_agent | 0/6 | — | Task board | untrusted=0, trusted=6 |
 | challenge_per_identity | 3 | 1 epoch | Challenge | per identity |
-| task_create_per_stage | 0/3/10/30 | — | Task creation (PDP) | by trust stage |
+| task_create_per_stage | 0/10 | — | Task creation (PDP) | untrusted=0, trusted=10 |
 
 ### 2.5 Failure Behavior
 
 - Quota race under concurrency: Atomic reservation (compare-and-swap on quota state) ensures single winner.
 - Reserved quota not consumed (execution failure): Released back to pool immediately.
-- Circuit-breaker active: All quotas tightened to emergency levels.
 - Quota monitoring: Quota exhaustion events are logged and trigger telemetry reporting.
 
 ### 2.6 Versioning and Compatibility
@@ -283,7 +233,7 @@ struct QuotaState {
 - Verify hard deny quotas checked before sender/stage quotas.
 - Verify atomic quota reservation: no negative remaining balance.
 - Verify quota release on execution failure.
-- Verify circuit-breaker mode tightens all non-critical quotas.
+- Verify stage-specific multipliers applied correctly for per-sender quotas (2-stage model).
 - Verify stage-specific multipliers applied correctly for per-sender quotas.
 
 ### 2.8 Trust-Assumption Inventory

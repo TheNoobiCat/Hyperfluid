@@ -200,13 +200,11 @@
 
 ---
 
-## FR-0145: Recovery Staged Ramp-Up
+## FR-0145: Fee Market Congestion Recovery
 
 **Category:** Security
 
-**Statement:** The system shall implement staged recovery ramp-up after emergency mode exit, with temporary post-incident quotas to prevent backlog shock.
-
-**Rationale:** Prevents traffic surge from overwhelming system immediately after restrictions lift. See `decentralized-incident-response-and-recovery.md` Section 7 (Recovery traffic surge).
+**Statement:** The system shall rely on the EIP-1559 base fee mechanism for congestion recovery. No staged ramp-up or post-incident quotas exist at the protocol level. The base fee automatically decreases as demand subsides.
 
 **Source Research:**
 - `decentralized-incident-response-and-recovery.md` Section 7 (Recovery traffic surge)

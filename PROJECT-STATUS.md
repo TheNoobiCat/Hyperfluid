@@ -10,9 +10,9 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 |-------|--------|
 | Phase 0: Research Audit | COMPLETE |
 | Phase 0: Decentralisation Audit | COMPLETE (issues in `docs/01-research/_overengineered.md`, fixes applied) |
-| Phase 1: Requirements | COMPLETE (195 requirements: 165 FR + 30 NFR) |
-| Phase 2: Architecture | COMPLETE (12 components, 12 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS) |
-| Phase 3: Specifications | COMPLETE (14 specs across 4 domains, all FRs mapped, trust-assumption inventories complete. Gate: PASS) |
+| Phase 1: Requirements | COMPLETE (203 requirements: 173 FR + 30 NFR — FR-0020a added) |
+| Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
+| Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
 | Phase 5+: Build | IN PROGRESS (Stage 00 complete. Stage 01 next: Protocol Core — Minimum Viable Chain) |
 
@@ -85,6 +85,17 @@ Key findings:
 
 Systemic patterns identified: incomplete migration propagation, f64 in deterministic contexts, documentation drift after Layer 2 amendments.
 
+## Bug Audit (2026-05-06) — Code
+
+**Result:** 7 bugs found and fixed across 2 crates. See `docs/01-research/_audit-bugs-2026-05-06.md` for full report.
+
+Key findings:
+1. **MAJOR:** SMT `verify_proof()` always computed `hash(current || sibling)` regardless of left/right position — proof verification broken for multi-leaf trees. Added `sibling_is_left` to `InclusionProof` struct.
+2. **MAJOR:** `Committee::weights` and `sample()` stakes remained `u64` after B-01's `u128` migration (incomplete migration recurrence). Changed to `u128` with 16-byte entropy selector.
+3. **MAJOR:** `f64` used in `committee_size * 0.33` max-overlap computation (determinism violation recurrence). Replaced with integer `div_ceil`.
+
+Systemic patterns identified: B-01 incomplete migration recurrence (committee weights), f64-in-deterministic recurrence (committee sampling), SMT proof correctness gap (no multi-leaf proof test).
+
 ## Next Actions
 
 1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete. See `docs/08-handoff/latest/checkpoint-2026-05-04.md`.
@@ -93,13 +104,15 @@ Systemic patterns identified: incomplete migration propagation, f64 in determini
 4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5: 7 FRs, ADR-0014, 4 specs, planning. See `checkpoint-2026-05-05b.md` and `checkpoint-2026-05-05c.md`.~~
 5. ~~Documentation-layer bug audit completed. See `docs/01-research/_audit-bugs-2026-05-05.md`.~~
 6. ~~Stage 01 Week 1-2 (C1 + C2): Consensus Engine + State Machine & SMT. See `checkpoint-2026-05-05d.md`.~~
-7. Stage 01 Week 3-4 (C3 + C5): Staking & Validator Manager + Fee Market.
-8. Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.
-9. Stage 01 Week 7-8: Integration, soak test, polish.
-10. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-11. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-12. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-13. Freeze all 14 specs before Stage 01 implementation starts. Post-freeze spec changes require governance proposals.
+7. ~~Architecture amendments (2026-05-06): 15% cap removed, overlap 33%→20%, VDF fallback hardened, stake-graph spec created, committee stall tiered, delegation spec'd. Changes across ~40 files. See `checkpoint-2026-05-06.md`.~~
+8. **PENDING:** 5 code changes required before Stage 01 Week 3-4: overlap+two-epoch guard, VDF fallback, stall thresholds, stake-graph clustering, delegation subsystem. See `checkpoint-2026-05-06.md` for exact file-level details.
+9. Stage 01 Week 3-4 (C3 + C5): Staking & Validator Manager + Fee Market. (Apply pending code changes first.)
+10. Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.
+11. Stage 01 Week 7-8: Integration, soak test, polish.
+12. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+13. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+14. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+15. Freeze all 15 specs before Stage 01 implementation continues. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -112,8 +125,9 @@ Systemic patterns identified: incomplete migration propagation, f64 in determini
 | `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
 | `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
 | `protocol/fee-market-spec.md` | C5 Fee Market (FR-0146-0160) | complete |
-| `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010, FR-0194 — TaskCreateTx) | complete |
-| `protocol/staking-spec.md` | C3 Staking & Validator Manager (FR-0011-0020) | complete |
+| `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010, FR-0194 — TaskCreateTx) | complete (amended 2026-05-06) |
+| `protocol/staking-spec.md` | C3 Staking & Validator Manager (FR-0011-0020, FR-0020a — delegation added) | complete (amended 2026-05-06) |
+| `protocol/stake-graph-analysis-spec.md` | C3 Staking & Validator Manager (FR-0002, FR-0183 — cluster detection algorithm) | **NEW (2026-05-06)** |
 | `protocol/governance-spec.md` | C4 Governance Engine (FR-0021-0030) | complete |
 | `protocol/p2p-wire-spec.md` | C7 P2P Networking (FR-0041-0050) | complete |
 | `protocol/fastpath-spec.md` | C6 Fast-Path Topic Protocol (FR-0031-0040) | complete |
@@ -134,11 +148,41 @@ Systemic patterns identified: incomplete migration propagation, f64 in determini
 | Telegram bot + TUI setup | New research doc. Optional single-tenant Telegram dashboard and ratatui first-launch config wizard. | `agent-telemetry-interface.md` (new), FR-0193 |
 | Bounty escrow mechanism | Task creation now requires escrowing bounty from creator's balance. Formalized escrow lifecycle. | `agx-economics-and-adversarial-incentives.md`, FR-0153b |
 
-## New Research Documents
+## Recent Design Changes (2026-05-06) — Committee BFT Hardening + Delegation
 
-- `docs/01-research/agents/sybil-detection-correlation-engine.md` — Sybil detection via behavioral correlation, automated adjudication, economic deterrence
-- `docs/01-research/agents/agent-telemetry-interface.md` — Telegram bot dashboard and ratatui TUI setup wizard for agent operators
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| 15% operator cap removed | Committee influence is now stake-proportional with anti-split clustering via stake-graph analysis. No per-operator seat cap exists. | `consensus-spec.md`, `FR-0002`, `ADR-0007`, `failure-model.md`, `agx-committee-bft-and-governance.md`, `decentralization-and-stack-benchmark.md`, `stage-01-protocol-core.md`, `state-model.md`, `FR-0183`, `checkpoint-2026-05-05d.md` |
+| Overlap 33%→20% + two-epoch recency | Max committee overlap reduced from 33% to 20%. Validators cannot serve more than 2 consecutive epochs. | `consensus-spec.md`, `FR-0004`, `state-model.md`, `failure-model.md`, `agx-committee-bft-and-governance.md`, `ADR-0007.md` |
+| VDF fallback hardened | Fallback seed now uses `previous_vdf_output \|\| hash(epoch_N-1_headers) \|\| epoch \|\| reveals` — no current-epoch malleable data. | `consensus-spec.md`, `FR-0003`, `agx-committee-bft-and-governance.md`, `ADR-0007.md` |
+| Stake-graph analysis spec created | New spec defining N=3 hop ancestor trace, clustering algorithm, committee weight integration. Deterministic, on-chain only. | `stake-graph-analysis-spec.md` (new), 8 referencing files updated |
+| Committee stall tiered fallback | Three tiers: Normal (67-100), Degraded (50-66, critical txs only), Emergency (0-49, halt + auto-recovery after 500 blocks). | `consensus-spec.md`, `FR-0001`, `failure-model.md`, `components.md` |
+| Stake delegation added | New ADR-0015. Validators gain `self_bond`/`total_delegated`/`commission_rate`. 4 new tx types (DelegateTx, UndelegateTx, WithdrawDelegationTx, SetCommissionTx). Delegation unbonding: 7 days. Commission cap: 20%. Slash propagates proportionally. | `ADR-0015` (new), `staking-spec.md`, `consensus-spec.md`, `FR-0020a`, `state-model.md`, `failure-model.md`, `components.md`, `agx-committee-bft-and-governance.md`, `stage-01-protocol-core.md`, `traceability-matrix.md`, `requirements/index.md` |
+
+## New Documents (2026-05-06)
+
+| Document | Type | Description |
+|----------|------|-------------|
+| `docs/04-specifications/protocol/stake-graph-analysis-spec.md` | Spec | N-hop ancestor trace for correlated validator detection. Deterministic, on-chain clustering algorithm. |
+| `docs/03-architecture/decisions/ADR-0015-stake-delegation.md` | ADR | Delegation model: self-bond + delegated stake for committee weight, commission, proportional slash propagation. |
+
+## New Requirements (2026-05-06)
+
+| FR | Description | File |
+|----|-------------|------|
+| FR-0020a | Stake Delegation | `docs/02-requirements/protocol/FR-0011-0020-staking-and-validator-lifecycle.md` |
+
+## Overengineering Fixes (2026-05-06 — Round 2)
+
+| Fix | What Changed | Files Affected |
+|-----|-------------|---------------|
+| Circuit breaker killed | Removed 3-tier CB, 22+ thresholds, IncidentRecord, CircuitBreakerState. EIP-1559 base fee is sole congestion mechanism. | ~15 files (incident-response-spec.md, ADR-0012, failure-model.md, state-model.md, components.md, 5+ FR files, research docs) |
+| Mempool lanes removed | Replaced 4-lane reservation with single fee-ordered pool + evidence/governance fee discounts. | ~10 files (p2p-wire-spec.md, ADR-0006, consensus-spec.md, components.md, FR-0050) |
+| Trust ladder simplified | 4 stages → 2 (untrusted/trusted). Removed reputation vector, decay, reviewer diversity, identity age. | ~10 files (state-model.md, ADR-0010, components.md, failure-model.md, research docs) |
+| PDP simplified to 5 checks | Removed RiskClass, role/trust, ACL, taint, risk step-up, plan binding, policy bundle match. Protocol no longer does LLM safety. DenyReasons: 12→5. | ~15 files (policy-engine-spec.md, ADR-0003, interfaces.md, components.md, FR docs) |
+| Review engine simplified | 3 phases → 2 (removed objective checks). Fixed payout, 1 independence constraint. Removed clawback, quality-weighted scoring. | ~10 files (review-engine-spec.md, ADR-0008, collaboration-spec.md, FR docs) |
+| TxType collapsed | 16 variants → 7 base types with action sub-enums. | ~12 files (consensus-spec.md, staking-spec.md, FR-0007, research docs) |
 
 ---
 
-*Last updated: 2026-05-05 (Stage 01 Week 1-2 complete: C1 Consensus + C2 State Machine & SMT; 56 workspace tests passing)*
+*Last updated: 2026-05-06 (Round 1: BFT hardening + delegation, ~40 files. Round 2: 6 overengineering fixes, ~72 files total. 57 tests passing. 5 pending code changes.)*

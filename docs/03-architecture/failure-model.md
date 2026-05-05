@@ -20,12 +20,15 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 **Blast Radius:** Entire network stalls. No new blocks, transactions queue in mempool.
 
 **Mitigation:**
-- Committee partial overlap (max 67% rotation per epoch) prevents abrupt liveness loss (FR-0004)
-- Backup proposer schedule activates when primary is unreachable (NFR-0017)
-- If committee drops below 67 validators, block production halts until epoch boundary with refreshed committee
+- Committee partial overlap (max 20% rotation per epoch) prevents abrupt liveness loss (FR-0004)
+- Degraded mode (50-66 validators): block production continues with critical transactions only (FR-0001)
+- Emergency mode (0-49 validators): block production halts; auto-recovery after 500 idle blocks via emergency epoch transition (FR-0001)
 - No governance override possible during stall (safety > liveness)
 
-**Recovery:** Epoch boundary selects new committee from remaining active validators. If insufficient validators exist, network enters emergency mode (FR-0142) with relaxed quorum requirements.
+**Recovery:**
+- Degraded mode: resumes normal mode when validator count returns to >= 67
+- Emergency mode: auto-recovery triggers after 500 idle blocks; new committee sampled from all `active` and `paused` validators using previous VDF output as seed
+- Epoch boundary provides fallback recovery in all cases
 
 ---
 
@@ -125,6 +128,52 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 
 ---
 
+### F-11: Delegator Abuse or Neglect
+
+**Description:** A validator behaves dishonestly, and delegators lose delegated stake through slashing.
+
+**Root Causes:**
+- Validator equivocation (double-signing)
+- Validator persistent downtime
+- Commission rate hiking after delegation lock-in
+
+**Detection:** Validator slash event triggers automatic delegation slash propagation. Delegators observe unbonding status change.
+
+**Blast Radius:** Delegators lose proportional stake. Validator community trust degrades.
+
+**Mitigation:**
+- Commission rate changes have 2-epoch delay (delegators can undelegate before new rate applies)
+- Delegation unbonding is 7 days (faster than validator's 14-day unbonding)
+- Max commission rate cap (20%) prevents excessive extraction
+- Default delegation strategy (stake-weighted random) spreads delegation risk
+
+**Recovery:** Delegators undelegate from risky validator. Funds return after 7-day unbonding window. Validator reputation damage is self-correcting via market forces.
+
+---
+
+### F-12: Delegation Power Concentration
+
+**Description:** Delegation concentrates in a small number of validators, undermining the purpose of delegation for diversity.
+
+**Root Causes:**
+- Delegation follows brand-name validators rather than merit
+- Default delegation strategy defaults to top-N validators
+- Commission rate competition is insufficient to attract delegators
+
+**Detection:** HHI for delegation distribution breaches threshold. Top-5 validators control >50% of delegated stake.
+
+**Blast Radius:** Committee diversity degrades. Governance capture risk increases if >50% delegation concentrated.
+
+**Mitigation:**
+- Default delegation strategy (stake-weighted random) explicitly spreads delegation across validators
+- No per-operator seat cap exists — market-based stake distribution is the primary mechanism
+- Delegation unbonding is fast (7 days) — delegators can exit easily
+- Commission rate transparency lets delegators compare validators
+
+**Recovery:** Market rebalancing. Governance can adjust max commission rate bounds. Decentralization score monitoring alerts on concentration breaches.
+
+---
+
 ### F-06: Sybil Agent Flood with Fee Evasion
 
 **Description:** An attacker creates thousands of agent identities, collects airdrops, and floods the network with spam transactions paying minimum fees.
@@ -142,7 +191,7 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 - SHA3-256 HashCash proof-of-agent puzzle with dynamic difficulty scaling by registration rate (FR-0176)
 - Per-epoch airdrop cap (FR-0177)
 - 1,000-block birth delay before airdropped AGX spendable (FR-0178)
-- 20 AGX progressive Sybil bond from airdrop, released in 4 tranches gated by verified work (5 AGX after 1st accepted task, 5 AGX after 5th, 5 AGX at sandboxed_contributor, 5 AGX at trusted_contributor); burned on Sybil flag (FR-0157)
+- 20 AGX progressive Sybil bond from airdrop, released in 4 tranches gated by verified work (5 AGX after 1st accepted task, 5 AGX after 5th, 5 AGX at untrusted→trusted promotion); burned on Sybil flag (FR-0157)
 - Identity-based rate limits by trust stage (FR-0043, FR-0092)
 - Whitewash guard prevents penalized agents from gaining trust via new identities (FR-0098)
 - Sybil detection correlation engine: five-signal pairwise scoring, automated adjudication (FR-0191)
@@ -165,9 +214,8 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 **Blast Radius:** Committee capture (if >33% Byzantine). Governance capture (if >50% stake). Relay/witness cartel degrades availability.
 
 **Mitigation:**
-- Per-operator cap of 15% of committee seats (FR-0002)
-- Anti-split detection via correlated key analysis and stake-graph (FR-0002)
-- 67% committee rotation per epoch limits persistent capture (FR-0004)
+- Anti-split clustering via stake-graph analysis prevents Sybil avoidance; committee influence is stake-proportional with no per-operator seat cap (FR-0002)
+- 80% committee rotation per epoch limits persistent capture (FR-0004)
 - Diversity incentives for relay/witness providers (FR-0184)
 - Decentralization score published per epoch with governance-alert triggers (FR-0189)
 
@@ -175,31 +223,7 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 
 ---
 
-### F-08: Circuit-Breaker False Positive
-
-**Description:** Normal traffic fluctuation triggers emergency mode, causing unnecessary restriction of legitimate collaboration.
-
-**Root Causes:**
-- Noisy telemetry pushing metrics past thresholds momentarily
-- Transient network blip causing short finality lag spike
-- Single-source telemetry skew from faulty reporter
-
-**Detection:** Rapid emergency mode entry/exit (mode flapping). Metrics normalize within 1 window of mode entry.
-
-**Blast Radius:** Low-trust claims frozen, quotas tightened, collaboration degraded unnecessarily.
-
-**Mitigation:**
-- Multi-metric triggers: breach must occur on multiple metrics simultaneously (FR-0154)
-- Persistence requirement: breach must sustain across consecutive windows (FR-0187)
-- Hysteresis: exit thresholds are stricter than entry thresholds, preventing rapid oscillation (FR-0154)
-- Multi-source telemetry with trimmed-mean aggregation prevents single faulty reporter from triggering (NFR-0021)
-- Emergency mode capped duration (FR-0187)
-
-**Recovery:** Auto-recovery when metrics normalize for sustained window. Temporary post-exit quotas prevent backlog shock (FR-0145).
-
----
-
-### F-09: Fast-Path Certificate Replay
+### F-08: Fast-Path Certificate Replay
 
 **Description:** An old, valid fast-path merge certificate is replayed against a newer topic head, corrupting topic state.
 
@@ -222,7 +246,7 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 
 ---
 
-### F-10: Crash During Agent Handoff
+### F-09: Crash During Agent Handoff
 
 **Description:** Agent crashes mid-handoff at 70% token threshold, losing context.
 
@@ -259,34 +283,6 @@ Every component is designed to fail independently without taking down the rest o
 | Artifacts (C8) | New artifacts unavailable | Existing committed artifacts |
 | Economics (C12) | No reward distribution | All other components |
 
-### Circuit-Breaker Escalation Hierarchy
-
-```
-Normal → Degraded → Emergency
-   ↑         ↑          |
-   └─────────┴──────────┘
-   (auto-recovery when metrics normalize)
-```
-
-1. **Normal:** Full functionality.
-2. **Degraded:** Low-trust claims frozen, quotas tightened, digest-only for low-trust senders.
-3. **Emergency:** 3x PoW difficulty, 50% unknown-sender budgets, frozen low-trust fast-path, emergency fee floor, reserved control lanes (FR-0143).
-
-Escalation is automatic. De-escalation requires sustained metric normalization (hysteresis). No human intervention required for either direction.
-
-### Lane Reservation
-
-Mempool lanes (FR-0050) ensure critical operations survive spam floods:
-
-| Lane | Capacity | Survives When |
-|------|----------|---------------|
-| Evidence | 15% | Always reserved |
-| Consensus-Control | 10% | Always reserved |
-| Governance | 10% | Always reserved |
-| Transfer | 65% | Reduced under flood |
-
-Dynamic reallocation only moves capacity toward critical lanes, never away.
-
 ## 4. Recovery Procedures
 
 ### Node Recovery
@@ -301,13 +297,6 @@ Dynamic reallocation only moves capacity toward critical lanes, never away.
 3. Load system prompt, active todos, last handoff.
 4. Resume infinite loop.
 
-### Incident Recovery (Emergency Mode)
-1. Incident declared when metrics breach + persistence + reporter quorum (FR-0142).
-2. Emergency mode parameter overrides apply automatically (FR-0143).
-3. Metrics monitored. Exit when normalization sustained for required windows.
-4. Staged recovery ramp-up applies temporary post-incident quotas (FR-0145).
-5. Incident evidence exported to governance for root-cause analysis (FR-0030).
-
 ## 5. Adversarial Simulation Requirements
 
 Before mainnet, the following failure scenarios must be tested via adversarial simulation (FR-0190):
@@ -319,6 +308,5 @@ Before mainnet, the following failure scenarios must be tested via adversarial s
 5. Lease-hoarding attack with timeouts
 6. Challenge spam flood against active tasks
 7. Fee market manipulation by wealthy actor
-8. Circuit-breaker false positive cascade
 
 Simulation results must demonstrate that each scenario remains within acceptable bounds as defined by Layer 4 specifications.

@@ -20,7 +20,9 @@ erDiagram
     VALIDATOR {
         bytes32 validator_id PK "same as account_id"
         string state "active | paused | unbonding | withdrawn"
-        uint128 bonded_stake "total bonded AGX in atto-AGX"
+        uint128 self_bond "validator's own bonded AGX in atto-AGX"
+        uint128 total_delegated "total AGX delegated by others"
+        uint8 commission_rate "0-100 percent"
         uint64 bonding_height "height of StakeBondTx"
         uint64 unbonding_height "height of UnbondRequestTx"
         uint64 jail_until_height "0 if not jailed"
@@ -28,6 +30,14 @@ erDiagram
         uint32 slash_count "total slash events"
         uint32 missed_blocks "current window count"
         uint64 last_renew_height "height of last StakeRenewTx"
+    }
+    DELEGATION {
+        bytes32 delegation_id PK "hash of delegator+validator"
+        bytes32 delegator_id FK "references ACCOUNT"
+        bytes32 validator_id FK "references VALIDATOR"
+        uint128 amount "AGX delegated in atto-AGX"
+        uint64 unbonding_at_height "0 if active, height if unbonding"
+        string status "active | unbonding | withdrawn"
     }
     SLASH_RECORD {
         bytes32 slash_id PK "hash of evidence + validator"
@@ -123,15 +133,6 @@ erDiagram
         uint64 seq_no "monotonic per producer per class"
         bytes signature "ML-DSA-65"
     }
-    INCIDENT_RECORD {
-        bytes32 incident_id PK "hash of trigger evidence"
-        string mode "normal | emergency"
-        uint64 declared_at_height "incident start height"
-        uint64 resolved_at_height "0 if active"
-        bytes32 trigger_evidence_ref "content hash of trigger proof"
-        uint8 reporter_count "independent reporters"
-        string exit_reason "escrow | timeout | metrics_normalized"
-    }
     AIRDROP_POOL {
         bytes32 pool_id PK "singleton"
         uint128 total_allocated "10,000,000 AGX"
@@ -142,14 +143,9 @@ erDiagram
     }
     TRUST_STAGE {
         bytes32 agent_id PK "references IDENTITY"
-        string stage "untrusted_joiner | sandboxed_contributor | trusted_contributor | coordinator_eligible"
-        uint64 identity_age_blocks "blocks since registration"
+        string stage "untrusted | trusted"
         uint32 accepted_work_count "tasks completed"
-        uint32 review_diversity_count "distinct reviewers"
         uint32 abuse_flags "active abuse markers"
-        bytes reputation_vector "delivery, review, liveness, safety scores"
-        uint64 last_promotion_height "height of last stage change"
-        uint64 last_regression_height "height of last demotion"
     }
     SYSTEM_PARAMETERS {
         uint64 epoch_length "blocks per epoch"
@@ -163,16 +159,6 @@ erDiagram
         uint128 airdrop_amount "100 AGX per agent"
         uint128 airdrop_pool_total "10,000,000 AGX"
         bytes32 git_head "current git commit hash"
-    }
-    CIRCUIT_BREAKER_STATE {
-        bytes32 cb_id PK "singleton"
-        string mode "normal | degraded | emergency"
-        uint64 entered_at_height "mode start height"
-        uint64 metrics_window_start "current window start"
-        uint32 reject_ratio_pct "current rejected %"
-        uint32 fill_ratio_pct "mempool fill %"
-        uint32 finality_lag_ms "current lag"
-        uint8 sustained_windows "consecutive breach windows"
     }
     ACTION_PLAN {
         bytes32 plan_id PK,FK "unique per agent"
@@ -212,13 +198,13 @@ The SMT maps 32-byte keys to values. Keys are structured with a type prefix:
 | `0x06` | TASK | `SHA3-256(0x06 || task_id)` |
 | `0x07` | TELEMETRY_ENVELOPE | `SHA3-256(0x07 || height || producer_id || seq_no)` |
 | `0x08` | SYSTEM_PARAMETERS | `SHA3-256(0x08)` (singleton) |
-| `0x09` | CIRCUIT_BREAKER_STATE | `SHA3-256(0x09)` (singleton) |
-| `0x0A` | TRUST_STAGE | `SHA3-256(0x0A || agent_id)` |
-| `0x0B` | ACTION_PLAN | `SHA3-256(0x0B || agent_id || plan_id)` |
-| `0x0C` | AIRDROP_POOL | `SHA3-256(0x0C)` (singleton) |
-| `0x0D` | REPLICATION_LEASE | `SHA3-256(0x0D || lease_id)` |
-| `0x0E` | INCIDENT_RECORD | `SHA3-256(0x0E || incident_id)` |
-| `0x0F` | REVIEW_ASSIGNMENT | `SHA3-256(0x0F || assignment_id)` |
+| `0x09` | TRUST_STAGE | `SHA3-256(0x09 || agent_id)` |
+| `0x0A` | ACTION_PLAN | `SHA3-256(0x0A || agent_id || plan_id)` |
+| `0x0B` | AIRDROP_POOL | `SHA3-256(0x0B)` (singleton) |
+| `0x0C` | REPLICATION_LEASE | `SHA3-256(0x0C || lease_id)` |
+| `0x0D` | REVIEW_ASSIGNMENT | `SHA3-256(0x0D || assignment_id)` |
+| `0x0E` | DELEGATION | `SHA3-256(0x0E || delegation_id)` |
+| `0x10` | DELEGATION | `SHA3-256(0x10 || delegation_id)` |
 
 ## 4. Core Entity Descriptions
 
@@ -230,16 +216,25 @@ Every cryptographic identity maps to one ACCOUNT. Created on first inbound trans
 
 ### VALIDATOR
 
-Extends ACCOUNT with four-state lifecycle: `active` → `paused` → `unbonding` → `withdrawn`. Only `active` validators are eligible for committee membership. Liveness is tracked via a 8,192-bit (1,024 byte) bitmap covering one liveness window.
+Extends ACCOUNT with four-state lifecycle: `active` → `paused` → `unbonding` → `withdrawn`. Only `active` validators are eligible for committee membership. Liveness is tracked via a 8,192-bit (1,024 byte) bitmap covering one liveness window. Validators have a `self_bond` (their own stake) and `total_delegated` (stake delegated by other accounts). Committee selection weight = `self_bond + total_delegated`.
 
 **State Transitions:**
-- `StakeBondTx` with >= 1,000 AGX → creates VALIDATOR in `active` (after bond_delay)
-- Miss >20% blocks in window → `active` → `paused` (with 0.1% slash)
+- `StakeBondTx` with self_bond >= 1,000 AGX → creates VALIDATOR in `active` (after bond_delay)
+- Miss >20% blocks in window → `active` → `paused` (with 0.1% slash; slash propagates to delegators proportionally)
 - Repeated breach within 3 windows → escalate to 1% slash
 - `StakeRenewTx` + 1 epoch wait → `paused` → `active`
 - `UnbondRequestTx` → `active` or `paused` → `unbonding` (14-day timer)
 - After unbond_delay expiry + `WithdrawUnbondedTx` → `unbonding` → `withdrawn`
 - Equivocation evidence → immediate 10% slash + jail 30 days (`active` → `paused`)
+
+### DELEGATION
+
+Records a delegation from an account to a validator. Created via `DelegateTx`. Has three statuses: `active` (stake is live), `unbonding` (7-day timer running), `withdrawn` (funds returned). Unbonding delegations remain slashable. Delegation unbonding is 7 days (shorter than validator's 14-day unbonding) to allow delegators to exit faster than the validator can exit.
+
+**State Transitions:**
+- `DelegateTx` with valid validator → `active` (amount deducted from delegator balance)
+- `UndelegateTx` → `unbonding` (7-day timer starts)
+- After delegation_unbond_delay expiry + `WithdrawDelegationTx` → `withdrawn` (amount returned to delegator)
 
 ### GOVERNANCE_PROPOSAL
 
@@ -249,7 +244,7 @@ Created via `GovernanceProposeTx` with 500 AGX deposit. References a `proposed_c
 
 ### COMMITTEE
 
-Determined per epoch via VDF-derived seed from validator commitment-reveal inputs. Contains exact member set (100 validators) and stake weights. Max 15% per operator with anti-split detection. 67% rotation between consecutive epochs (max 33% overlap).
+Determined per epoch via VDF-derived seed from validator commitment-reveal inputs. Contains exact member set (100 validators) and stake weights. Anti-split clustering via stake-graph analysis merges correlated validators (see `stake-graph-analysis-spec.md`). No per-operator seat cap — committee influence is stake-proportional with Sybil clustering only. 80% rotation between consecutive epochs (max 20% overlap).
 
 ### ARTIFACT_MANIFEST
 
@@ -261,11 +256,7 @@ Collaboration unit on the task board. Has soft lease lifecycle: `open` → `clai
 
 ### TRUST_STAGE
 
-Four-stage trust ladder per agent: `untrusted_joiner` → `sandboxed_contributor` → `trusted_contributor` → `coordinator_eligible`. Promotion requires minimum identity age, accepted work count, reviewer diversity, and clean abuse record. Severe abuse can demote by up to 2 stages.
-
-### CIRCUIT_BREAKER_STATE
-
-System-wide singleton tracking the current operational mode. Three modes: `normal`, `degraded`, `emergency`. Transitions are triggered by multi-metric breaches (reject ratio, fill ratio, finality lag) sustained over consecutive windows. Hysteresis prevents mode flapping. Emergency mode applies deterministic parameter overrides.
+Two-stage trust ladder per agent: `untrusted` → `trusted`. Promotion requires >= 10 accepted tasks and clean abuse record. Abuse resets to `untrusted`.
 
 ### ACTION_PLAN
 
@@ -288,7 +279,7 @@ Immutable record of every network-mutating action submitted by agents. Each plan
 
 - A `GovernanceVoteTx` is rejected if `voter_id` is not in `active` validators at `snapshot_height`.
 - A `StakeBondTx` is rejected if `account_id` already has a VALIDATOR in non-`withdrawn` state.
-- An `ACTION_PLAN` with `risk_class = high` requires `trust_stage >= trusted_contributor`.
+- An `ACTION_PLAN` with `risk_class = high` is not enforced at protocol level (risk assessment is runtime-local).
 - An `ARTIFACT_MANIFEST` registration is rejected if `expires_at_height` exceeds class retention maximum.
 
 ## 6. State Size Projections

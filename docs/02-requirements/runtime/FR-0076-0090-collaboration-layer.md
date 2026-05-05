@@ -205,17 +205,13 @@
 
 ---
 
-## FR-0085: Swarm Circuit-Breaker Mode
+## FR-0085: Swarm Anti-Abuse Mode
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall trigger circuit-breaker mode on lease-hoarding ratio, inbox overload, or merge-flood thresholds, temporarily freezing low-trust claims and tightening quotas.
+**Statement:** The system may implement local anti-abuse rate limiting (see `agent-runtime-spec.md`). No protocol-level swarm circuit-breaker exists — congestion is handled by the EIP-1559 fee market.
 
-**Rationale:** Automatic defense against coordination layer saturation. See `collaboration-layer-parallel-teams.md` Section 5 (Swarm circuit-breaker mode).
-
-**Source Research:**
-- `collaboration-layer-parallel-teams.md` Section 5, lines 134-141
-- `agx-economics-and-adversarial-incentives.md` Section 5 (Circuit-breaker controller)
+**Rationale:** Protocol-level circuit breakers are overengineered for the problem they solve. EIP-1559 base fee handles congestion automatically. Local rate limiting is an agent runtime concern.
 
 **Acceptance Criteria:**
 - [ ] Trigger conditions are deterministic and logged.

@@ -29,12 +29,14 @@ If you discover a trust assumption or centralised dependency not listed in the s
 2. File in `open-questions.md`.
 3. Escalate to spec revision before continuing.
 
-**Testing (TDD — Red → Green → Refactor):**
+**Testing (TDD — Red → Green → Refactor → Recurse):**
 - The spec's Section X.7 Conformance Test Hooks ARE the TDD stories.
 - For each hook, in order:
-  1. **RED:** Write a failing test that asserts the hook's behavior.
-  2. **GREEN:** Write minimum code to make the test pass.
-  3. **REFACTOR:** Clean up while keeping the test green.
+   1. **RED:** Write a failing test that asserts the hook's behavior.
+   2. **GREEN:** Write minimum code to make the test pass.
+   3. **REFACTOR:** Clean up while keeping the test green.
+   4. **RECURSE:** After GREEN, grep for the SAME bug pattern across ALL crates. If found, file a new issue or fix inline before moving to the next hook.
+- **Every conformance test must have at least one NEGATIVE assertion** (wrong input → correct rejection). If the hook only tests positive behavior, add an explicit edge-case subtest.
 - `cargo test` before any implementation must fail on the new test.
 - Test file convention: `crates/<component>/tests/` mirroring spec sections.
 - Test naming: `conforms_to_<spec>_<section>_<short_description>`.
@@ -43,7 +45,10 @@ If you discover a trust assumption or centralised dependency not listed in the s
 **Checkpoint cadence:**
 - Create a checkpoint after each passing green test, not just week boundaries.
 - A checkpoint is one line per test: `hook <name> — PASS`.
-- At week boundaries, summarise: total new tests, what works, what's next, blockers.
+- At week boundaries, before summarising, run a **determinism sweep** on any new protocol-level code:
+  - `grep -rn "as f64\|as f32\|f64::\|f32::" crates/` — flag any floating-point in deterministic paths
+  - `grep -rn "Instant::now\|SystemTime::now\|thread_rng\|rand::random" crates/` — flag wall-clock/random sources in protocol logic
+  - Verify all new `HashMap`/`HashSet` usages in protocol code don't leak iteration order into consensus decisions
 - File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
 
 When the week's tasks are complete:

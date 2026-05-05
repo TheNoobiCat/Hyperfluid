@@ -130,8 +130,12 @@ Each spec is a sequence of sections following this pattern:
 ### X.1 Purpose
 What this spec section defines.
 
+**Non-goals** (optional): What this section explicitly does NOT cover. Helps prevent scope creep and clarifies boundary cases that belong in a different section or spec.
+
 ### X.2 Normative Behavior
 MUST/SHOULD/MAY statements defining behavior.
+
+**Always include:** What happens on invalid/malformed input. If the spec does not define a rejection path for invalid input, document that as a gap.
 
 ### X.3 Data Structures
 ```rust
@@ -152,6 +156,13 @@ Upgrade rules and backwards compatibility.
 
 ### X.7 Conformance Test Hooks
 How to verify this spec is implemented correctly.
+
+**Every hook MUST include:**
+- At least one positive assertion (correct input → expected output).
+- At least one negative assertion (invalid input → correct error/rejection).
+- At least one edge-case subtest (boundary values, zero/null, max values, extreme concurrency).
+
+**Recurrence prevention:** For each hook, note the pattern class (e.g., "integer overflow check", "f64 determinism check", "enum exhaustive match"). After implementation, the implementer must grep the crate for the same pattern class and verify no other code has the same bug class.
 
 ### X.8 Trust-Assumption Inventory
 - External dependency/oracle: [name]

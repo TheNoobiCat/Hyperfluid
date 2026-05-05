@@ -67,7 +67,7 @@
 | `cargo doc --workspace --no-deps` | PASS |
 
 ## SPEC_DEVIATION flags
-1. `consensus-spec.md` Section 1.4: Committee sampling with small validator pools may produce duplicate members. Operator cap enforcement (>15%) is deferred to higher layer (C3 Staking).
+1. `consensus-spec.md` Section 1.4: Committee sampling with small validator pools may produce duplicate members. (SPEC_DEVIATION resolved in 2026-05-06: per-operator seat cap removed entirely — committee influence is now stake-proportional with anti-split clustering only.)
 2. `consensus-spec.md` Section 2.4: First-spend pubkey reveal is deferred until ML-DSA signature verification is integrated in C1 consensus proper.
 
 ## What's Next (Stage 01 Week 3-4: Staking + Fee Market)

@@ -200,22 +200,24 @@
 
 ---
 
-## FR-0050: Mempool Lane Reservation
+## FR-0050: Mempool Fee Ordering with Evidence/Governance Discounts
 
 **Category:** Networking
 
-**Statement:** The system shall split mempool into bounded lanes: evidence (15%), consensus-control (10%), governance (10%), transfer (65%), with per-lane eviction and strict reservation.
+**Statement:** The system shall maintain a single mempool priority queue ordered by fee (highest first). Evidence and governance transactions shall receive governance-set fee discounts to ensure they clear during congestion. No lane reservation exists.
 
-**Rationale:** Prevents lane starvation attacks that delay critical operations. See `agx-committee-bft-and-governance.md` Section 5 (Swarm hardening profile).
+**Rationale:** Single-pool fee ordering is simpler than lane reservation and wastes no capacity. Evidence/governance discounts ensure critical operations are not starved under load. See `p2p-wire-spec.md` Section 2.
 
 **Source Research:**
-- `agx-committee-bft-and-governance.md` Section 5, lines 209-214
-- `agx-committee-bft-and-governance.md` Section 7 (Mempool lane starvation attack)
+- `p2p-wire-spec.md` Section 2
+- `fee-market-spec.md` Section 1
 
 **Acceptance Criteria:**
-- [ ] Lane allocation is enforced at admission.
-- [ ] Critical lanes (evidence, control, governance) maintain reserved capacity even under transfer spam.
-- [ ] Dynamic reallocation only occurs toward evidence/control lanes, never away.
+- [ ] Mempool is a single priority queue ordered by fee.
+- [ ] Evidence transactions receive effective base fee discount (governance-set percentage).
+- [ ] Governance transactions receive effective base fee discount (governance-set percentage).
+- [ ] No lane reservation exists — all transaction types share the same pool.
+- [ ] Per-sender pending transaction limit prevents spam.
 
 **Dependencies:** FR-0007
 **Tags:** must-have

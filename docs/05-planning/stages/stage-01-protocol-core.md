@@ -49,8 +49,9 @@
 
 ### Week 3–4: Staking + Fee Market (C3 + C5)
 1. Validator lifecycle state machine: `active` → `paused` (downtime trigger) → `unbonding` (user request, 14-day window) → `withdrawn`.
-2. Stake-weighted committee sampling; operator identity deduplication (15% cap enforcement).
-3. Slashing evidence pipeline: equivocation proof, downtime proof (signed headers missing >20% in window).
+2. Stake-weighted committee sampling using `self_bond + total_delegated` as effective weight; operator identity deduplication via stake-graph anti-split clustering (see `stake-graph-analysis-spec.md`).
+3. Delegation: `DelegateTx`, `UndelegateTx`, `WithdrawDelegationTx`, `SetCommissionTx`; DelegationRecord management; proportional slash propagation; commission rate constraints.
+4. Slashing evidence pipeline: equivocation proof, downtime proof (signed headers missing >20% in window).
 4. EIP-1559 fee market: base fee per block, priority tip, fee adjustment denominator (8), block weight targets.
 5. Validator rebate distribution: proportional to signed blocks in epoch.
 6. Integration test: 3-validator network with staking lifecycle and fee market.
@@ -75,7 +76,7 @@
 6. Exit checkpoint: all exit criteria met; conformance log written.
 
 ## Risk Areas
-- **Malachite BFT mismatch with Hyperfluid specs:** Hyperfluid's committee model (exactly 100, 15% operator cap, VDF rotation) may not be a direct fit for Malachite's internals. Mitigation: first verify Malachite supports custom validator set changes at epoch boundaries. If not, adapt Hyperfluid's consensus-spec or compile a custom Malachite fork.
+- **Malachite BFT mismatch with Hyperfluid specs:** Hyperfluid's committee model (exactly 100, anti-split clustering, VDF rotation) may not be a direct fit for Malachite's internals. Mitigation: first verify Malachite supports custom validator set changes at epoch boundaries. If not, adapt Hyperfluid's consensus-spec or compile a custom Malachite fork.
 - **Ockam P2P version compatibility:** Ockam APIs may change between versions. Mitigation: pin Ockam dependency to a specific git commit hash. Re-evaluate at the start of each week.
 - **State sync correctness:** Snap-sync reconstructed state must match SMT root exactly; divergence = network split risk. Mitigation: automated differential fuzzing: replay same transaction stream via full-sync and snap-sync; assert identical state roots.
 - **gix repository-scale performance:** Content-addressed blob store may become a bottleneck at scale. Mitigation: benchmark with 100k+ blobs in Week 5; if performance degrades, add RocksDB-backed blob index.

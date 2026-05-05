@@ -134,35 +134,28 @@ RelayActive ──(all relay paths lost)──► Unknown
 
 ---
 
-## Section 2: Mempool Lane Reservation
+## Section 2: Mempool Ordering
 
 ### 2.1 Purpose
 
-Define the mempool lane architecture for admission control under congestion.
+Define the mempool as a single priority queue ordered by fee. No lane reservation exists — EIP-1559 base fee adjustment is the sole congestion mechanism.
 
 ### 2.2 Normative Behavior
 
-- The system MUST split the mempool into bounded lanes with reserved capacity.
-- Lane capacities MUST be: Evidence 15%, Consensus-Control 10%, Governance 10%, Transfer 65%.
-- Lane reservation MUST be enforced at transaction admission.
-- Critical lanes (evidence, control, governance) MUST maintain reserved capacity even under transfer spam.
-- Dynamic reallocation MUST only move capacity toward critical lanes, never away.
-- Each lane MUST have independent eviction policy (FIFO by fee within lane).
+- The system MUST maintain a single mempool ordered by `(priority_fee, base_fee + priority_fee)` descending.
+- Evidence transactions receive a governance-set fee discount (e.g., 50% reduction in effective base fee) to ensure they clear during congestion.
+- Governance transactions receive a similar fee discount to prevent starvation of protocol upgrades.
+- Standard transactions compete on fee alone.
+- The system MUST NOT partition the mempool into lanes or reserve capacity for any transaction type.
 
 ### 2.3 Data Structures
 
 ```rust
-enum MempoolLane {
-    Evidence = 0,        // 15% capacity
-    ConsensusControl,    // 10%
-    Governance,          // 10%
-    Transfer,            // 65%
-}
-
 struct MempoolConfig {
-    lane_capacities: [u8; 4],    // percentages
     max_total_tx: u64,           // total mempool size
-    per_sender_tx_limit: u32,   // per sender per block
+    per_sender_tx_limit: u32,    // per sender pending
+    evidence_fee_discount_pct: u8,   // e.g., 50 = 50% off base fee for evidence
+    governance_fee_discount_pct: u8, // e.g., 50 = 50% off base fee for governance
 }
 ```
 
@@ -170,38 +163,31 @@ struct MempoolConfig {
 
 **Mempool admission flow:**
 1. Transaction arrives at mempool ingress.
-2. Classify transaction type into lane (Evidence, ConsensusControl, Governance, Transfer).
-3. Check lane capacity: if lane is at reserved capacity, reject.
-4. Check per-sender limit: if sender has >= per_sender_tx_limit pending, reject lowest-fee tx from that sender in the same lane.
-5. Insert transaction into lane, ordered by priority_fee descending (FIFO by fee within lane).
-6. On block proposal: proposer selects transactions from each lane up to block gas target, respecting lane capacities.
-
-**Lane reallocation:** Under congestion, dynamic reallocation increases critical lane capacity up to 100% reserved. Transfer lane capacity may shrink but never below 25%.
+2. Compute effective fee: if tx_type is evidence or governance, apply `effective_base_fee = base_fee * (100 - discount_pct) / 100`.
+3. Check per-sender limit: if sender has >= per_sender_tx_limit pending, reject lowest-fee tx from that sender.
+4. Insert into single priority queue ordered by `(priority_fee, base_fee + priority_fee)` descending.
+5. On block proposal: proposer selects highest-fee transactions up to block gas target.
 
 ### 2.5 Failure Behavior
 
-- Lane starvation: critical lane transactions always admitted up to reserved capacity.
-- Transfer lane full: lowest-fee transactions evicted first.
-- Per-sender limit reached: additional transactions from same sender are rejected.
+- Mempool full: globally lowest-fee transactions evicted first regardless of type.
+- Per-sender limit reached: additional transactions from same sender rejected.
+- Evidence/governance fee discounts are set via governance and baked into `MempoolConfig` — they are not dynamic.
 
 ### 2.6 Versioning and Compatibility
 
-- Mempool lane capacities are governance-adjustable within defined bounds (evidence 5%-25%, control 5%-20%, governance 5%-20%).
+- Fee discount percentages are governance-adjustable.
 - Per-sender transaction limit is stored in system parameters.
-- Lane classification is deterministic; new transaction types default to Transfer lane unless governance maps them.
 
 ### 2.7 Conformance Test Hooks
 
-- Verify lane allocation at admission: evidence tx goes to evidence lane only.
-- Verify reserved capacity for governance lane under 100% transfer saturation.
-- Verify dynamic reallocation does not reduce critical lane capacities.
-- Verify per-lane eviction: lowest fee within lane evicted first.
+- Verify mempool ordered by fee: highest fee transaction selected first for block.
+- Verify evidence fee discount: evidence transaction with lower raw fee clears before higher-fee standard tx when discount applied.
+- Verify per-sender limit enforcement.
+- Verify no lane reservation exists: all transaction types share the same pool.
 
 ### 2.8 Trust-Assumption Inventory
 
-- Lane reservation under byzantine behavior
-  - Justification: Validators could bypass lane reservation in their own blocks. Peer rejection of blocks violating lane capacity provides enforcement.
-  - Trust-minimised alternative: Block validation rule rejects blocks that violate lane capacity; committee BFT requires 2f+1 honest validators to reject invalid blocks.
-- Mempool admission fairness
-  - Justification: Per-sender limits are locally enforced; colluding validators could admit own transactions exceeding limits.
-  - Trust-minimised alternative: Transaction admission proofs in block header verify lane/reservation compliance per-sender.
+- Fee discount manipulation
+  - Justification: Evidence and governance transactions receive fee discounts. If discounts are set too high, attackers could submit fake evidence to get cheap inclusion.
+  - Trust-minimised alternative: Discounts are governance-adjustable; false evidence is slashable (see staking-spec.md).

@@ -1,20 +1,17 @@
-## ADR-0006: Dual-Lane Economics (Collaboration + Control)
+## ADR-0006: Fee-Market Congestion Control
 
-**Status:** accepted
+**Status:** superseded
 
-**Context:** The network must support both high-volume collaboration traffic (task claims, messages, merges) and safety-critical control traffic (evidence, governance, emergency signals). Spam in one traffic class must not stall the other.
+**Context:** Originally a dual-lane economics model (collaboration + control) was spec'd with 4 mempool lanes (Evidence 15%, Consensus-Control 10%, Governance 10%, Transfer 65%). In practice, no major blockchain uses lane reservation — Bitcoin and Ethereum use a single mempool with fee ordering. Lane reservation wastes 25-35% of mempool capacity under normal load and adds complexity without proven benefit.
 
-**Decision:** Implement dual-lane economics with explicit separation:
-
-- **Collaboration lane:** Low baseline cost, trust-adjusted quotas, subject to circuit-breaker tightening. Handles task operations, topic merges, messages.
-- **Control lane:** Reserved mempool capacity (35% total: evidence 15%, consensus-control 10%, governance 10%), higher collateral requirements, always available regardless of circuit-breaker state.
+**Decision:** Remove mempool lane reservation. The mempool is a single priority queue ordered by fee. Evidence and governance transactions receive governance-set fee discounts to ensure they clear during congestion. EIP-1559 base fee adjustment is the sole congestion mechanism.
 
 **Consequences:**
-- Positive: Safety-critical operations survive spam floods (NFR-0008 requires >80% baseline throughput under 10x malicious sender ratio, with critical lanes at 100%). Gas market pricing differentiates collaboration from control. Governance lane never starved.
-- Negative: More complex fee market with separate congestion handling per lane. Control lane reservation reduces throughput for collaboration during normal operation.
+- Positive: Simpler mempool, no wasted capacity, no dynamic reallocation logic, no lane classification complexity.
+- Negative: Evidence/governance transactions compete in the same pool. Fee discounts mitigate this — if they're insufficient, these transactions may be delayed during extreme congestion (governance can adjust discounts).
 
 **Alternatives considered:**
-- **Single unified lane:** Rejected because spam can starve governance and evidence. EIP-1559 fee alone cannot distinguish safety-critical from non-critical traffic.
-- **Dynamic lane allocation:** Rejected because it could be gamed to expand collaboration lane at expense of control lane during attack. Dynamic reallocation only moves toward critical lanes, never away (FR-0050).
+- **Dual-lane reservation (original):** Rejected. Wastes capacity, adds complexity, no major chain uses this.
+- **Dynamic lane allocation:** Rejected on same grounds — no proven benefit over fee-ordered pool with targeted discounts.
 
-**Related:** FR-0050, FR-0152, NFR-0008, `components.md` C5.
+**Related:** FR-0050, FR-0146, FR-0159, `p2p-wire-spec.md` §2.

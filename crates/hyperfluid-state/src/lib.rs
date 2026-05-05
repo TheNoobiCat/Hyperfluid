@@ -91,16 +91,6 @@ pub struct SMTNode {
     pub hash: Hash32,
 }
 
-/// Inclusion proof from leaf to root. Source: consensus-spec.md Section 2.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InclusionProof {
-    pub key: Hash32,
-    pub value: Vec<u8>,
-    pub proof: Vec<Hash32>,
-    pub root: Hash32,
-    pub height: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

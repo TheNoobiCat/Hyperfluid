@@ -109,21 +109,13 @@ impl SparseMerkleTree {
             })
             .collect();
 
-        let leaf_count = current_level.len();
         let mut proof_siblings = Vec::new();
+        let mut sibling_is_left = Vec::new();
         let mut index = pos;
 
         while current_level.len() > 1 {
-            let mut next_level = Vec::new();
-            for chunk in current_level.chunks(2) {
-                let left = chunk[0];
-                let right = if chunk.len() == 1 { [0u8; 32] } else { chunk[1] };
-                next_level.push(left);
-                next_level.push(if chunk.len() > 1 { right } else { [0u8; 32] });
-            }
-            // next_level has pairs: [left0, right0, left1, right1, ...]
-            // But we need to build internal nodes from pairs.
-            let sibling = if index % 2 == 0 {
+            let is_left = index % 2 == 0;
+            let sibling = if is_left {
                 // current node is left, sibling is right (or zero if no right)
                 if index + 1 < current_level.len() {
                     current_level[index + 1]
@@ -135,6 +127,9 @@ impl SparseMerkleTree {
                 current_level[index - 1]
             };
             proof_siblings.push(sibling);
+            // Record whether the sibling was on the LEFT (true) or RIGHT (false).
+            // If current is right (odd), sibling is left. If current is left (even), sibling is right.
+            sibling_is_left.push(!is_left);
 
             let mut reduced = Vec::new();
             for pair_idx in (0..current_level.len()).step_by(2) {
@@ -157,14 +152,17 @@ impl SparseMerkleTree {
 
         let value = sorted_entries[pos].value.clone();
         let root = self.root();
-        let _ = leaf_count;
 
-        Some(InclusionProof { key: *key, value, proof: proof_siblings, root })
+        Some(InclusionProof { key: *key, value, proof: proof_siblings, sibling_is_left, root })
     }
 
     /// Verify an inclusion proof against a trusted root.
     pub fn verify_proof(proof: &InclusionProof, root: Hash32) -> bool {
         if proof.root != root {
+            return false;
+        }
+
+        if proof.proof.len() != proof.sibling_is_left.len() {
             return false;
         }
 
@@ -176,15 +174,17 @@ impl SparseMerkleTree {
         current.copy_from_slice(&hasher.finalize());
 
         // Walk up the tree
-        for sibling in &proof.proof {
+        for (sibling, is_left) in proof.proof.iter().zip(proof.sibling_is_left.iter()) {
             let mut hasher = Sha3_256::new();
-            // The order depends on whether key was left or right in its pair.
-            // We need to know the path to reconstruct correctly.
-            // For a sorted Merkle tree, the path is determined by the key's
-            // position among all leaves at each level.
-            // We walk up deterministically by comparing hash values.
-            hasher.update(current);
-            hasher.update(sibling);
+            if *is_left {
+                // sibling was the left child, current was the right child
+                hasher.update(sibling);
+                hasher.update(current);
+            } else {
+                // current was the left child, sibling was the right child
+                hasher.update(current);
+                hasher.update(sibling);
+            }
             let mut out = [0u8; 32];
             out.copy_from_slice(&hasher.finalize());
             current = out;
@@ -200,6 +200,9 @@ pub struct InclusionProof {
     pub key: Hash32,
     pub value: Vec<u8>,
     pub proof: Vec<Hash32>,
+    /// true if the sibling at this level was the LEFT child (current was RIGHT).
+    /// This is needed to reconstruct the correct parent hash ordering.
+    pub sibling_is_left: Vec<bool>,
     pub root: Hash32,
 }
 
@@ -272,5 +275,33 @@ mod tests {
         let mut tree = SparseMerkleTree::new();
         tree.insert([1u8; 32], vec![1]);
         assert!(tree.prove(&[2u8; 32]).is_none());
+    }
+
+    #[test]
+    fn multi_leaf_proof_verifies_at_even_and_odd_positions() {
+        let mut tree = SparseMerkleTree::new();
+        // Insert 5 leaves to exercise both even and odd proof positions at multiple levels
+        let keys: [Hash32; 5] =
+            [[0x01u8; 32], [0x02u8; 32], [0x03u8; 32], [0x04u8; 32], [0x05u8; 32]];
+        for (i, k) in keys.iter().enumerate() {
+            tree.insert(*k, vec![i as u8; 16]);
+        }
+        let root = tree.root();
+        // Verify proof for EVERY key (ensures both even and odd positions work)
+        for k in &keys {
+            let proof = tree.prove(k).expect("proof must exist for inserted key");
+            assert!(
+                SparseMerkleTree::verify_proof(&proof, root),
+                "proof verification failed for key at position {:?}",
+                k
+            );
+        }
+        // Verify that wrong value gives wrong root
+        let mut tree2 = SparseMerkleTree::new();
+        for (i, k) in keys.iter().enumerate() {
+            tree2.insert(*k, vec![(i + 100) as u8; 16]); // different values
+        }
+        let root2 = tree2.root();
+        assert_ne!(root, root2);
     }
 }
