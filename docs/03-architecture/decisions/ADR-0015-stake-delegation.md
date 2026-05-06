@@ -23,7 +23,7 @@
 **State:**
 - `ValidatorRecord` gains: `commission_rate: u8` (0-100, percent), `total_delegated: u128`, `self_bond: u128`
 - NEW: `DelegationRecord(delegator, validator, amount, unbonding_at_height, status, commission_share)`
-- NEW: key prefix `0x10` for DELEGATION in SMT
+- NEW: key prefix `0x0E` for DELEGATION in SMT
 
 **Consequences:**
 - Positive: Drastically larger validator pool. Small holders participate in security. Committee diversity improves. 15% cap removal compensated by broader natural stake distribution. Anti-split clustering still catches Sybil-funded validators.

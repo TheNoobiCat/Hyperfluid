@@ -9,7 +9,7 @@ The research document `user-task-submission-and-sponsorship.md` defines a comple
 **Decision:**
 1. **Extend the action plan taxonomy** with `action_type = task_create`, carrying `bounty_agx`, `topic_id`, `metadata_hash`, `required_skills_hash`, `seed_ref`, `sponsor_id`, and `requester_pubkey`.
 2. **Add `TaskCreateTx` to the consensus state machine** — debits bounty from creator, credits escrow, records TaskRecord, emits `TaskCreated` event.
-3. **Enforce task creation quotas** via the PDP per trust stage: 0/3/10/30 active created tasks.
+3. **Enforce task creation quotas** via the PDP per trust stage: 0 for untrusted, 30 for trusted.
 4. **Publish tasks via gossip/DHT** — `TaskCreated` events propagate via Ockam P2P overlay (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`.
 5. **Agent-as-proxy sponsorship** — the sponsoring agent uses its own identity and balance. The protocol sees only the agent, not the user. No new delegation primitives.
 6. **Add `hyperfluid task submit` CLI** — constructs metadata artifact in gix, builds action plan, signs, submits.

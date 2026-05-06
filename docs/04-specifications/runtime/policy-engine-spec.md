@@ -90,7 +90,7 @@ struct PolicyAuditEntry {
 
 ### 1.4 State Transitions
 
-**PDP rule chain evaluation (simplified to 5 steps):**
+**PDP rule chain evaluation (simplified to 6 steps):**
 
 ```
 Step 1: SCHEMA VALIDATION
@@ -287,38 +287,7 @@ struct KeyRotationTransaction {
 
 ### 3.4 State Transitions
 
-**Key rotation lifecycle:**
-
-```
-State: STABLE
-  - active_pubkey only (no pending rotation)
-  - Signature verification uses active_pubkey
-
-  Agent submits KeyRotationTransaction ──→ State: GRACE_WINDOW
-
-State: GRACE_WINDOW (100 blocks)
-  - active_pubkey = old key, pending_pubkey = Some(new_key)
-  - Signature verification: try active_pubkey first; on fail, try pending_pubkey
-  - grace_end_height = commit_height + 100
-
-  New rotation tx submitted during grace → grace_end_height = new_height + 100 (restart)
-  Current block >= grace_end_height → State: ROTATION_FINALIZED
-
-State: ROTATION_FINALIZED
-  - active_pubkey = pending_pubkey
-  - pending_pubkey = None
-  - Old key permanently revoked
-  - Rotation event written to audit log
-  → returns to STABLE with new active_pubkey
-```
-
-**Signature verification during each phase:**
-
-| Phase | Verification rule |
-|-------|-------------------|
-| STABLE (no pending) | Verify against active_pubkey only |
-| GRACE_WINDOW | Verify against active_pubkey; on fail, retry pending_pubkey. Accept if either matches. |
-| ROTATION_FINALIZED | Verify against active_pubkey only (old key revoked, will fail) |
+Key rotation uses a dual-key model: when pending_pubkey is set and current_height < grace_end_height, both old and new keys are accepted. After grace_end_height, only the new key is valid.
 
 **Nonce preservation:** Nonce is bound to agent_id, not pubkey. Nonce continuity is maintained across rotation — the agent continues from last_nonce + 1 with the new key.
 
@@ -358,49 +327,4 @@ State: ROTATION_FINALIZED
   - Justification: A compromised old key can still sign during the 100-block grace window. This is an intentional tradeoff — the grace window allows in-flight action plans to complete, preventing operational disruption during legitimate rotation. At ~10s block times, the exposure window is ~17 minutes.
   - Trust-minimised alternative: Zero-grace-window (instant rotation) would atomically revoke old key but would cause in-flight plan failures. The 100-block window is the minimal value that covers a full challenge window (144 blocks of plan validity) and allows queued plans to complete. Shorter windows (~50 blocks) increase the risk of false-positive plan rejections during rotation.
 
----
 
-## Section 4: Prompt Injection Defense
-
-### 4.1 Purpose
-
-Prompt injection defense is a **runtime-local concern** — the protocol does not mandate or enforce an evaluation framework. The protocol's only prompt-injection enforcement is the 5-step PDP rule chain (§1) which applies identically to all action plans regardless of content.
-
-For a reference design of the attack corpus registry, dual-metric release gating, canary drift detection, and scenario runner framework, see `docs/01-research/security/prompt-injection-defense-framework.md`.
-
-### 4.2 Normative Behavior (Protocol Level)
-
-- The system MUST treat all inbound payloads (DM, topic messages, documentation, web content, code) as untrusted at ingress regardless of sender identity (FR-0121).
-- The system MUST NOT allow untrusted text to directly trigger network-mutating actions without passing through the deterministic PDP rule chain (FR-0121).
-- The system MUST apply identical policy gate evaluation to actions from any sender regardless of apparent trust level (FR-0133).
-- The system MUST detect multi-turn delayed trigger payloads by evaluating each action independently of benign conversation history (FR-0134).
-- The system MUST block actions that violate schema, signature, replay, quota, or fee checks (FR-0132, already covered in §1).
-
-### 4.3 Data Structures
-
-No protocol-level data structures. See research reference for the attack corpus and evaluation framework data types.
-
-### 4.4 State Transitions
-
-No protocol-level state transitions. See research reference for attack corpus lifecycle, scenario runner, and canary drift detection flows.
-
-### 4.5 Failure Behavior
-
-No protocol-level failure modes beyond standard PDP deny behavior (§1.5). See research reference for corpus blind spot, metric gaming, and other evaluation-specific failure modes.
-
-### 4.6 Versioning and Compatibility
-
-No protocol-level versioning. See research reference for corpus versioning convention.
-
-### 4.7 Conformance Test Hooks
-
-- Verify inbound payload from any sender (including trusted) is marked untrusted at ingress.
-- Verify identical policy gate evaluation for all senders (no trust-based bypass).
-- Verify multi-turn delayed trigger: each action evaluated independently; no history-based trust.
-- Verify role confusion payloads are sanitized before context insertion.
-
-### 4.8 Trust-Assumption Inventory
-
-- Deterministic PDP as root guard
-  - Justification: Prompt injection defense relies on the PDP rule chain being consistently enforced on all nodes. Any PDP bypass is a security boundary violation.
-  - Trust-minimised alternative: Formal verification of PDP rule chain determinism; adversarial testing against PDP implementation.

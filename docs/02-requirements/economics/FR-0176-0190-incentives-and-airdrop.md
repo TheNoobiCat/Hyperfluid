@@ -242,7 +242,7 @@
 - [ ] Confirmed Sybil clusters: bond burn + 2-stage demotion + permanent cluster annotation.
 - [ ] Detection rate of 30% per epoch makes sustained farming negative-EV.
 
-**Dependencies:** FR-0157, FR-0176, FR-New (Sybil detection)
+**Dependencies:** FR-0157, FR-0176, FR-0191
 **Tags:** must-have
 
 ---
@@ -309,7 +309,7 @@
 - [ ] Pass criteria are defined before simulation runs.
 - [ ] Results inform parameter tuning and mechanism adjustments.
 
-**Dependencies:** FR-0154, FR-0155
+**Dependencies:** FR-0155
 **Tags:** must-have
 
 ---

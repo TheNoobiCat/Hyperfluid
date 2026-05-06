@@ -102,20 +102,17 @@ erDiagram
         string topic_id "topic reference (derived from seed_ref: idea/<slug>)"
         bytes32 seed_ref "SHA3-256 of canonical seed idea .md file; required"
         bytes32 parent_task_id FK "references TASK (optional, None if top-level)"
-        bytes depends_on "list of task_ids this task depends on (empty if none)"
         bytes32 primary_owner "agent_id with active lease"
         bytes32 funder "agent_id that created and funded the bounty"
-        string status "open | claimed | in_progress | blocked | done | decomposed"
+        string status "open | claimed | in_progress | blocked | done"
         uint128 bounty_agx "escrowed reward for completion (atto-AGX)"
-        bytes32 coordinator_id "agent who performed the split (optional)"
-        uint128 held_coordinator_fee "coordinator fee held until children done (optional)"
         uint64 created_at_height "task creation height"
         uint64 lease_expires_height "primary lease expiry"
         bytes32 required_skills_hash "content hash of skill list"
         bytes32 metadata_hash "SHA3-256 of gix-stored task description artifact"
         bytes32 sponsor_id "agent_id of sponsoring agent (optional, zero if not sponsored)"
         bytes32 requester_pubkey "pubkey of human user making the request (optional, zero if not applicable)"
-        string escrow_status "locked | released | refunded | clawed_back | bounty_redistributed | held_escrow"
+        string escrow_status "locked | released | refunded | bounty_redistributed | held_escrow"
     }
     REVIEW_ASSIGNMENT {
         bytes32 assignment_id PK "hash of task+reviewer+epoch"
@@ -161,13 +158,12 @@ erDiagram
         uint64 max_governance_proposals "32"
         uint128 proposal_deposit "500 AGX"
         uint128 airdrop_amount "100 AGX per agent"
-        uint128 airdrop_pool_total "10,000,000 AGX"
         bytes32 git_head "current git commit hash"
     }
     ACTION_PLAN {
         bytes32 plan_id PK,FK "unique per agent"
         bytes32 agent_id FK "references ACCOUNT"
-        string action_type "publish_topic_message | claim_task_lease | etc"
+        string action_type "publish_topic_message | claim_task_lease | task_create | ..."  // See interfaces.md for the full canonical list.
         bytes32 resource_id "target resource"
         uint64 nonce "monotonically increasing"
         uint64 expires_at_height "plan TTL"

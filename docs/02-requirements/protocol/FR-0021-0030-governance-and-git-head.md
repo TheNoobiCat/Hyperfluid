@@ -156,7 +156,7 @@
 
 **Category:** Governance
 
-**Statement:** The system shall enforce governance anti-flood controls: max 32 open proposals network-wide, 1 proposal per identity per epoch, and a reserved governance lane.
+**Statement:** The system shall enforce governance anti-flood controls: max 32 open proposals network-wide, 1 proposal per identity per epoch.
 
 **Rationale:** Prevents governance queue saturation by spam or griefing. See `agx-committee-bft-and-governance.md` Section 5 (Swarm hardening profile).
 
@@ -168,7 +168,6 @@
 - [ ] `max_open_governance_proposals` = 32 network-wide.
 - [ ] `max_proposals_per_identity_per_epoch` = 1.
 - [ ] `proposal_cooldown_after_reject` = 3 epochs.
-- [ ] Governance lane reserves 10% of mempool capacity.
 
 **Dependencies:** FR-0024
 **Tags:** must-have

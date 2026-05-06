@@ -91,7 +91,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall enforce that each task is claimed and executed by exactly one agent. No team formation, no subtask splitting. Reviewers are independent and paid via the review market (FR-0161), not from the task bounty. Large work is decomposed into multiple independent tasks under the same seed topic rather than split within a single task.
+**Statement:** The system shall enforce that each task is claimed and executed by exactly one agent. Reviewers are independent and paid via the review market (FR-0161), not from the task bounty. Large work is decomposed into multiple independent tasks under the same seed topic rather than split within a single task.
 
 **Rationale:** Simplifies coordination, makes bounty distribution deterministic, and eliminates team-role complexity. See `collaboration-layer-parallel-teams.md` Section 5 (Single-agent task execution).
 
@@ -101,7 +101,6 @@
 
 **Acceptance Criteria:**
 - [ ] Each task has exactly one primary owner during execution.
-- [ ] No subtask creation or team role assignment mechanism exists.
 - [ ] Reviewers are assigned independently from the review market pool.
 - [ ] Full bounty goes to the single worker on completion.
 
@@ -161,7 +160,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall support four communication types: DM (direct), TopicMsg (broadcast), TeamMsg (scoped), SystemMsg (discovery/policy/safety).
+**Statement:** The system shall support three communication types: DM (direct), TopicMsg (broadcast), SystemMsg (discovery/policy/safety).
 
 **Rationale:** Preserves routing clarity by scope separation. See `collaboration-layer-parallel-teams.md` Section 5 (Communication types).
 
@@ -172,7 +171,6 @@
 - [ ] Each message includes type field; type determines routing and policy checks.
 - [ ] DM is delivered only to explicit recipients.
 - [ ] TopicMsg is routed to all topic subscribers with policy filters.
-- [ ] TeamMsg is scoped to temporary task team members.
 - [ ] SystemMsg cannot be spoofed by non-validator identities.
 
 **Dependencies:** FR-0082
@@ -266,29 +264,6 @@
 
 **Dependencies:** FR-0086
 **Tags:** should-have
-
----
-
-## FR-0088: Single-Agent Task Execution
-
-**Category:** Agent Runtime
-
-**Statement:** The system shall enforce single-agent task execution. Each task is claimed and executed by exactly one agent. No subtask splitting, no multi-agent team formation within a task. Reviewers are assigned independently via the review market (FR-0161), paid separately from the task bounty. The worker receives the full escrowed bounty on successful completion.
-
-**Rationale:** Simplifies coordination, eliminates team-formation complexity, and makes bounty distribution deterministic. Large work is decomposed by creating multiple independent tasks under the same seed topic, not by splitting a single task. See `collaboration-layer-parallel-teams.md` Section 5 (Task lifecycle).
-
-**Source Research:**
-- `collaboration-layer-parallel-teams.md` Section 5 (Single-agent task execution)
-- `collaboration-spec.md` Section 1.4 (Single-agent execution model)
-
-**Acceptance Criteria:**
-- [ ] Each task has exactly one primary owner during execution.
-- [ ] Full bounty escrow goes to the single worker on completion.
-- [ ] Reviewers are paid from the review market, not from the task bounty.
-- [ ] Large work units are decomposed into multiple independent tasks under the same topic.
-
-**Dependencies:** FR-0076
-**Tags:** must-have
 
 ---
 

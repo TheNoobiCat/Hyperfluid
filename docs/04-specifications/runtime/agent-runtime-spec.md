@@ -293,7 +293,6 @@ struct ApplyPatchOutput {
 - Verify failure guard deduplication within 1 hour window.
 - Verify knowledge TTL: 30-day default, +30-day on read.
 - Verify max 100 active knowledge entries; oldest auto-archived.
-- Verify contradiction detection flags same-topic opposite conclusions.
 - Verify read tool: reads file content correctly; offset/limit boundaries respected.
 - Verify edit tool: exact string replacement works; multiple-match returns error.
 - Verify write tool: creates new file; overwrites existing file.
@@ -305,9 +304,6 @@ struct ApplyPatchOutput {
 - Bash tool sandbox containment
   - Justification: Local bash commands run within operator-controlled sandbox, not protocol-enforced.
   - Trust-minimised alternative: Protocol-enforced tool restrictions via PDP (only network-mutating tools gated).
-- Knowledge contradiction detection accuracy
-  - Justification: Contradiction detection uses heuristic comparison; false positives possible.
-  - Trust-minimised alternative: Review sandbox for manual contradiction resolution by another agent.
 
 ---
 
@@ -334,8 +330,6 @@ Define the system prompt assembly, context window allocation, and token budget m
 ```rust
 struct ContextEnvelope {
     identity_block: Vec<u8>,
-    goals_block: Vec<u8>,
-    inbox_signals: Vec<u8>,
     recent_messages: Vec<u8>,
     tool_specs: Vec<u8>,
     reserve: Vec<u8>,
@@ -365,6 +359,12 @@ struct ContextEnvelope {
 - Context overflow: if the aggregate exceeds the token budget, content is summarized or pruned by priority score.
 - Excess messages: summarized into digest or dropped with notification to agent.
 
+### 3.6 Versioning and Compatibility
+
+- System prompt assembly rules versioned in the policy bundle.
+- CLI specification is pinned to policy bundle hash; changes require governance proposal.
+- PTok normalization formula is protocol-wide and requires `git:head` update to change.
+
 ### 3.7 Conformance Test Hooks
 
 - Verify system prompt always includes identity block and active todos.
@@ -379,12 +379,6 @@ struct ContextEnvelope {
 - PTok normalization across models
   - Justification: Normalization depends on accurate model context limits; cross-model comparability may be approximate.
   - Trust-minimised alternative: Protocol-enforced maximum context length per agent (model-agnostic).
-
-### 3.6 Versioning and Compatibility
-
-- System prompt assembly rules versioned in the policy bundle.
-- CLI specification is pinned to policy bundle hash; changes require governance proposal.
-- PTok normalization formula is protocol-wide and requires `git:head` update to change.
 
 ---
 
@@ -471,16 +465,14 @@ struct ResourceLimits {
 
 ### 5.1 Purpose
 
-Define two optional operator-facing interfaces: a TUI setup wizard for first-launch configuration and a Telegram bot dashboard for ongoing monitoring. Both run within the agent runtime process (Zone 3). Neither interface can modify agent behavior, task state, or policy decisions.
-
-A third interface — **sponsored task submission** (FR-0200) — is defined in `user-task-submission-and-sponsorship.md` Section 5. In this mode, the agent receives natural-language task requests from the operator via Telegram, refines them into properly-scoped tasks mapped to seed ideas, and submits them as a sponsor using `hyperfluid task submit --sponsor`.
+Define optional operator-facing interfaces for first-launch configuration and monitoring. These run in Zone 3 (agent runtime) and cannot modify protocol state.
 
 ### 5.2 Normative Behavior
 
-- **TUI setup wizard**: Launches on first-run when no `config.toml` exists (or with `--setup` flag). Presents linear screens for LLM provider, agent identity, and optional Telegram config. Writes `config.toml`, then exits. If no TTY and no config, prints error and exits code 1.
-- **Telegram dashboard**: Single-tenant, read-only. Accepts `/start` (dashboard with balance, stage, current task), `/balance`, `/help`. Supports `/send` interactive flow for AGX transfers (address → amount → confirm). Silent on unrecognized commands. Bot key in `config.toml`, never transmitted on-chain.
-- **Failure behavior**: Telegram API unreachable → exponential backoff (1s–60s max), agent loop continues. CLI failure → error returned to user. SQLite read conflict → retry 3x with 100ms backoff. TUI fails gracefully with error message.
-- **Sponsored task submission** (`/submit`): operator sends a natural language task description. The agent refines it (expands scope, identifies skills, estimates bounty, selects topic/seed_ref), constructs the metadata artifact, builds a `task_create` action_plan with `sponsor_id`, signs it with its own key, and submits via `hyperfluid task submit --sponsor`. The agent communicates progress back to the user via Telegram (task claimed, in progress, completed). All refinement logic is off-protocol — the protocol sees only a valid `task_create` action_plan.
+- The system MAY provide a TUI setup wizard for first-launch configuration (LLM provider, agent identity, Telegram).
+- The system MAY provide a Telegram bot dashboard for monitoring (balance, trust stage, current tasks) and AGX transfers.
+- Neither interface can modify agent behavior, task state, or policy decisions.
+- Sponsored task submission (FR-0200): the agent receives natural-language task requests, refines them, and submits as sponsor via `hyperfluid task submit --sponsor`.
 
 ### 5.3 Data Structures
 
@@ -494,13 +486,10 @@ struct TelegramConfig {
 
 ### 5.4 Conformance Test Hooks
 
-- Verify TUI wizard launches when config absent and TTY available.
-- Verify Telegram bot validates token at startup, runs without Telegram on invalid token.
-- Verify `/start` dashboard contains balance, stage, current task.
-- Verify bot does NOT respond to non-standard commands.
+- Verify Telegram bot validates token at startup.
 - Verify bot token is not present in agent output artifacts or on-chain state.
 
 ### 5.5 Trust-Assumption Inventory
 
-- Telegram Bot API availability: Bot depends on Telegram's infrastructure. Bot failure is non-critical — agent continues without it.
-- Bot token secrecy: Token stored in local `config.toml`. Trust-minimised alternative: OS keychain or HSM.
+- Telegram Bot API availability: Bot depends on Telegram's infrastructure. Non-critical — agent continues without it.
+- Bot token secrecy: Token stored in local config.toml.

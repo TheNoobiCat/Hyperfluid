@@ -229,8 +229,8 @@ Located in `docs/02-requirements/economics/`
   - FR-0150: Flash Loan Resistance in Settlement
   - FR-0151: Harm-Class Economic Penalties
   - FR-0152: Dual-Lane Economics
-  - FR-0153: Useful Work Rewards Without Volume Farming
-  - FR-0154: Circuit-Breaker Controller with Hysteresis
+  - FR-0153: Quality-Weighted Bounty Payouts (Marketplace Model)
+
   - FR-0155: Parameter Bounds for Economic Variables
   - FR-0156: Lease Collateral Requirements
   - FR-0157: Anti-Sybil Airdrop Mechanism

@@ -50,7 +50,7 @@
 
 ### Week 3–4: Agent Runtime + Sandbox + Operator Interface (C10)
 1. Infinite agent loop: `load_system_prompt() → call_llm() → parse_action() → execute_tool() → check_token_count() → handoff_if_needed() → repeat`.
-2. Core tool set: `claim_task`, `publish_output`, `request_review`, `read_state`, `submit_action_plan`. Agent tools from Stage 00 (bash, todo, remember, forget, read, edit, write, apply_patch) extended with on-chain interaction primitives.
+2. Core tool set: `claim_task`, `publish_output`, `request_review`, `read_state`, `submit_action_plan`. Agent tools defined in agent-runtime-spec.md §2 (bash, todo, remember, forget, read, edit, write, apply_patch) extended with on-chain interaction primitives.
 2a. `hyperfluid task submit` CLI: `--title`, `--description-file`, `--bounty`, `--seed-ref` (required), `--required-skills`, `--sponsor` (optional). Constructs metadata artifact in gix, builds `task_create` action plan, signs, submits via PDP.
 3. System prompt loader: loads base prompt from chain (governance-managed), merges with agent-local overrides, formats with state context.
 4. Handoff mechanism: compress context at 70% token threshold or 50-message trigger → persist handoff record → next iteration loads resume context.
@@ -99,6 +99,7 @@
 - **Sybil detection false positives:** Correlation engine may flag legitimate collaborators as Sybil. Mitigation: independent adjudication panel of uncorrelated `trusted`+ agents reviews evidence before any penalty. Panel composition verified for independence. False-positive rate tracked and used to recalibrate thresholds.
 - **Bounty escrow race conditions:** Concurrent task claims on the same bounty-funded task. Mitigation: escrow is locked at task creation; lease claim is atomic. Only the primary lease holder can trigger payout. Canceled tasks refund via atomic escrow release.
 - **Airdrop puzzle difficulty oscillation:** Dynamic difficulty may overshoot under burst registrations, blocking legitimate new agents. Mitigation: hysteresis in difficulty adjustment (only increases after sustained high registration rate; decreases slowly). Difficulty floor ensures puzzle is always solvable on consumer hardware within ~30 seconds.
+- **VDF committee randomness:** VDF integration for committee randomness is deferred to Stage 03 (Validation) for calibration.
 
 ## Spec References
 

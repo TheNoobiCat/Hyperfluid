@@ -42,7 +42,7 @@
 ### Week 1–2: Consensus + State Machine (C1 + C2) — **COMPLETE (2026-05-05)**
 1. Integrate Malachite BFT: define validator identity, epoch structure, block proposal pipeline. (deferred: Malachite integration pending external dep)
 2. Implement SMT-backed state: key-value state store, transaction execution, block finalisation, SMT root hash computation. — **DONE**
-3. VDF-based committee rotation: deterministic committee from epoch seed (initially seeded from genesis; full VDF in Stage 03 tune). — **DONE (deterministic SHA3-256 sampling; full VDF deferred)**
+3. VDF-based committee rotation: deterministic committee from epoch seed (initially seeded from genesis; full VDF integration and tuning in Stage 03 (Validation)). — **DONE (deterministic SHA3-256 sampling; full VDF deferred)**
 4. Transaction types: `TransferTx`, `StakeBondTx`, `UnbondRequestTx`, `WithdrawUnbondedTx`, `TaskCreateTx`, `GovernanceProposeTx`, `GovernanceVoteTx`, `EvidenceTx`, etc. — **DONE (12 tx types in TxType enum)**
 5. Unit tests for state transitions; integration test for single-node block production. — **DONE (56 workspace tests)**
 6. Exit checkpoint: `cargo test` passes for C1 and C2 crates; single-node testnet produces blocks. — **DONE (see checkpoint-2026-05-05d.md)**

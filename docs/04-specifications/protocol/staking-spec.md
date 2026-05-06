@@ -34,7 +34,7 @@ struct ValidatorRecord {
     bonding_height: u64,
     unbonding_height: u64,
     jail_until_height: u64,         // 0 if not jailed
-    liveness_bitmap: [u8; 1024],    // 8192 bits for ~1 day window
+    liveness_counter: u32,            // rolling missed-block counter
     slash_count: u32,
     missed_blocks: u32,
     last_renew_height: u64,
@@ -127,7 +127,7 @@ DelegationTx(SetCommission) ──► ValidatorRecord.commission_rate updated (a
 | DelegationTx(WithdrawDelegation) | delegator | DelegationRecord.withdrawn | After delegation_unbond_delay (7 days); funds returned |
 | DelegationTx(SetCommission) (0-20%) | validator | ValidatorRecord.commission_rate | Effective after 2 epochs (buffer for delegator reaction) |
 
-**Liveness tracking:** An 8,192-bit bitmap per validator tracks participation per block in the liveness window. A missed block sets the bit at position (height % 8192) to 1. The count of 1-bits is the missed_block counter. At each epoch boundary, the window slides forward.
+**Liveness tracking:** A rolling counter of missed blocks per validator. The counter increments when a validator misses a block in the liveness window and resets on renewal. At >20% miss rate within the window, the validator transitions to paused.
 
 **StakeRenewTx:** This is the exclusive mechanism to resume from paused. No separate ResumeTx exists. The tx contains the validator's signature and takes effect after 1 epoch.
 
@@ -155,7 +155,7 @@ DelegationTx(SetCommission) ──► ValidatorRecord.commission_rate updated (a
 ### 1.7 Conformance Test Hooks
 
 - Verify only four states are valid; any other state transition is rejected.
-- Verify StakeBondTx with < 1,000 AGX is rejected.
+- Verify StakingTx(Bond) with < 1,000 AGX is rejected.
 - Verify newly bonded validators are not committee-eligible until bond_delay expires.
 - Verify 14-day unbonding delay is enforced and funds remain slashable during unbonding.
 - Verify equivocation triggers 10% slash and 30-day jail.

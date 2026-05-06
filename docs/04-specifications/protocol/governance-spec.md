@@ -138,16 +138,7 @@ Define the isolated sandbox subagent for governance proposal review.
 
 ### 2.3 Data Structures
 
-```rust
-struct GovernanceVoteTx {
-    proposal_id: [u8; 32],
-    voter_id: [u8; 32],
-    vote: VoteOption,
-    reason_hash: [u8; 32],
-    vote_weight: u64,
-    signature: Vec<u8>,
-}
-```
+GovernanceVoteTx is canonically defined in staking-spec.md §2.3. The vote_weight field is u128 (atto-AGX precision).
 
 ### 2.4 State Transitions
 

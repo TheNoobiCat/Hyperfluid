@@ -204,14 +204,13 @@
 
 **Category:** Security
 
-**Statement:** The system shall rely on the EIP-1559 base fee mechanism for congestion recovery. No staged ramp-up or post-incident quotas exist at the protocol level. The base fee automatically decreases as demand subsides.
+**Statement:** The system shall rely on the EIP-1559 base fee mechanism for congestion recovery. Staged ramp-up and post-incident quotas are local operator concerns, not protocol-enforced. The base fee automatically decreases as demand subsides.
 
 **Source Research:**
 - `decentralized-incident-response-and-recovery.md` Section 7 (Recovery traffic surge)
 
 **Acceptance Criteria:**
 - [ ] Recovery coordinator validates metrics over stabilization window before full normalization.
-- [ ] Temporary post-incident quotas are applied for bounded duration.
 - [ ] Deferred low-priority operations are replayed safely.
 
 **Dependencies:** FR-0143

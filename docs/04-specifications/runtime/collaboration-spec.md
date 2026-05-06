@@ -11,11 +11,11 @@
 
 ### 1.1 Purpose
 
-Define the decentralized task board, soft lease lifecycle, task splitting with dependency DAG, and single-agent execution model. Every task MUST reference a canonical seed idea via `seed_ref` — no orphan tasks are permitted. New seeds enter via `git:head` governance proposals. The seed idea index (stored as markdown files in `/ideas/`, discoverable via `hyperfluid idea list`) bootstraps the marketplace — see FR-0084 and `collaboration-layer-parallel-teams.md` Section 4.
+Define the decentralized task board, soft lease lifecycle, task splitting with dependency DAG, and single-agent execution model. Every task MUST reference a canonical seed idea via `seed_ref` — no orphan tasks are permitted. New seeds enter via `git:head` governance proposals. The seed idea index (stored as markdown files in `/ideas/`, discoverable via `hyperfluid idea list`) bootstraps the marketplace — see FR-0084 (Idea Seed Index for Work Bootstrapping) and ADR-0013 (Expanded Agent Tools, CLI Seed Index Discovery, and Seed-Centric Task Model).
 
 ### 1.2 Normative Behavior
 
-- Tasks are created via the `task_create` action plan type (FR-0194) and the `TaskCreateTx` consensus transaction. Task submission from external users or sponsoring agents flows through `hyperfluid task submit` → PDP validation → state machine → `TaskCreated` gossip event. See `user-task-submission-and-sponsorship.md` and ADR-0014 for the full pipeline.
+- Tasks are created via the `task_create` action plan type (FR-0194) and the `TaskCreateTx` consensus transaction. Task submission from external users or sponsoring agents flows through `hyperfluid task submit` → PDP validation → state machine → `TaskCreated` gossip event. See ADR-0014 (Task Submission and Sponsorship) for the full pipeline.
 - The system MUST implement a decentralized task board with soft lease lifecycle: `open → claimed → in_progress → blocked → done`.
 - Tasks MAY be split into child subtasks forming a dependency DAG. Split tasks transition to `decomposed` while children execute.
 - Each child task MUST reference its parent via `parent_task_id`. Top-level tasks have `parent_task_id = None`.
@@ -48,7 +48,7 @@ struct Task {
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
-    escrow_status: EscrowStatus,   // locked | bounty_redistributed | held_escrow | released | refunded | clawed_back
+    escrow_status: EscrowStatus,   // locked | bounty_redistributed | held_escrow | released | refunded
 }
 
 enum EscrowStatus {
@@ -57,7 +57,6 @@ enum EscrowStatus {
     HeldEscrow,            // coordinator fee held until children done
     Released,
     Refunded,
-    ClawedBack,
 }
 
 enum TaskStatus {
@@ -212,7 +211,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - **Coordinator abandons split:** Coordinator has no ongoing responsibility after the split. Children are independent. The coordinator fee is released when the last child finishes. If the coordinator disappears, children complete independently — the fee is released when they do.
 - **Voided split:** If all children expire or are abandoned (no lease taken for N epochs), the parent task returns to Open. The coordinator fee is forfeited (returned to funder balance). Any child that did complete keeps its payout.
 - **Split quality enforced by market:** If a coordinator splits badly (unfair bounties, vague descriptions, excessive fee), children sit unclaimed. The coordinator fee is never released. The coordinator wastes their transaction fee and locks AGX for nothing. This natural punishment replaces any need for a separate approval pipeline.
-- **Task stall:** No shadow claimant → task returns to open pool. After 3 consecutive primary lease expiries without completion, task bounty increases by 10% per cycle (up to 3x original).
+- **Task stall:** No shadow claimant → task returns to open pool. Lease TTL and collateral penalties increase on repeated timeouts (see LeasePenalty schedule).
 - **Lease collateral loss:** 1 timeout = warning; 2 timeouts = 50% lease budget reduction; 3 timeouts = 90% reduction + reputation penalty.
 
 ### 1.6 Versioning and Compatibility
@@ -233,7 +232,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - Verify bounty escrow: task creation deducts bounty_agx from funder balance; full bounty goes to single worker.
 - Verify bounty release: payout to worker after review + challenge window close.
 - Verify bounty refund: task expiry returns bounty to funder (minus cancellation fee).
-- Verify bounty clawback: collusion detection reverses settlement, funds return to escrow pool.
+
 - Verify timeout penalty escalation: warning → 50% → 90% + reputation.
 
 ### 1.8 Trust-Assumption Inventory
@@ -260,7 +259,7 @@ Define the inbox bucket system, message quotas, priority scoring, and communicat
 - The system MUST enforce per-sender message quotas by trust stage: untrusted 5 msg/min, trusted 60/min.
 - Global inbox budget: 2,000 messages per agent per hour with strict digest compaction after threshold.
 - Per-topic message budget: 500 messages per 5 minutes with priority reservation for moderation/system traffic.
-- The system MUST support four communication types: DM (direct), TopicMsg (broadcast), TeamMsg (scoped), SystemMsg (discovery/policy/safety).
+- The system MUST support three communication types: DM (direct), TopicMsg (broadcast), SystemMsg (discovery/policy/safety).
 - Only compact notification signals MUST be injected into agent prompt context; full payloads are fetched on demand.
 - New senders MUST default to digest-only routing until they build reliability through sustained low-abuse history.
 
@@ -273,7 +272,6 @@ struct InboxMessage {
     recipient_id: Option<[u8; 32]>,  // None for broadcast
     msg_type: MessageType,
     topic_id: Option<[u8; 32]>,
-    team_id: Option<[u8; 32]>,
     priority_bucket: PriorityBucket,
     priority_score: u8,              // 0-100
     content_hash: [u8; 32],
@@ -284,7 +282,6 @@ struct InboxMessage {
 enum MessageType {
     DM,
     TopicMsg,
-    TeamMsg,
     SystemMsg,
 }
 

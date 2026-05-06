@@ -295,7 +295,7 @@
 - [ ] Birth-block delay: 1,000 blocks before airdropped AGX can be spent.
 - [ ] Remaining locked bond is burned if identity is flagged for Sybil farming by the correlation detection engine.
 
-**Dependencies:** FR-0096, FR-New (Sybil detection)
+**Dependencies:** FR-0096, FR-0191
 **Tags:** must-have
 
 ---

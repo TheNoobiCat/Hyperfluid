@@ -53,9 +53,9 @@
 - `proof-of-work-quality-and-review-markets.md` Section 5, lines 122-131
 
 **Acceptance Criteria:**
-- [ ] Protocol tracks pair counts per rolling 10-task window deterministically.
-- [ ] Assignment rejected if cap exceeded.
-- [ ] Cap enforcement is visible in assignment logs.
+- [ ] Operator clusters are detected via stake-graph analysis and key correlation heuristics.
+- [ ] No reviewer shares a cluster with the worker or another reviewer.
+- [ ] If cluster constraints cannot be met, assignment falls back to next eligible reviewer.
 
 **Dependencies:** FR-0099
 **Tags:** must-have

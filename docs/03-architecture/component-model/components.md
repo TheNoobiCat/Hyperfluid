@@ -150,7 +150,7 @@ flowchart TD
 
 ### C11: Collaboration & Inbox Layer
 
-**Responsibility:** Task board with soft leases, bounty escrow lifecycle (lock on creation, release/refund/clawback on resolution), team formation, topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, trust ladder.
+**Responsibility:** Task board with soft leases, bounty escrow lifecycle (lock on creation, release/refund/clawback on resolution), topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, trust ladder.
 **Owned state:** Task board, lease registry, bounty escrow balances, topic metadata, inbox state, trust stages, abuse records.
 **Key FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b
 
@@ -197,7 +197,7 @@ flowchart TD
 - **Chosen:** Option B.
 - **Why chosen:** ML classifiers are probabilistic and bypassable. Deterministic rules are auditable, reproducible, and cannot be gamed through adversarial inputs.
 - **Sacrifice:** Less flexibility for novel action patterns.
-- **Scaling risk:** Rule chain depth must remain O(1). 8-step chain bounds evaluation to <100ms.
+- **Scaling risk:** Rule chain depth must remain O(1). 5-step chain bounds evaluation to <100ms.
 
 ### Tradeoff 3: 12 Components vs Fewer
 
@@ -225,11 +225,11 @@ flowchart TD
 - **Why it happens:** LLM nondeterminism or payload manipulation.
 - **Handling:** PDP rejects actions with invalid schema, bad signatures, replay, or quota exhaustion.
 
-### Scenario: Committee Stall with Tiered Recovery
+### Scenario: Committee Stall
 
 - **What happens:** Committee size drops below safety threshold.
 - **Why it happens:** Mass validator churn or network partition.
-- **Handling:** Three-tier response: degraded mode (50-66) continues critical transactions; emergency mode (0-49) halts block production but auto-recovers after 500 idle blocks via emergency epoch transition (FR-0001). No governance override possible during stall.
+- **Handling:** Block production halts until committee recovers. After 500 idle blocks, an emergency epoch transition triggers auto-recovery (FR-0001). No governance override possible during stall.
 
 ### Scenario: Review Sandbox Timeout Flood
 

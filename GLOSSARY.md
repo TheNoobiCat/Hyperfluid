@@ -33,7 +33,7 @@ Note: `inactive_bonded` and `probationary` from earlier drafts have been merged 
 
 ## Trust Ladder Stages
 
-Four-stage model for agent identity progression.
+Two-stage model for agent identity progression.
 
 | Stage | Description |
 |-------|-------------|

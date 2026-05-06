@@ -35,7 +35,7 @@ C12 reads from all layers; writes go through the State Machine (C2) as standard 
 ActionPlanRequest {
   plan_id: bytes32 (unique per agent_id)
   agent_id: bytes32 (SHA3-256 of agent pubkey)
-  action_type: enum (publish_topic_message | claim_task_lease | renew_task_lease | submit_fast_path_merge | submit_governance_proposal | cast_governance_vote)
+  action_type: enum (publish_topic_message | claim_task_lease | renew_task_lease | submit_fast_path_merge | submit_governance_proposal | cast_governance_vote | task_create)
   resource_id: bytes32
     nonce: uint64 (monotonically increasing)
     expires_at_height: uint64
@@ -60,8 +60,6 @@ ActionPlanResponse {
 - Invalid signature → DENIED (SIGNATURE_INVALID)
 - Replayed plan → DENIED (REPLAY_DETECTED)
 - Expired plan → DENIED (TTL_EXPIRED)
-- Wrong policy bundle → DENIED (BUNDLE_MISMATCH)
-- Risk step-up required → DENIED (STEPUP_REQUIRED)
 - Quota exhausted → DENIED (QUOTA_EXHAUSTED)
 
 **Version:** v1
@@ -79,7 +77,7 @@ ActionPlanResponse {
 **Message Format:**
 ```
 TransactionEnvelope {
-  tx_type: enum (TransferTx | StakeBondTx | EvidenceTx | GovernanceVoteTx | ...)
+  tx_type: enum (TransferTx | StakingTx(Bond/Renew/Unbond/Withdraw) | DelegationTx(Delegate/Undelegate/WithdrawDelegation/SetCommission) | TaskCreateTx | GovernanceTx(Propose/Vote) | EvidenceTx | FastPathTx)
   tx_payload: bytes (type-specific serialized transaction)
   approved_plan_id: bytes32
   plan_expires_at_height: uint64
@@ -335,12 +333,11 @@ ErrorResponse {
 | SIGNATURE_INVALID | Cryptographic verification failed | No |
 | REPLAY_DETECTED | Message nonce/ID already consumed | No |
 | TTL_EXPIRED | Message expired before processing | Yes (with new TTL) |
-| BUNDLE_MISMATCH | Policy bundle version conflict | Yes (after bundle update) |
-| STEPUP_REQUIRED | Action requires additional attestation | Yes (with attestation) |
+
 | QUOTA_EXHAUSTED | Sender quota depleted | Yes (after quota reset) |
 | INSUFFICIENT_FUNDS | Not enough AGX balance | Yes (after funding) |
 | VALIDATOR_INELIGIBLE | Sender not in required validator state | Yes (after state change) |
-| CIRCUIT_BREAKER_ACTIVE | System in emergency/degraded mode | Yes (after mode exit) |
+
 | RESOURCE_NOT_FOUND | Referenced resource does not exist | No |
 | INTERNAL_ERROR | Unexpected processing failure | Yes |
 

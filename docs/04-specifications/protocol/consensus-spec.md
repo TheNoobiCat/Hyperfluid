@@ -20,7 +20,7 @@ Define the committee-based Byzantine Fault Tolerant consensus protocol from gene
 - Committee influence is stake-proportional. Correlated validator keys detected via stake-graph analysis (see `stake-graph-analysis-spec.md`) MUST be treated as a single entity for committee weight computation.
 - Committee liveness operation is tiered by active validator count:
   - **Normal (67-100):** Full consensus, all transaction types permitted.
-  - **Degraded (50-66):** Block production continues. Only critical transaction types permitted: `TransferTx`, `StakeBondTx`, `StakeRenewTx`, `UnbondRequestTx`, `WithdrawUnbondedTx`, `EvidenceTx`. Governance and fast-path transactions are queued until normal mode resumes.
+  - **Degraded (50-66):** Block production continues. Only critical transaction types permitted: `TransferTx`, `StakingTx(Bond)`, `StakingTx(Renew)`, `StakingTx(Unbond)`, `StakingTx(Withdraw)`, `EvidenceTx`. Governance and fast-path transactions are queued until normal mode resumes.
   - **Emergency (0-49):** Block production halts. After K=500 idle blocks (~83 minutes), an emergency epoch transition is triggered: seed = previous VDF output, new committee sampled from ALL validators in `active` or `paused` states (not `unbonding`/`withdrawn`). New committee starts at full target size.
 - Committee selection MUST be fully deterministic given the same epoch seed and validator pool.
 - The system MUST use Malachite BFT (or protocol-equivalent) for consensus message passing.
@@ -65,7 +65,7 @@ enum TxType {
     TaskCreateTx,                     // create bounty-funded task (FR-0194)
     GovernanceTx(GovernanceAction),   // propose, vote
     EvidenceTx,
-    FastPathTx(FastPathAction),       // proposal, review, challenge
+    FastPathTx,
 }
 
 enum StakingAction {
@@ -87,11 +87,7 @@ enum GovernanceAction {
     Vote,
 }
 
-enum FastPathAction {
-    Propose,
-    Review,
-    Challenge,
-}
+
 ```
 
 ### 1.4 State Transitions

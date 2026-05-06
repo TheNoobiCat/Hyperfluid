@@ -122,7 +122,7 @@
 - `index.md` (Canonical Terminology)
 
 **Acceptance Criteria:**
-- [ ] Four stages are canonical; no additional stages without governance.
+- [ ] Two stages are canonical; no additional stages without governance.
 - [ ] Promotion requires minimum identity age, accepted work count, reviewer diversity, and clean abuse record.
 - [ ] Regression triggers on inactivity decay, challenge losses, or proven abuse.
 - [ ] Severe abuse can demote by 2 stages.

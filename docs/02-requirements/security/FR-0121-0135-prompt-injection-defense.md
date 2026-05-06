@@ -314,7 +314,7 @@
 - `prompt-injection-and-network-policy-boundary.md` Section 5 (Pattern filtering)
 
 **Acceptance Criteria:**
-- [】 Pattern filtering blocks known role-confusion prefixes ("ignore previous instructions", "system:", etc.).
+- [ ] Pattern filtering blocks known role-confusion prefixes ("ignore previous instructions", "system:", etc.).
 - [ ] Role override attempts in untrusted content are sanitized before entering context.
 - [ ] System prompt identity block is protected from modification by user/assistant messages.
 

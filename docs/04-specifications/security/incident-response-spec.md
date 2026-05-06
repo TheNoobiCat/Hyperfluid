@@ -1,4 +1,4 @@
-# Security Spec: Incident Response
+# Security Spec: Fee Market & Congestion Control
 
 **Components:** C4 Governance (Post-Incident Bridge)
 **Covered FRs:** FR-0142, FR-0143, FR-0144, FR-0145
@@ -10,7 +10,7 @@
 
 ### 1.1 Purpose
 
-Define the protocol's congestion response. Replaces the previous multi-tier circuit-breaker system with a single EIP-1559-style dynamic base fee — the only congestion control mechanism the protocol needs.
+Define the EIP-1559 base fee adjustment formula for congestion control. No emergency mode, degraded mode, or circuit-breaker hierarchy exists — the single dynamic base fee is the sole congestion mechanism.
 
 ### 1.2 Normative Behavior
 

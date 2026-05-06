@@ -25,7 +25,7 @@ Define the fast-path merge protocol for topic-scoped collaboration with quorum c
 - Certified rollbacks MUST revert topic state to a prior head, scoped to the affected topic only.
 - Competing certificates for the same base topic head MUST be resolved deterministically: higher approval weight first, then lower certificate hash.
 - Certificate validity MUST be bound to `proposal_id` and `base_topic_head`; replay of old certificates against newer topic heads MUST be rejected.
-- Topic merge outputs MAY be packaged into promotion bundles for optional canonical governance proposals.
+- Topic merge outputs are topic-scoped only; they do not directly produce governance proposals.
 
 ### 1.3 Data Structures
 
@@ -82,13 +82,7 @@ struct FastPathRollbackTx {
     signature: Vec<u8>,
 }
 
-struct PromotionBundle {
-    topic_id: [u8; 32],
-    merge_certificate: FastPathCertificate,
-    artifact_hash_chain: Vec<[u8; 32]>,
-    diff_summary: [u8; 32],
-    coordinator_signatures: Vec<Vec<u8>>,
-}
+
 ```
 
 ### 1.4 State Transitions
@@ -145,7 +139,7 @@ FastPathProposalTx ─► proposed
 - Verify deterministic tie-break produces identical result on all nodes.
 - Verify challenge window of 144 blocks before finality.
 - Verify rollback is topic-local; canonical git:head unchanged.
-- Verify promotion bundle packaging with content-addressed references.
+
 
 ### 1.8 Trust-Assumption Inventory
 

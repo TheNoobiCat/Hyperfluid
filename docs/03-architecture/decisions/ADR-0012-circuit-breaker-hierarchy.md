@@ -1,6 +1,8 @@
 ## ADR-0012: Congestion Response via EIP-1559 Base Fee
 
-**Status:** superseded
+**Status:** accepted
+
+**Note:** Circuit breaker system is removed. Congestion control is handled by EIP-1559 base fee adjustment and fee discounts for evidence/governance transactions (see p2p-wire-spec.md §2).
 
 **Context:** Originally a three-tier circuit-breaker escalation hierarchy (Normal/Degraded/Emergency) was spec'd. In practice, no major blockchain uses a multi-tier circuit breaker — the complexity of 22+ thresholds, persistence windows, hysteresis, reporter quorums, and sub-circuit-breakers creates oscillation risk and false-positive mode switches without proven benefit. Ethereum's EIP-1559 (single-parameter base fee adjusting 12.5% per block) has been proven in production since 2021.
 

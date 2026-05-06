@@ -185,4 +185,18 @@ Systemic patterns identified: B-01 incomplete migration recurrence (committee we
 
 ---
 
-*Last updated: 2026-05-06 (Phase 3 doc audit: 17 stale/simplified items fixed, §4 prompt injection framework demoted to `docs/01-research/security/prompt-injection-defense-framework.md`.)*
+## Documentation Audit — Resolved Questions (2026-05-06)
+
+All 5 open questions from the documentation audit were resolved:
+
+| # | Question | Resolution |
+|---|----------|------------|
+| Q1 | Magic number provenance | Accepted as-is — values are initial estimates, adjustable via governance. |
+| Q2 | FR-0154 missing | Stale reference from removed circuit-breaker feature. Removed from spec index and dependency lists. |
+| Q3 | Cross-spec dependency on research docs | Promoted: collaboration-spec.md §1.1 now references FR-0084 + ADR-0013; §1.2 now references ADR-0014. No Layer 1 research doc references remain in Layer 4 specs. |
+| Q4 | VDF integration schedule | VDF is scheduled: Stage 01 builds committee rotation with SHA3-256 sampling; Stage 03 (Validation) includes VDF calibration and tuning for production randomness. In-scope and tracked. |
+| Q5 | ADR-0012 stale references | Accepted — ADR-0012 status is `accepted` (circuit breaker removed). No further action needed. |
+
+---
+
+*Last updated: 2026-05-06 (Documentation audit: ~47 stale/simplified items fixed across L2-L5 docs, 5 open questions flagged.)*

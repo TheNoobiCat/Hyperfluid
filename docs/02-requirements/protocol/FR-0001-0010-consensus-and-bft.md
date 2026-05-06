@@ -201,7 +201,7 @@
 
 **Category:** Consensus
 
-**Statement:** The system shall use a Sparse Merkle Tree (SMT) for compact state commitments, storing balances, staking state, committee seed, liveness status, and `git:head`.
+**Statement:** The system shall use a Sparse Merkle Tree (SMT) for compact state commitments, storing balances, staking state, committee seed, and `git:head`.
 
 **Rationale:** Enables lightweight state verification and witnesses without full history. See `agx-committee-bft-and-governance.md` Section 4 (Architecture).
 

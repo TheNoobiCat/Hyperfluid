@@ -80,7 +80,6 @@ Located in `docs/04-specifications/security/`
 | FR-0148, FR-0149, FR-0150, FR-0153 | review-engine-spec.md | Section 1 |
 | FR-0151 | staking-spec.md | Section 1 |
 | FR-0152 | p2p-wire-spec.md | Section 2 |
-| FR-0154 | incident-response-spec.md | Section 1 |
 | FR-0155 | governance-spec.md | Section 1 |
 | FR-0156, FR-0157, FR-0158 | collaboration-spec.md | Section 3 |
 | FR-0161-0175 | review-engine-spec.md | Section 1 |

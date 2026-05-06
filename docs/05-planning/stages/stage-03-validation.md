@@ -65,8 +65,9 @@
 4. Injection defense: prompt injection payloads targeting system prompt loader, action plan forgeries with tampered signatures, replay attacks with stale nonces. PDP must reject all.
 5. Key compromise: simulate agent key leak. Verify key rotation (policy-engine-spec.md Section 3, FR-0118) prevents replay with old key; incident FSM escalates.
 6. Parameter calibration: run load tests at 50%, 100%, 150%, 200% target throughput. Measure fee adjustment response, review pipeline backlog. Derive recommended [TUNE] parameter values.
-7. Bug fixes from all validation findings. Re-run affected conformance tests.
-8. Exit checkpoint: all exit criteria met; calibration report written; security audit clean.
+7. VDF calibration: tune committee randomness parameters, validate entropy quality against theoretical bounds.
+8. Bug fixes from all validation findings. Re-run affected conformance tests.
+9. Exit checkpoint: all exit criteria met; calibration report written; security audit clean.
 
 ## Risk Areas
 - **Adversarial testing reveals protocol flaw:** If a byzantine scenario exposes an unfixable spec-level issue, the spec must be amended via governance in Stage 02 before Stage 03 can complete. This could add 2–4 weeks. Mitigation: Stage 02 governance engine can process spec amendment proposals.
