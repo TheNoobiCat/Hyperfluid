@@ -44,13 +44,13 @@ The system has five core mechanisms:
 ## Stack
 
 | Component | Technology |
-|---|---|---|
-| Language | Rust 2021 edition, MSRV 1.80 |
+|---|---|
+| Language | Rust 2021 edition (MSRV 1.80) |
 | Consensus | Committee BFT (Malachite) |
-| Networking | Ockam (P2P, encrypted channels) |
-| Storage | Content-addressed (gix) |
-| Fee market | EIP-1559 style |
-| CI | GitHub Actions (build, test, fmt, clippy, doc, deny) |
+| Networking | Ockam for P2P encrypted channels |
+| Storage | Content-addressed storage (gix) |
+| Fee market | EIP-1559–inspired fee market |
+| CI | GitHub Actions for build, test, fmt, clippy, doc, deny |
 
 ---
 

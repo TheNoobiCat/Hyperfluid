@@ -41,7 +41,6 @@ struct FeeConfig {
     max_adjustment_pct: u8,          // 12.5 (%)
     min_base_fee: u128,              // floor in atto-AGX — [TUNE] default 1_000_000 atto-AGX
     max_per_sender_tx: u32,          // 100 per block
-    fee_burn_ratio: u8,              // 100% (of base fee), governance-adjustable 50%-100%
 }
 ```
 
@@ -65,8 +64,8 @@ Where `adjustment_denominator = 8` (smooth adjustment rate).
 **Transaction admission:**
 1. Transaction must pay `(base_fee + priority_fee) * tx_size` in total.
 2. Transactions with `max_fee < base_fee` are rejected at admission.
-3. Mempool ordered by priority_fee descending within each lane.
-4. Block proposer selects transactions from each lane up to block gas target.
+3. Mempool ordered by priority_fee descending.
+4. Block proposer selects transactions up to block gas target.
 5. Excess priority_fee (max_fee - base_fee - minimum_inclusion_bid) is refunded.
 
 ### 1.5 Failure Behavior
@@ -74,7 +73,7 @@ Where `adjustment_denominator = 8` (smooth adjustment rate).
 - **Fee manipulation:** Base fee capped at 12.5% increase per block prevents rapid price inflation by wealthy actors.
 - **Fee collapse:** Minimum fee floor prevents zero-fee spam even during zero demand.
 - **Mempool saturation:** Per-sender transaction limits prevent single actor from filling blocks.
-- **Starvation:** Lane reservation ensures critical transactions (evidence, governance) always have capacity.
+- **Starvation:** Evidence and governance fee discounts prevent critical transaction starvation (see p2p-wire-spec.md §2 for fee discount mechanism).
 
 ### 1.6 Versioning and Compatibility
 
