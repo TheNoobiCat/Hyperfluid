@@ -65,7 +65,7 @@ struct SlashRecord {
     slash_id: [u8; 32],        // SHA3-256 of evidence || validator_id
     validator_id: [u8; 32],
     fault_type: FaultType,
-    slash_amount: u64,
+    slash_amount: u128,
     slash_height: u64,
     evidence_ref: [u8; 32],    // content hash of evidence
 }
@@ -201,7 +201,7 @@ struct GovernanceVoteTx {
     voter_id: [u8; 32],
     vote: VoteOption,
     reason_hash: [u8; 32],
-    vote_weight: u64,          // bonded_stake at snapshot
+    vote_weight: u128,          // bonded_stake at snapshot in atto-AGX
     signature: Vec<u8>,
 }
 

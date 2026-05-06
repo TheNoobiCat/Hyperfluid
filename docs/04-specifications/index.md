@@ -42,7 +42,7 @@ Located in `docs/04-specifications/runtime/`
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
 | [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
-| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120, FR-0121-0135 | 10-step deterministic rule chain, action plans, risk step-up, quota matrix, key rotation, prompt injection defense, audit log |
+| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 10-step deterministic rule chain, action plans, quota matrix, key rotation, audit log |
 | [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
 | [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, team formation, inbox routing, trust ladder, reputation, airdrop economics |
 
@@ -72,7 +72,7 @@ Located in `docs/04-specifications/security/`
 | FR-0061-0075 | agent-runtime-spec.md | Sections 1-4 |
 | FR-0076-0105 | collaboration-spec.md | Sections 1-3 |
 | FR-0106-0120 | policy-engine-spec.md | Sections 1-3 |
-| FR-0121-0135 | policy-engine-spec.md | Section 4 |
+| FR-0121-0135 | docs/01-research/security/prompt-injection-defense-framework.md | — |
 | FR-0136-0138 | agent-runtime-spec.md | Section 4 |
 | FR-0139-0141 | telemetry-spec.md | Sections 1-2 |
 | FR-0142-0145 | incident-response-spec.md | Sections 1-2 |

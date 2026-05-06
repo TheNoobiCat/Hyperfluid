@@ -1,7 +1,7 @@
 # Runtime Spec: Collaboration & Inbox Layer
 
 **Component:** C11 Collaboration & Inbox Layer
-**Source ADRs:** ADR-0010 (Two-Stage Trust Ladder), ADR-0006 (Dual-Lane Economics)
+**Source ADRs:** ADR-0010 (Two-Stage Trust Ladder)
 **Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190, FR-0194, FR-0195, FR-0198, FR-0201
 **Dependencies:** C9 Policy Decision Point, C10 Agent Runtime, C12 Economics
 
@@ -48,13 +48,16 @@ struct Task {
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
-    escrow_status: EscrowStatus,   // locked | released | refunded | clawed_back
+    escrow_status: EscrowStatus,   // locked | bounty_redistributed | held_escrow | released | refunded | clawed_back
 }
 
 enum EscrowStatus {
     Locked,
+    BountyRedistributed,  // parent split into children
+    HeldEscrow,            // coordinator fee held until children done
     Released,
     Refunded,
+    ClawedBack,
 }
 
 enum TaskStatus {
@@ -312,7 +315,7 @@ struct TopicRelevance {
 }
 
 struct InboxConfig {
-    per_sender_quota_min: [(TrustStage, u32); 4],
+    per_sender_quota_min: [(TrustStage, u32); 2],
     global_budget_per_hour: u32,       // 2000
     topic_budget_per_5min: u32,        // 500
     digest_compaction_threshold: u32,  // when to start compacting
@@ -381,9 +384,8 @@ Define the two-stage trust ladder and promotion rules.
 
 - The system MUST implement exactly two trust stages: `untrusted`, `trusted`.
 - Promotion MUST require: >= 10 accepted tasks (survived challenge window) and zero active abuse flags.
-- Reputation MUST be computed as a multi-dimensional vector: delivery_quality, review_reliability, liveness, safety.
-- Regression MUST trigger on inactivity decay, challenge losses, or proven abuse.
-- Severe abuse (equivocation-class) MUST demote by up to 2 stages.
+- Regression MUST trigger on proven abuse.
+- Severe abuse (equivocation-class) MUST demote to `untrusted`.
 - The system MUST allow agents to join with 0 AGX (untrusted) and earn trust through verifiable work.
 
 ### 3.3 Data Structures

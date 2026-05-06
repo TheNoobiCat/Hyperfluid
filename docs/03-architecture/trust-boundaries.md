@@ -159,7 +159,6 @@ Agent runtime queries node API for state information. Responses are read-only an
 - Committee roster
 - `git:head` pointer
 - System parameters
-- Circuit-breaker mode
 - Task board (on-chain task registry)
 - Artifact manifests and replication leases
 - Action plan records (approved/denied/consumed)

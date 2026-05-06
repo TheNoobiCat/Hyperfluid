@@ -32,7 +32,7 @@ struct Committee {
     epoch: u64,
     seed: [u8; 32],
     members: Vec<[u8; 32]>,  // validator_id list, exactly 100 entries
-    weights: Vec<u64>,        // corresponding stake weights
+    weights: Vec<u128>,       // corresponding stake weights in atto-AGX
 }
 
 struct BlockHeader {
@@ -209,11 +209,12 @@ enum KeyPrefix {
     Task = 0x06,
     TelemetryEnvelope = 0x07,
     SystemParams = 0x08,
-    TrustStage = 0x0A,
-    ActionPlan = 0x0B,
-    AirdropPool = 0x0C,
-    ReplicationLease = 0x0D,
-    ReviewAssignment = 0x0F,
+    TrustStage = 0x09,
+    ActionPlan = 0x0A,
+    AirdropPool = 0x0B,
+    ReplicationLease = 0x0C,
+    ReviewAssignment = 0x0D,
+    Delegation = 0x0E,
 }
 
 struct Account {
@@ -234,7 +235,7 @@ struct Account {
 4. After all transactions: recompute SMT root by replaying key-value inserts in sorted order.
 5. Commit state root into block header.
 
-**Account lifecycle:** Created on first inbound transfer or airdrop → Active (perpetual) → Prugable if balance = 0 and nonce = 0 for 100,000 blocks.
+**Account lifecycle:** Created on first inbound transfer or airdrop → Active (perpetual) → Prunable if balance = 0 and nonce = 0 for 100,000 blocks.
 
 **Task creation (TaskCreateTx):**
 1. PDP validates action_plan fields: schema, signature, policy bundle, nonce uniqueness, TTL, creator trust stage >= `trusted`, creator active task count < stage-based cap, creator balance >= `bounty_agx + estimated_tx_fee`, `seed_ref` references valid seed idea, `topic_id` matches seed.

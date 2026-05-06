@@ -185,4 +185,4 @@ Systemic patterns identified: B-01 incomplete migration recurrence (committee we
 
 ---
 
-*Last updated: 2026-05-06 (Round 1: BFT hardening + delegation, ~40 files. Round 2: 6 overengineering fixes, ~72 files total. 57 tests passing. 5 pending code changes.)*
+*Last updated: 2026-05-06 (Phase 3 doc audit: 17 stale/simplified items fixed, §4 prompt injection framework demoted to `docs/01-research/security/prompt-injection-defense-framework.md`.)*

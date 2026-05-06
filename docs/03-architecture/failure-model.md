@@ -47,8 +47,6 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 
 **Mitigation:**
 - Multi-layer defense: PDP checks + challenge windows + reviewer attestation + slashable deposits
-- Cumulative risk scoring detects tool-chaining bypass attempts (FR-0116)
-- Taint tracking escalates risk for actions derived from untrusted content (FR-0114)
 - Repeat offenders face trust regression and quarantine
 
 **Recovery:** Successful challenge rolls back the action within the challenge window (144 blocks). Slashing and jail for responsible parties. Policy bundle update closes the bypass vector.

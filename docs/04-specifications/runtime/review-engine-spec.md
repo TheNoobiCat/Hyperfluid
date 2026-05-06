@@ -73,29 +73,14 @@ enum ChallengeOutcome {
     Overturned,  // challenge unsuccessful, challenger bond burned
 }
 
-struct QualityScore {
-    task_id: [u8; 32],
-    objective_score: f64,    // normalized [0, 1]
-    review_score: f64,       // weighted reviewer verdicts [0, 1]
-    durability_score: f64,   // survived challenge window [0, 1]
-    final_score: f64,        // w1*objective + w2*review + w3*durability
-    weights: (f64, f64, f64),
-}
 ```
 
 ### 1.4 State Transitions
 
-**Three-phase pipeline flow:**
+**Two-phase pipeline flow:**
 
 ```
-Phase 1: OBJECTIVE VERIFICATION
-  Work submitted with artifact_root_hash, execution_profile_hash
-  → Node pulls artifact chunks by hash, recomputes root
-  → Runs deterministic checker set (pinned per epoch by checker_bundle_hash)
-  → Produces ObjectiveCheckRecord with pass_fail_vector + metrics_hash
-  → All checks pass → proceeds to Phase 2; any failure → rejected immediately
-
-Phase 2: INDEPENDENT REVIEW
+Phase 1: INDEPENDENT REVIEW
   Protocol assigns reviewers with independence constraints
   → Reviewers independently fetch artifacts by hash
   → Reviewers verify hash, run against same execution_profile_hash
@@ -103,7 +88,7 @@ Phase 2: INDEPENDENT REVIEW
   → Provisional settlement at review completion (2f+1 quorum)
   → Challenge window (144 blocks) opens
 
-Phase 3: CHALLENGE FINALITY
+Phase 2: CHALLENGE FINALITY
   Any eligible participant may submit ChallengeRecord with bond
   → Commit-reveal: challenger submits commit hash, reveals after 6 blocks
   → Arbiter evaluates evidence against work output and review records
