@@ -40,7 +40,6 @@ struct AgentLoopState {
     iteration: u64,
     total_tokens_used: u64,
     last_handoff_height: u64,
-    circuit_breaker_active: bool,
     active_tool_calls: Vec<ToolCallExecution>,
 }
 
@@ -321,8 +320,7 @@ Define the system prompt assembly, context window allocation, and token budget m
 ### 3.2 Normative Behavior
 
 - The system MUST assemble the system prompt from: identity block, project knowledge (newest N rows), current todos (all non-done), last handoff, and recent messages.
-- Context window MUST be allocated by percentage: identity 10%, goals 25%, inbox 15%, deltas 25%, tools 10%, reserve 15%.
-- Per-category caps MUST be enforced; overflow triggers deterministic pruning by priority score.
+- Context window is allocated dynamically; each block is pruned by priority score when the aggregate exceeds the token budget.
 - The `hyperfluid` CLI specification MUST be embedded verbatim in the system prompt.
 - Runtime command discovery MUST NOT be used; the CLI spec is static in the prompt.
 - The system prompt MUST instruct agents that all tasks require a valid seed idea reference. Agents MUST NOT create tasks without a `seed_ref`. If no suitable seed exists, the agent MUST advise proposing a new seed via `git:head` governance rather than creating an orphan task.
@@ -335,38 +333,37 @@ Define the system prompt assembly, context window allocation, and token budget m
 
 ```rust
 struct ContextEnvelope {
-    identity_block: Vec<u8>,       // 10%
-    goals_block: Vec<u8>,          // 25%
-    inbox_signals: Vec<u8>,        // 15%
-    recent_messages: Vec<u8>,      // 25%
-    tool_specs: Vec<u8>,           // 10%
-    reserve: Vec<u8>,              // 15% (dynamic overflow buffer)
+    identity_block: Vec<u8>,
+    goals_block: Vec<u8>,
+    inbox_signals: Vec<u8>,
+    recent_messages: Vec<u8>,
+    tool_specs: Vec<u8>,
+    reserve: Vec<u8>,
 }
 ```
 
 ### 3.4 State Transitions
 
 **System prompt assembly flow (per iteration):**
-1. Load identity block (agent_id, trust stage, reputation vector).
+1. Load identity block (agent_id, trust stage).
 2. Load project knowledge (newest N active KnowledgeEntry rows, max 100).
 3. Load current todos (all non-done TodoItems).
 4. Load last HandoffRecord summary.
-5. Load recent messages (last N up to context_window * 0.25).
-6. Load tool specs (CLI specification, 10% of context).
-7. Assemble ContextEnvelope with percentage-capped blocks.
+5. Load recent messages (last N up to context budget).
+6. Load tool specs (CLI specification).
+7. Assemble ContextEnvelope, pruning by priority score if token budget exceeded.
 8. Inline link resolution: HTTP/HTTPS URLs in payloads are resolved and content is appended.
 9. Send assembled prompt to LLM.
 
 **Token budget enforcement (per iteration):**
 1. After LLM response, count tokens in prompt + response.
-2. If consumed > context_limit * 0.70: inject reflection prompt, capture handoff, persist to SQLite, reset messages.
+2. If consumed > context_limit * handoff_threshold_pct / 100: inject reflection prompt, capture handoff, persist to SQLite, reset messages.
 3. Ingress token budgets enforced by sender trust stage before messages are added to context.
 
 ### 3.5 Failure Behavior
 
-- Context overflow: if a block exceeds its allocation, content is summarized or pruned by priority score rather than silently truncated.
+- Context overflow: if the aggregate exceeds the token budget, content is summarized or pruned by priority score.
 - Excess messages: summarized into digest or dropped with notification to agent.
-- Reserved priority lanes: signal/system messages bypass stage budgets.
 
 ### 3.7 Conformance Test Hooks
 
@@ -386,7 +383,6 @@ struct ContextEnvelope {
 ### 3.6 Versioning and Compatibility
 
 - System prompt assembly rules versioned in the policy bundle.
-- Context window allocation percentages are governance-adjustable with hard minima per block type (identity >= 5%, reserve >= 10%).
 - CLI specification is pinned to policy bundle hash; changes require governance proposal.
 - PTok normalization formula is protocol-wide and requires `git:head` update to change.
 
@@ -477,235 +473,34 @@ struct ResourceLimits {
 
 Define two optional operator-facing interfaces: a TUI setup wizard for first-launch configuration and a Telegram bot dashboard for ongoing monitoring. Both run within the agent runtime process (Zone 3). Neither interface can modify agent behavior, task state, or policy decisions.
 
-A third interface — **sponsored task submission** (FR-0200) — is defined in `user-task-submission-and-sponsorship.md` Section 5. In this mode, the agent receives natural-language task requests from the operator via Telegram, refines them into properly-scoped tasks mapped to seed ideas, and submits them as a sponsor using `hyperfluid task submit --sponsor`. This is a separate capability from the read-only dashboard and requires agent-level decision-making.
+A third interface — **sponsored task submission** (FR-0200) — is defined in `user-task-submission-and-sponsorship.md` Section 5. In this mode, the agent receives natural-language task requests from the operator via Telegram, refines them into properly-scoped tasks mapped to seed ideas, and submits them as a sponsor using `hyperfluid task submit --sponsor`.
 
-### 5.2 Normative Behavior — TUI Setup Wizard
+### 5.2 Normative Behavior
 
-**Launch conditions:**
+- **TUI setup wizard**: Launches on first-run when no `config.toml` exists (or with `--setup` flag). Presents linear screens for LLM provider, agent identity, and optional Telegram config. Writes `config.toml`, then exits. If no TTY and no config, prints error and exits code 1.
+- **Telegram dashboard**: Single-tenant, read-only. Accepts `/start` (dashboard with balance, stage, current task), `/balance`, `/help`. Supports `/send` interactive flow for AGX transfers (address → amount → confirm). Silent on unrecognized commands. Bot key in `config.toml`, never transmitted on-chain.
+- **Failure behavior**: Telegram API unreachable → exponential backoff (1s–60s max), agent loop continues. CLI failure → error returned to user. SQLite read conflict → retry 3x with 100ms backoff. TUI fails gracefully with error message.
+- **Sponsored task submission** (`/submit`): operator sends a natural language task description. The agent refines it (expands scope, identifies skills, estimates bounty, selects topic/seed_ref), constructs the metadata artifact, builds a `task_create` action_plan with `sponsor_id`, signs it with its own key, and submits via `hyperfluid task submit --sponsor`. The agent communicates progress back to the user via Telegram (task claimed, in progress, completed). All refinement logic is off-protocol — the protocol sees only a valid `task_create` action_plan.
 
-- The wizard MUST launch on first-run when no `config.toml` exists in the agent's working directory.
-- The wizard MUST NOT launch on subsequent runs unless the `--setup` CLI flag is passed.
-- If no interactive terminal (TTY) is available and no `config.toml` exists, the agent MUST print an error message and exit with code 1.
-
-**Screen flow:**
-
-- The wizard MUST present five screens in linear order:
-  1. **Welcome**: Project name (alphanumeric + hyphens, 1–64 chars), agent name (same rules).
-  2. **LLM Configuration**: Provider dropdown (OpenAI, Anthropic, Ollama, Custom), API URL, API key (masked input), model name.
-  3. **Identity**: Agent description (free text), capability tags (comma-separated, alphanumeric + hyphens, max 20).
-  4. **Telegram (optional)**: Bot token (validated via Telegram `getMe` API call), allowed user ID (numeric).
-  5. **Confirm**: Summary of all settings, with "Write config and start agent" or "Go back and edit" options.
-
-**Validation:**
-
-- Project/agent names MUST match `[a-z0-9-]{1,64}`.
-- API URL MUST start with `http://` or `https://`.
-- API key MUST be non-empty.
-- Capability tags MUST match `[a-z0-9-]{1,32}` each, max 20 tags.
-- Bot token MUST match `\d+:[\w-]+` format.
-- Allowed user ID MUST be a non-zero positive integer.
-- Validation errors MUST display inline near the relevant field in red text.
-
-**Output:**
-
-- On confirm, the wizard MUST write a valid `config.toml` file.
-- The wizard MUST print "Agent starting..." and exit, handing control to the agent loop.
-- `config.toml` format:
-
-```toml
-[agent]
-name = "agent-01"
-project = "hyperfluid-main"
-description = "Agent description."
-capability_tags = ["tag1", "tag2"]
-
-[llm]
-provider = "openai"
-api_url = "https://api.openai.com/v1"
-api_key = "sk-..."
-model = "gpt-4o"
-
-[telegram]
-bot_token = "123456:ABC-DEF1234ghijk"
-allowed_user_id = 123456789
-```
-
-- The `[telegram]` section is optional. If entirely absent, the Telegram bot is not started.
-
-### 5.3 Normative Behavior — Telegram Bot
-
-**Startup:**
-
-- If `[telegram]` is present in `config.toml`, the runtime MUST spawn a `tokio::spawn` task for the Telegram bot client.
-- The bot MUST validate the token by calling Telegram `getMe` API. If the token is invalid, it MUST log a warning and the agent MUST continue without Telegram (not crash).
-- The bot MUST use long-polling (`getUpdates` with `timeout=30`) — no webhook server required.
-
-**User ID binding (single-tenant):**
-
-- The bot MUST compare `message.from.id` against `allowed_user_id` on every incoming message.
-- Messages from non-matching user IDs MUST be silently dropped (no response, no error message).
-- The bot MUST NOT support multi-user access, group chats, or channel integration.
-
-**Commands:**
-
-| Command | Behavior | Mutates state? |
-|---------|----------|:---:|
-| `/start` | Full dashboard: balance, address, trust stage, current task (from SQLite todos), team, last completed task | No |
-| `/status` | Compact status: current task + team | No |
-| `/balance` | AGX balance + wallet address (from `hyperfluid query balance`) | No |
-| `/send` | Interactive AGX transfer flow (see below) | Yes, via CLI |
-| `/help` | Command list | No |
-
-- Any message not matching these commands MUST receive the help text.
-- The bot MUST NOT respond to commands with agent instruction, prompt injection, or task manipulation. No `/prompt`, `/task`, or `/team` commands exist.
-
-**Dashboard content (`/start`):**
-
-The dashboard MUST include, sourced as indicated:
-
-```
-*Hyperfluid Agent*
-
-*Agent:* <config.agent.name>
-*Stage:* <hyperfluid query trust-stage>
-*Balance:* <hyperfluid query balance> AGX
-*Address:* `agx1...`
-
-*Current Task:* <todos WHERE status='in_progress'>
-*Status:* in_progress | *Lease expires:* block <N>
-
-*Team:* <team members from topic contract>
-— member-1 (lead)
-— <agent-name> (implementer) ← you
-— member-3 (reviewer)
-
-*Last Completed:* <todos WHERE status='done' ORDER BY ts DESC LIMIT 1>
-*Settled:* <yes/no> | *Payout:* <N> AGX
-```
-
-- All data reads from the agent's local SQLite (read-only) and the node API via `hyperfluid` CLI.
-- The bot MUST NOT write to SQLite or modify any agent state.
-
-**Interactive `/send` flow:**
-
-1. Bot: "Send AGX to which address? (reply with the address)"
-2. User replies with recipient address.
-3. Bot validates address format (checksum, length). If invalid: "Invalid address format. Please check and try again." → restart flow.
-4. Bot: "How much AGX? (reply with amount)"
-5. User replies with amount.
-6. Bot validates: amount must be positive, <= current balance. If invalid: "Invalid amount." → restart at step 4.
-7. Bot: "Send X AGX to `<address>`? Reply YES to confirm or anything else to cancel."
-8. User replies YES. Any other reply cancels.
-9. Bot executes `hyperfluid tx transfer <address> <amount>`. The agent's key signs the transaction via the node API.
-10. Bot: "Sent. TX hash: `0x...`"
-
-- The bot MUST NOT hold or cache the agent's private key. All signing occurs in the node process (Zone 1/2).
-
-**Failure behavior:**
-
-- Telegram API unreachable: Exponential backoff (1s, 2s, 4s, ... 60s max). Log warning. Agent loop continues.
-- `hyperfluid` CLI failure: Bot returns error message to user ("Transfer failed: <reason>").
-- SQLite read conflict: Retry up to 3 times with 100ms backoff. If still busy, return "Agent state busy, try again."
-
-### 5.4 Data Structures
+### 5.3 Data Structures
 
 ```rust
 struct TelegramConfig {
-    bot_token: String,           // Telegram bot token
-    allowed_user_id: u64,        // single tenant
-    enabled: bool,               // true if [telegram] section present + valid
-}
-
-struct TuiWizardState {
-    screen: WizardScreen,
-    project_name: String,
-    agent_name: String,
-    llm_provider: String,
-    api_url: String,
-    api_key: String,
-    model: String,
-    description: String,
-    capability_tags: Vec<String>,
-    bot_token: Option<String>,
-    tg_user_id: Option<u64>,
-}
-
-enum WizardScreen {
-    Welcome,
-    LlmConfig,
-    Identity,
-    Telegram,
-    Confirm,
-}
-
-#[derive(Serialize, Deserialize)]
-struct AgentConfigFile {
-    agent: AgentSection,
-    llm: LlmSection,
-    telegram: Option<TelegramSection>,
-}
-
-struct AgentSection {
-    name: String,
-    project: String,
-    description: String,
-    capability_tags: Vec<String>,
-}
-
-struct LlmSection {
-    provider: String,
-    api_url: String,
-    api_key: String,
-    model: String,
-}
-
-struct TelegramSection {
     bot_token: String,
     allowed_user_id: u64,
-}
-
-enum DashboardCommand {
-    Start,
-    Status,
-    Balance,
-    Help,
-    SendStart,
-    SendAddress(String),
-    SendAmount(String, u64),
-    SendConfirm(String, u64),
+    enabled: bool,
 }
 ```
 
-### 5.5 Process Isolation
+### 5.4 Conformance Test Hooks
 
-- The Telegram bot client MUST run within the same Zone 3 process as the agent runtime.
-- Bot HTTP requests to Telegram API are the only outbound connections permitted beyond the node API proxy.
-- The Telegram bot token MUST NOT be transmitted to the chain, included in agent output artifacts, or logged at INFO level or above.
-- The TUI wizard MUST terminate immediately after writing `config.toml` — it MUST NOT persist as a background dashboard process.
-
-### 5.6 Conformance Test Hooks
-
-- Verify TUI wizard launches when `config.toml` is absent and TTY is available.
-- Verify TUI wizard does NOT launch when `config.toml` exists (without `--setup`).
-- Verify TUI wizard exits with code 1 when no TTY and no config.
-- Verify `config.toml` written by wizard passes serde deserialization with correct sections.
-- Verify wizard validation rejects invalid project name, capability tags, and bot token formats.
-- Verify Telegram bot validates token at startup and runs without Telegram on invalid token.
-- Verify Telegram bot silently drops messages from non-configured user ID.
-- Verify `/start` dashboard contains balance, stage, current task, team, and last completed task.
-- Verify `/send` interactive flow validates address and amount, executes `hyperfluid tx transfer` on confirm.
-- Verify bot does NOT respond to messages resembling `/prompt`, `/task`, or any non-standard command.
-- Verify bot writes nothing to agent SQLite.
+- Verify TUI wizard launches when config absent and TTY available.
+- Verify Telegram bot validates token at startup, runs without Telegram on invalid token.
+- Verify `/start` dashboard contains balance, stage, current task.
+- Verify bot does NOT respond to non-standard commands.
 - Verify bot token is not present in agent output artifacts or on-chain state.
 
-### 5.7 Trust-Assumption Inventory
+### 5.5 Trust-Assumption Inventory
 
-- Telegram Bot API availability
-  - Justification: Bot depends on Telegram's infrastructure for message delivery.
-  - Trust-minimised alternative: Local dashboard or alternative notification channel. Bot failure is non-critical — agent continues without it.
-- Bot token secrecy
-  - Justification: Token stored in local `config.toml` on agent operator's filesystem.
-  - Trust-minimised alternative: Token stored in OS keychain or hardware security module; read at startup, never persisted in plaintext.
-- TUI wizard input validity
-  - Justification: Wizard validates inputs but operator may provide incorrect LLM credentials.
-  - Trust-minimised alternative: Wizard tests LLM connection before accepting config (optional `--test-llm` flag).
+- Telegram Bot API availability: Bot depends on Telegram's infrastructure. Bot failure is non-critical — agent continues without it.
+- Bot token secrecy: Token stored in local `config.toml`. Trust-minimised alternative: OS keychain or HSM.

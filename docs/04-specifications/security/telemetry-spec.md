@@ -176,7 +176,7 @@ struct ReconciliationReport {
 
 - Finality lag discrepancy >10%: Possible clock skew or fabricated telemetry. Flag for investigation.
 - Fill ratio discrepancy >10%: Possible mempool admission discrepancy between nodes. Suggests partition or selective admission.
-- Reconciliation not possible (NotReconcilable): Metric excluded from circuit-breaker triggers. Relies on other metrics only.
+- Reconciliation not possible (NotReconcilable): Metric flagged for investigation. Relies on other metrics only.
 
 ### 2.6 Versioning and Compatibility
 

@@ -196,7 +196,7 @@ NetworkEvent {
 
 ### I-07: C9 → C11: Quota Check Response
 
-**Purpose:** PDP responds to Collaboration Layer with quota availability and circuit-breaker status.
+**Purpose:** PDP responds to Collaboration Layer with quota availability.
 
 **Direction:** C9 → C11
 
@@ -208,7 +208,6 @@ QuotaCheckResponse {
   quota_id: string
   remaining: uint64
   reset_at_height: uint64
-  circuit_breaker_active: bool
   temporary_restrictions: optional [Restriction]
 }
 ```
@@ -235,7 +234,7 @@ SettlementBatch {
 BountyPayout {
     recipient_id: bytes32
     amount: uint128
-    reward_type: enum (work | review | relay | witness | staking_rebate)
+    reward_type: enum (work | review | staking_rebate)
     escrow_ref: bytes32           // references the task escrow this came from
     evidence_ref: bytes32
 }
@@ -258,7 +257,6 @@ InboxSignal {
   high_priority_count: uint16
   trusted_sender_urgents: [SenderAlert]
   top_topics: [TopicRelevance]
-  circuit_breaker_mode: bool
 }
 
 SenderAlert {

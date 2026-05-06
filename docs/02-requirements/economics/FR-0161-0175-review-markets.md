@@ -21,8 +21,6 @@
 
 ---
 
-## FR-0162: (removed — objective verification was Phase 1 of old three-phase pipeline; reviewers verify work directly)
-
 ## FR-0164: Reviewer Collateral
 
 **Category:** Economics

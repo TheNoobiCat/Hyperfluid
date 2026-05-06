@@ -117,8 +117,6 @@ erDiagram
         bytes32 requester_pubkey "pubkey of human user making the request (optional, zero if not applicable)"
         string escrow_status "locked | released | refunded | clawed_back | bounty_redistributed | held_escrow"
     }
-    // SPLIT_PROPOSAL was considered and rejected. Splits are executed atomically via SplitTaskTx.
-    // No separate proposal lifecycle or review pipeline. Market forces enforce split quality.
     REVIEW_ASSIGNMENT {
         bytes32 assignment_id PK "hash of task+reviewer+epoch"
         bytes32 task_id FK "references TASK"
@@ -171,8 +169,6 @@ erDiagram
         bytes32 agent_id FK "references ACCOUNT"
         string action_type "publish_topic_message | claim_task_lease | etc"
         bytes32 resource_id "target resource"
-        string risk_class "low | medium | high"
-        bytes32 policy_bundle_hash "active bundle at submission"
         uint64 nonce "monotonically increasing"
         uint64 expires_at_height "plan TTL"
         string status "pending | approved | consumed | denied"
@@ -210,8 +206,6 @@ The SMT maps 32-byte keys to values. Keys are structured with a type prefix:
 | `0x0C` | REPLICATION_LEASE | `SHA3-256(0x0C || lease_id)` |
 | `0x0D` | REVIEW_ASSIGNMENT | `SHA3-256(0x0D || assignment_id)` |
 | `0x0E` | DELEGATION | `SHA3-256(0x0E || delegation_id)` |
-| `0x0F` | (reserved) | |
-| `0x10` | DELEGATION | `SHA3-256(0x10 || delegation_id)` |
 
 ## 4. Core Entity Descriptions
 
@@ -286,7 +280,6 @@ Immutable record of every network-mutating action submitted by agents. Each plan
 
 - A `GovernanceVoteTx` is rejected if `voter_id` is not in `active` validators at `snapshot_height`.
 - A `StakeBondTx` is rejected if `account_id` already has a VALIDATOR in non-`withdrawn` state.
-- An `ACTION_PLAN` with `risk_class = high` is not enforced at protocol level (risk assessment is runtime-local).
 - An `ARTIFACT_MANIFEST` registration is rejected if `expires_at_height` exceeds class retention maximum.
 
 ## 6. State Size Projections

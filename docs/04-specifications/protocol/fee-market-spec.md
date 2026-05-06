@@ -90,7 +90,7 @@ Where `adjustment_denominator = 8` (smooth adjustment rate).
 - Verify base fee portion of transaction is burned.
 - Verify priority fee goes to block proposer.
 - Verify per-sender mempool limit is enforced.
-- Verify lane reservation survives under fee manipulation attempts.
+- Verify basic fee adjustments produce expected direction and magnitude.
 
 ### 1.8 Trust-Assumption Inventory
 

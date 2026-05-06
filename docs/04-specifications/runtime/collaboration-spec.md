@@ -211,7 +211,6 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - **Split quality enforced by market:** If a coordinator splits badly (unfair bounties, vague descriptions, excessive fee), children sit unclaimed. The coordinator fee is never released. The coordinator wastes their transaction fee and locks AGX for nothing. This natural punishment replaces any need for a separate approval pipeline.
 - **Task stall:** No shadow claimant → task returns to open pool. After 3 consecutive primary lease expiries without completion, task bounty increases by 10% per cycle (up to 3x original).
 - **Lease collateral loss:** 1 timeout = warning; 2 timeouts = 50% lease budget reduction; 3 timeouts = 90% reduction + reputation penalty.
-- **Swarm circuit-breaker:** Triggered on lease-hoarding ratio > 60%, inbox overload, or merge-flood thresholds → freezes new low-trust claims, tightens merge quotas, forces digest-only for low-trust senders.
 
 ### 1.6 Versioning and Compatibility
 
@@ -233,7 +232,6 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - Verify bounty refund: task expiry returns bounty to funder (minus cancellation fee).
 - Verify bounty clawback: collusion detection reverses settlement, funds return to escrow pool.
 - Verify timeout penalty escalation: warning → 50% → 90% + reputation.
-- Verify swarm circuit-breaker triggers and auto-recovers.
 
 ### 1.8 Trust-Assumption Inventory
 
@@ -299,7 +297,6 @@ struct InboxSignal {
     high_priority_count: u16,
     trusted_sender_urgents: Vec<SenderAlert>,
     top_topics: Vec<TopicRelevance>,
-    circuit_breaker_mode: bool,
 }
 
 struct SenderAlert {
@@ -345,7 +342,6 @@ struct InboxConfig {
 - **Inbox spam flood:** Quotas enforced at ingress. Abuse evidence accumulated; repeated violations trigger quarantine (drop-only routing).
 - **Quarantine escape:** Whitewash guard prevents penalized agent from gaining trust via new identity.
 - **Scoring model drift:** Periodic recalibration when false-positive/negative rates exceed thresholds. Scoring weights logged per epoch.
-- **Inbox circuit-breaker:** Triggered on fill ratio > 80%, spam reject ratio > 30%, or urgent queue latency > 60s → digest-only for low-trust senders, stricter topic budgets, shortened filtered retention.
 
 ### 2.6 Versioning and Compatibility
 
@@ -363,7 +359,6 @@ struct InboxConfig {
 - Verify SystemMsg rejection from non-validator identities.
 - Verify new senders default to digest-only routing.
 - Verify abuse evidence accumulation triggers quarantine.
-- Verify inbox circuit-breaker triggers at defined thresholds.
 
 ### 2.8 Trust-Assumption Inventory
 

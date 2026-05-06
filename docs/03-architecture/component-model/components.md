@@ -22,7 +22,7 @@ The system decomposes into three primary layers:
 
 4. **Agent Runtime (C10-C11):** Agent loop, collaboration, inbox management. Ruby/TypeScript, SQLite, LLM integration.
 
-5. **Economics (C12):** Review markets, incentives, anti-Sybil, circuit-breakers. Cross-cutting component that spans all layers.
+5. **Economics (C12):** Review markets, incentives, anti-Sybil. Cross-cutting component that spans all layers.
 
 ## 3. Architecture Diagram
 
@@ -77,7 +77,6 @@ flowchart TD
     C8 -->|replica_state| C12
     C12 -->|reward_settlement| C2
     C12 -->|stake_check| C3
-    C12 -->|circuit_breaker| C9
     C12 -->|airdrop| C2
     C9 <-->|policy_bundle| C4
 
@@ -224,7 +223,7 @@ flowchart TD
 
 - **What happens:** Agent produces an action plan, but tool call parameters drift from approved binding hash.
 - **Why it happens:** LLM nondeterminism or payload manipulation.
-- **Handling:** PDP rejects actions with invalid schema, bad signatures, replay, or quota exhaustion. Plan binding check was removed — runtime-local concern.
+- **Handling:** PDP rejects actions with invalid schema, bad signatures, replay, or quota exhaustion.
 
 ### Scenario: Committee Stall with Tiered Recovery
 

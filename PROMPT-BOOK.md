@@ -191,52 +191,8 @@ Use this when encountering a build error, runtime crash, test failure, or when a
 
 ### Prompt:
 
-Read the prompt left by the user at the end of this message, then read `BUILD-SYSTEM.md`, `GLOSSARY.md`, `TEMPLATES.md`, then:
+Use the prompt in `.opencode/commands/execute-build.md`. It is the single source of truth for the build execution workflow. This section exists only to reference it — do not redefine the prompt here.
 
-1. **Read current state:**
-   - Latest handoff: `docs/08-handoff/latest/` (prioritise most recent `checkpoint-*.md` and `build-status.md`).
-   - Current stage file in `docs/05-planning/stages/` (check which week is active and what tasks are pending/complete).
-   - `PROJECT-STATUS.md`.
-   - All relevant spec files in `docs/04-specifications/` — read the spec(s) for the component(s) involved in the error or feature request.
-   - All relevant source code in `crates/` for the affected components.
-   - Architecture docs and ADRs in `docs/03-architecture/` if the fix crosses design boundaries.
-
-2. **Diagnose the user's message:**
-   - If error/bug: trace root cause. Check whether the code deviates from the spec (accidental bug) or the spec itself is wrong/underspecified (design gap).
-   - If feature request: check whether this is:
-     - **Already in scope** but under-specified in the spec → update spec, then implement.
-     - **Genuinely new** → file an ADR in `docs/03-architecture/decisions/ADR-XXXX-description.md`, update the affected spec section, and if the feature introduces new requirements, add a FR file in `docs/02-requirements/`. Then implement.
-
-3. **Fix or implement:**
-   - Apply the fix or build the feature in the appropriate crate. Follow existing code conventions (error types, naming, module structure).
-   - When a spec deviation is intentional or forced by implementation constraints, annotate with `// SPEC_DEVIATION: [reason]` and reference the ADR if one was created.
-   - Write or update tests that cover the fix/feature.
-   - **After fixing, grep the entire codebase for the same root-cause pattern.** If it appears elsewhere, fix those instances too (or file new bugs) before marking the original fix complete. Common patterns to check:
-     - Type migration (u64→u128): grep for the old type in struct field definitions, function signatures, and test fixtures
-     - Floating-point in protocol code: grep for `as f64`, `as f32`, `f64::`
-     - Missing negative assertion: grep the test file for `assert!` or `assert_eq!` — if all are positive, add an edge-case or rejection test
-
-4. **Synchronise documentation:**
-   - If spec was wrong/ambiguous: update the spec file in `docs/04-specifications/`. If the change affects the trust-assumption inventory (section X.8), update it.
-   - If an ADR was created: register it in `docs/03-architecture/index.md` (add to the ADR table).
-   - If a requirement was added: register it in `docs/02-requirements/index.md`.
-   - Update `build-status.md`: mark affected tasks, add new entries for any new work done.
-   - Create `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md` summarising: what broke, root cause, what was fixed/changed, and any new gaps or open questions.
-   - If a week boundary was crossed or new tasks were injected into the stage plan, update the stage file's week-by-week breakdown.
-   - Update `PROJECT-STATUS.md`: record the fix, update "Next Actions" and "Last updated".
-
-5. **Verify:**
-   - `cargo build --workspace` passes.
-   - `cargo test --workspace` passes (new and existing tests).
-   - `cargo fmt --all -- --check` passes.
-   - `cargo clippy --workspace --all-targets -- -D warnings` passes.
-   - `cargo doc --workspace --no-deps` passes.
-   - **Determinism sweep** (if protocol-level code changed): `grep -rn "as f64\|as f32\|f64::\|f32::\|Instant::now\|SystemTime::now\|thread_rng\|rand::random" crates/` — flag any violations in consensus/state/staking/fee/governance code.
-   - If any verification step fails, fix the issue before proceeding.
-
-6. **Report back:** Summarise what was found, what code files were changed, what docs were updated, and any remaining open questions or gaps.
-
-The prompt from the user: 
 
 ---
 

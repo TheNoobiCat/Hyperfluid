@@ -233,9 +233,9 @@ enum ReconciliationStatus {
 
 ### 2.5 Failure Behavior
 
-- **Insufficient reporters:** If fewer than M independent reporters submit for a metric class, the metric is marked as low-confidence and circuit-breaker triggers require additional corroboration.
+- **Insufficient reporters:** If fewer than M independent reporters submit for a metric class, the metric is marked as low-confidence and triggers require additional corroboration.
 - **Outlier detection:** Producers with envelopes beyond z=3.0 are flagged. Repeated flagging (3+ consecutive epochs) triggers anomaly report.
-- **Reconciliation failure:** If aggregated telemetry disagrees with independently observable data by more than 10%, reconciliation is marked DiscrepancyDetected and circuit-breaker excludes that metric from triggers.
+- **Reconciliation failure:** If aggregated telemetry disagrees with independently observable data by more than 10%, reconciliation is marked DiscrepancyDetected.
 
 ### 2.6 Versioning and Compatibility
 

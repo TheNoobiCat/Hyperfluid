@@ -24,14 +24,7 @@ Define the protocol's congestion response. Replaces the previous multi-tier circ
 
 ### 1.3 Data Structures
 
-```rust
-struct IncidentRecord {
-    incident_id: [u8; 32],         // SHA3-256 of trigger evidence
-    declared_at_height: u64,
-    resolved_at_height: u64,       // 0 if active
-    trigger_evidence_ref: [u8; 32],
-}
-```
+No protocol-level incident data structures exist. Congestion is handled entirely through the EIP-1559 base fee mechanism (§1.4).
 
 ### 1.4 State Transitions
 

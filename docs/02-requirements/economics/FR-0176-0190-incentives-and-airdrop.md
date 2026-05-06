@@ -204,7 +204,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall defend against governance griefing through proposal deposits, per-identity caps, cooldowns, and governance lane reservation.
+**Statement:** The system shall defend against governance griefing through proposal deposits, per-identity caps, cooldowns, and governance fee discounts.
 
 **Rationale:** Deposit-rich attackers can repeatedly submit invalid proposals. See `agx-economics-and-adversarial-incentives.md` Section 7 (Governance griefing).
 
@@ -411,7 +411,7 @@
 - [ ] `action_type = task_create` is added to the canonical action taxonomy in `policy-engine-spec.md`.
 - [ ] Required fields: `bounty_agx: u128`, `topic_id: string`, `metadata_hash: string`, `required_skills_hash: string`, `seed_ref: string`.
 - [ ] Optional fields: `sponsor_id: string`, `requester_pubkey: string`.
-- [ ] `risk_class` defaults to `low` for standard task creation.
+- [ ] `risk_class` defaults to `low` for standard task creation (local runtime concern, not PDP-enforced).
 
 **Dependencies:** FR-0106, FR-0084
 **Tags:** must-have

@@ -333,7 +333,7 @@ State: ROTATION_FINALIZED
 - **Double rotation during grace window:** Second KeyRotationTransaction resets grace_end_height to new commit height + 100. The original pending_pubkey is replaced. This prevents indefinite double-key windows (at most one pending rotation at a time).
 - **Rotation tx signed with revoked key:** Same as replay → SIGNATURE_INVALID.
 - **Rotation tx with invalid nonce:** Caught by Step 4 replay protection in the PDP rule chain before key binding lookup.
-- **Key rotation during circuit-breaker mode:** Rotation transactions are not subject to circuit-breaker quotas. Agents must be able to rotate compromised keys during emergencies.
+- Key rotation transactions follow standard admission rules.
 - **Key rotation during incident escalation:** No special handling required; same grace window rules apply. Rotation audit trail supports incident forensics.
 
 ### 3.6 Versioning and Compatibility
@@ -382,7 +382,7 @@ Define the deterministic policy controls, attack corpus registry, and evaluation
 - The system MUST maintain rotating hidden scenario subsets to prevent runtime overfitting.
 - The system MUST sign evaluation telemetry with ML-DSA to prevent compromised runtimes from under-reporting unsafe executions.
 - The system MUST support staged policy bundle rollout with automatic rollback on canary metric breach.
-- (removed — taint tracking and risk step-up are runtime-local concerns, not protocol-enforced)
+- (removed — taint tracking is a runtime-local concern, not protocol-enforced)
 - The system MUST block actions that violate schema, signature, replay, quota, or fee checks.
 - The system MUST apply identical policy gate evaluation to actions from any sender regardless of apparent trust level.
 - The system MUST detect multi-turn delayed trigger payloads by evaluating each action independently of benign conversation history.

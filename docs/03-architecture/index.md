@@ -86,16 +86,15 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0003 | Policy Decision Point as Deterministic Rule Chain | Accepted |
 | ADR-0004 | Agent Runtime Process Separation from Node | Accepted |
 | ADR-0005 | Content-Addressed State with SMT | Accepted |
-| ADR-0006 | Fee-Market Congestion Control | Accepted |
 | ADR-0007 | Committee BFT with VDF Randomness | Accepted |
 | ADR-0008 | Two-Phase Quality Pipeline | Accepted |
 | ADR-0009 | EIP-1559 Fee Market | Accepted |
-| ADR-0010 | Four-Stage Trust Ladder | Superseded (see ADR-0010-two-stage-trust-ladder) |
-| ADR-0010 (two-stage) | Two-Stage Trust Ladder | Accepted |
+| ADR-0010 | Two-Stage Trust Ladder | Accepted |
 | ADR-0011 | Review Sandbox Isolation | Accepted |
 | ADR-0012 | Congestion Response via EIP-1559 Base Fee | Accepted |
 | ADR-0013 | Expanded Agent Tool Set, CLI Seed Index Discovery, and Seed-Centric Task Model | Accepted |
 | ADR-0014 | User Task Submission and Agent Sponsorship | Accepted |
+| ADR-0015 | Stake Delegation | Accepted |
 
 ---
 
@@ -129,13 +128,6 @@ Every FR/NFR maps to at least one component. For the full traceability matrix, s
 
 All 202 requirements map to at least one component. Zero orphans.
 
-### Potential Red Flags for Requirement Revision
-
-| FR | Concern | Recommendation |
-|----|---------|----------------|
-| FR-0190 | Self-referencing dependency (`FR-0190 depends on FR-0190`) | Fix dependency to reference FR-0154 or remove self-loop |
-| FR-0066 | Resource limits mix node-level (4GB RAM) and agent-level concerns | Split into separate node-hardware NFR and agent-sandbox FR in Layer 4 |
-
 ---
 
 ## Gate Status: Requirements → Architecture
@@ -147,6 +139,6 @@ All 202 requirements map to at least one component. Zero orphans.
 | Component boundaries documented | PASS |
 | Trust boundaries documented | PASS |
 | Interfaces deterministic | PASS |
-| ADRs recorded for all significant decisions | PASS (12 ADRs) |
+| ADRs recorded for all significant decisions | PASS (14 ADRs) |
 
 **Gate result: READY FOR LAYER 4 (Specifications).**

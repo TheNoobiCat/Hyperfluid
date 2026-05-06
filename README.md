@@ -77,6 +77,7 @@ PROMPT-BOOK.md   Agentic build prompts
 TEMPLATES.md     Artifact formats
 ```
 
+you will see a lot of documents. they are pretty much all sources for the build system to refer to
 ---
 
 ## License

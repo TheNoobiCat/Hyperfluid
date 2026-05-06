@@ -182,7 +182,7 @@ BEFORE implementing any Stage 01 Week 3-4 code (or if resuming after a gap), the
 | Code changes | PENDING (see Pending Code Changes section above) |
 | SPEC_DEVIATION flags | `checkpoint-2026-05-05d.md` deferred cap enforcement — RESOLVED (cap removed entirely) |
 
-## Round 2 — Overengineering Fixes (applied same session)
+## Round 2 — Architecture Simplification (applied same session)
 
 | Fix | Files | Key Changes |
 |-----|-------|-------------|
@@ -199,7 +199,7 @@ BEFORE implementing any Stage 01 Week 3-4 code (or if resuming after a gap), the
 ## Verification
 | Check | Result |
 |-------|--------|
-| Doc changes applied | Round 1 (6 BFT+delegation amendments) + Round 2 (6 overengineering fixes) across ~72 files total |
+| Doc changes applied | Round 1 (6 BFT+delegation amendments) + Round 2 (6 architecture simplifications) across ~72 files total |
 | Code changes | PENDING (see Pending Code Changes section above — unchanged from prior) |
 
 ## What's Next (Stage 01 Week 3-4: Staking + Fee Market)

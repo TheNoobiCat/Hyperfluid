@@ -84,7 +84,7 @@ Located in `docs/02-requirements/protocol/`
   - FR-0047: Gossip Duplicate Suppression
   - FR-0048: Network Partition Resilience
   - FR-0049: Connection Manager State Machine
-  - FR-0050: Mempool Lane Reservation
+  - FR-0050: Mempool Fee Ordering with Evidence/Governance Discounts
 
 ### Artifact Availability
 - [`FR-0051-0060-artifact-availability.md`](protocol/FR-0051-0060-artifact-availability.md)
@@ -121,7 +121,6 @@ Located in `docs/02-requirements/runtime/`
   - FR-0072: Node API Stateless and Cacheable
   - FR-0073: Token Budget Normalization (ptok)
   - FR-0074: Deterministic Context Envelope Allocation
-  - FR-0075: (removed — token budget is local runtime concern, not protocol-enforceable)
 
 ### Collaboration Layer
 - [`FR-0076-0090-collaboration-layer.md`](runtime/FR-0076-0090-collaboration-layer.md)

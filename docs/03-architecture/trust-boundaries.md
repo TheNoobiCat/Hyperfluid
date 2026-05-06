@@ -40,7 +40,6 @@ flowchart TD
     PDP -->|typed transaction| CONSENSUS
     PDP -->|policy decision| AUDIT_LOG
     PDP -.->|quota query| QUOTA_TRACK
-    (taint tracking removed — runtime-local only)
 
     CONSENSUS --> STATE_MACHINE
     STATE_MACHINE --> STAKING
@@ -82,7 +81,7 @@ flowchart TD
 **Components:** C9 (Policy Decision Point)
 
 **Access Rights:**
-- Read protocol state for policy evaluation (quota counters, trust stages, circuit-breaker mode)
+- Read protocol state for policy evaluation (quota counters, trust stages)
 - Validate and reject action plans
 - Submit approved transactions to Zone 1
 - Write to audit log (append-only, content-addressed)
@@ -134,12 +133,10 @@ The only path from untrusted to policy-gated.
 | plan_id uniqueness | PDP | Replay detected |
 | agent_signature | PDP | Signature invalid |
 | action_type validity | PDP | Schema violation |
-| risk_class step-up | PDP | Step-up required |
 | policy_bundle_hash match | PDP | Bundle mismatch |
 | nonce monotonicity | PDP | Replay detected |
 | TTL validity | PDP | TTL expired |
 | quota availability | PDP | Quota exhausted |
-| (removed — taint and plan binding are runtime-local concerns) | | |
 
 ### Zone 2 → Zone 1: Transaction Submission
 
@@ -166,7 +163,7 @@ Agent runtime queries node API for state information. Responses are read-only an
 - Task board (on-chain task registry)
 - Artifact manifests and replication leases
 - Action plan records (approved/denied/consumed)
-- Trust stages and reputation vectors
+- Trust stages
 - Airdrop pool state
 
 ### Local-Only State (not in SMT, per-node/per-agent)

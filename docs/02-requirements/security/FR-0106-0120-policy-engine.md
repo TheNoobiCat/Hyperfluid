@@ -11,7 +11,7 @@
 - `prompt-injection-and-network-policy-boundary.md` Section 5 (Typed network action plan schema)
 
 **Acceptance Criteria:**
-- [ ] Action plan schema includes: plan_id, agent_id, action_type, resource_id, risk_class, reason_hash, evidence_refs, policy_bundle_hash, nonce, expires_at_height, agent_signature.
+- [ ] Action plan schema includes: plan_id, agent_id, action_type, resource_id, nonce, expires_at_height, agent_signature.
 - [ ] Free text alone never executes network-mutating tools.
 - [ ] Schema validation is deterministic across all nodes.
 
@@ -20,23 +20,21 @@
 
 ---
 
-## FR-0107: Tool-Call Binding Hash Verification
+## FR-0107: Tool-Call Verification
 
 **Category:** Security
 
-**Statement:** The system shall verify that each network tool call matches its approved action plan via canonical binding hash computed from tool_name, normalized params, resource_id, and action_type.
+**Statement:** The system shall verify that each network tool call is properly signed and authorized by a valid action plan.
 
-**Rationale:** Prevents parameter substitution attacks after plan approval. See `network-policy-engine-spec.md` Section 5 (Tool-call binding).
+**Rationale:** Prevents unauthorized tool calls. Tool-call binding hash verification is an agent runtime local concern — the protocol only enforces signature and plan validity.
 
 **Source Research:**
-- `network-policy-engine-spec.md` Section 5, lines 144-149
-- `prompt-injection-and-network-policy-boundary.md` Section 5 (Tool-call binding rule)
+- `network-policy-engine-spec.md` Section 5
 
 **Acceptance Criteria:**
-- [ ] Gateway computes canonical hash of tool call parameters.
-- [ ] Hash must equal `plan_binding_hash` in approved plan.
-- [ ] Any parameter drift invalidates execution.
+- [ ] Gateway verifies agent signature on action plan.
 - [ ] Approved plans are single-use and transition to consumed state after execution.
+- [ ] Any action without a valid approved plan is rejected.
 
 **Dependencies:** FR-0106
 **Tags:** must-have

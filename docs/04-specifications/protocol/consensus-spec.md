@@ -147,7 +147,7 @@ Degraded mode resumes normal mode when validator count returns to >= 67 (new val
 - Verify degraded mode (50-66) allows critical transactions and blocks governance/fast-path.
 - Verify emergency auto-recovery triggers after 500 idle blocks with correct seed (previous VDF output).
 - Verify 10-second median block time under normal load (p95 finality < 3 seconds).
-- Verify transaction ordering is deterministic and lane-reservation respected.
+- Verify transaction ordering is deterministic.
 
 ### 1.8 Trust-Assumption Inventory
 
@@ -209,12 +209,10 @@ enum KeyPrefix {
     Task = 0x06,
     TelemetryEnvelope = 0x07,
     SystemParams = 0x08,
-    CircuitBreakerState = 0x09,
     TrustStage = 0x0A,
     ActionPlan = 0x0B,
     AirdropPool = 0x0C,
     ReplicationLease = 0x0D,
-    IncidentRecord = 0x0E,
     ReviewAssignment = 0x0F,
 }
 

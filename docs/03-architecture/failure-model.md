@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-This document catalogues system-level failure scenarios for Hyperfluid, their detection mechanisms, and their cascading failure prevention strategies. Every failure has a root cause, detection signal, blast radius, and recovery path. The system degrades gracefully under stress through circuit-breakers, lane reservations, and economic incentives rather than catastrophic failure.
+This document catalogues system-level failure scenarios for Hyperfluid, their detection mechanisms, and their cascading failure prevention strategies. Every failure has a root cause, detection signal, blast radius, and recovery path. The system degrades gracefully under stress through economic incentives rather than catastrophic failure.
 
 ## 2. Failure Scenario Catalogue
 
@@ -121,7 +121,6 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 - Per-identity cap: 1 proposal per epoch with 3-epoch cooldown after rejection (FR-0028)
 - Network-wide cap: 32 open proposals (FR-0028)
 - Deterministic precheck gates review sandbox launch (FR-0027)
-- Governance lane reserves 10% mempool capacity (FR-0050)
 - Fee market cap prevents fee evasion (FR-0159)
 
 **Recovery:** Proposals age out of queue. Cooldowns expire. Legitimate proposals processed after queue drains.

@@ -190,7 +190,7 @@ Define the Sybil detection correlation engine and its adjudication sub-type with
 **Threshold and alerting:**
 
 - Default correlation threshold: 0.70. Pairs above this threshold trigger a CorrelationAlert.
-- Emergency threshold: 0.50, activated during circuit-breaker mode.
+- Emergency threshold: 0.50.
 - Signal weights and thresholds MUST be governance-adjustable within bounded ranges (0.05–0.50 per weight, thresholds 0.40–0.90).
 - Weight changes MUST be epoch-bound: historical scores retain their original weight vector hash for auditability.
 
@@ -201,7 +201,7 @@ Define the Sybil detection correlation engine and its adjudication sub-type with
 - Cluster size thresholds:
   - 2 identities: standard review panel, 5 reviewers, 48-hour window.
   - 3–5 identities: escalated panel, 7 reviewers, 24-hour window.
-  - 6+ identities: emergency panel, 11 reviewers, 24-hour window, automatic circuit-breaker consideration.
+  - 6+ identities: emergency panel, 11 reviewers, 24-hour window.
 
 **Adjudication panel selection:**
 

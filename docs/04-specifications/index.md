@@ -22,7 +22,7 @@ Located in `docs/04-specifications/protocol/`
 | [`consensus-spec.md`](protocol/consensus-spec.md) | C1 Consensus Engine, C2 State Machine | FR-0001-0010 | Consensus BFT, committee rotation, VDF randomness, SMT state, transaction types, nonces, finality |
 | [`staking-spec.md`](protocol/staking-spec.md) | C3 Staking & Validator Manager | FR-0011-0020 | Four-state validator lifecycle, bonding/unbonding, slashing, downtime, evidence pipeline |
 | [`governance-spec.md`](protocol/governance-spec.md) | C4 Governance Engine | FR-0021-0030 | git:head management, proposal lifecycle, vote window, sandbox review, anti-flood controls |
-| [`p2p-wire-spec.md`](protocol/p2p-wire-spec.md) | C7 P2P Networking | FR-0041-0050 | Peer discovery, connection state machine, gossip, relay, mempool lane reservation |
+| [`p2p-wire-spec.md`](protocol/p2p-wire-spec.md) | C7 P2P Networking | FR-0041-0050 | Peer discovery, connection state machine, gossip, relay, fee-ordered mempool |
 | [`fastpath-spec.md`](protocol/fastpath-spec.md) | C6 Fast-Path Topic Protocol | FR-0031-0040 | Topic-scoped merges, quorum certificates, challenge windows, rollback, promotion bridge |
 | [`fee-market-spec.md`](protocol/fee-market-spec.md) | C5 Fee Market | FR-0146, FR-0147, FR-0159, FR-0160 | EIP-1559 base fee, validator rebates, manipulation defense, front-running protection |
 
@@ -53,7 +53,7 @@ Located in `docs/04-specifications/security/`
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
 | [`telemetry-spec.md`](security/telemetry-spec.md) | C1, C2 (Telemetry) | FR-0060, FR-0139-0141, NFR-0020-0021 | Signed envelopes, aggregation, reconciliation, outlier detection |
-| [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0142-0145 | Incident state machine, emergency mode, recovery ramp-up, circuit-breaker hierarchy |
+| [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0142-0145 | Incident state machine, emergency mode, recovery ramp-up, congestion control |
 
 ---
 
@@ -107,7 +107,6 @@ Located in `docs/04-specifications/security/`
 | ADR-0003 (PDP Deterministic Chain) | policy-engine-spec.md, governance-spec.md |
 | ADR-0004 (Agent Process Separation) | agent-runtime-spec.md Section 4 |
 | ADR-0005 (Content-Addressed SMT) | consensus-spec.md Section 2, state-sync-spec.md |
-| ADR-0006 (Fee-Market Congestion Control) | fee-market-spec.md |
 | ADR-0007 (Committee BFT VDF) | consensus-spec.md Section 1, staking-spec.md |
 | ADR-0008 (Two-Phase Quality) | review-engine-spec.md Section 1 |
 | ADR-0009 (EIP-1559 Fee Market) | fee-market-spec.md Section 1 |
@@ -124,11 +123,8 @@ Parameters marked `[TUNE]` in specs (reasonable default provided; calibration ta
 | Parameter | Default | Spec Location | Notes |
 |-----------|---------|---------------|-------|
 | min_base_fee | 1,000,000 atto-AGX | fee-market-spec.md 1.3 | Minimum fee floor |
-| emergency_fee_floor | 10x normal minimum | incident-response-spec.md 1.3 | Emergency mode fee |
 | promotion thresholds | See collaboration-spec.md 3.3 | collaboration-spec.md 3.3 | Trust ladder promotion requirements |
-| recovery exit hysteresis | 0.7x entry thresholds | incident-response-spec.md 1.4 | Prevents mode flapping |
 | fee adjustment denominator | 8 | fee-market-spec.md 1.4 | Base fee adjustment rate |
-| circuit-breaker window persist | 3 windows | incident-response-spec.md 1.4 | Sustained breach windows |
 
 ---
 
