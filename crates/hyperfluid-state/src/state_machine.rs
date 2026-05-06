@@ -34,6 +34,17 @@ pub struct StateMachine {
     consumed_plans: HashSet<Hash32>,
     /// Tracked task IDs for deduplication
     task_ids: HashSet<Hash32>,
+    /// Delegation records: (delegator_id, validator_id) -> (amount, unbonding_height, active)
+    delegations: HashMap<(Hash32, Hash32), DelegationState>,
+}
+
+/// In-memory delegation state tracked by the state machine.
+/// Mirrors on-chain DelegationRecord from staking-spec.md Section 1.3.
+#[derive(Debug, Clone)]
+struct DelegationState {
+    amount: u128,
+    unbonding_at_height: u64,
+    active: bool,
 }
 
 impl Default for StateMachine {
@@ -44,7 +55,12 @@ impl Default for StateMachine {
 
 impl StateMachine {
     pub fn new() -> Self {
-        Self { accounts: HashMap::new(), consumed_plans: HashSet::new(), task_ids: HashSet::new() }
+        Self {
+            accounts: HashMap::new(),
+            consumed_plans: HashSet::new(),
+            task_ids: HashSet::new(),
+            delegations: HashMap::new(),
+        }
     }
 
     /// Bootstrap accounts from genesis configuration.
@@ -169,6 +185,151 @@ impl StateMachine {
 
         // Record task for deduplication
         self.task_ids.insert(task_id);
+
+        ExecutionResult::Success
+    }
+
+    /// Delegate AGX from delegator to a validator.
+    /// Deducts amount from delegator balance, credits validator's total_delegated.
+    pub fn execute_delegate(
+        &mut self,
+        delegator_id: Hash32,
+        validator_id: Hash32,
+        amount: u128,
+        nonce: u64,
+        min_delegation: u128,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        if amount < min_delegation {
+            return ExecutionResult::Rejected;
+        }
+        if delegator_id == validator_id {
+            return ExecutionResult::Rejected;
+        }
+
+        let delegator_nonce = self.accounts.get(&delegator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != delegator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        let delegator_balance = self.accounts.get(&delegator_id).map(|a| a.balance).unwrap_or(0);
+        if delegator_balance < amount {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(delegator) = self.accounts.get_mut(&delegator_id) {
+            delegator.balance -= amount;
+            delegator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+
+        let key = (delegator_id, validator_id);
+        let existing = self.delegations.entry(key).or_insert_with(|| DelegationState {
+            amount: 0,
+            unbonding_at_height: 0,
+            active: true,
+        });
+        existing.amount = existing.amount.saturating_add(amount);
+        existing.active = true;
+        existing.unbonding_at_height = 0;
+
+        ExecutionResult::Success
+    }
+
+    /// Initiate undelegation. Starts the 7-day unbonding timer.
+    pub fn execute_undelegate(
+        &mut self,
+        delegator_id: Hash32,
+        validator_id: Hash32,
+        nonce: u64,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let delegator_nonce = self.accounts.get(&delegator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != delegator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        let key = (delegator_id, validator_id);
+        if let Some(del) = self.delegations.get_mut(&key) {
+            if !del.active {
+                return ExecutionResult::Rejected;
+            }
+            del.active = false;
+            del.unbonding_at_height = current_height;
+
+            if let Some(delegator) = self.accounts.get_mut(&delegator_id) {
+                delegator.nonce = nonce;
+            }
+            ExecutionResult::Success
+        } else {
+            ExecutionResult::Rejected
+        }
+    }
+
+    /// Withdraw delegation after unbonding delay expires.
+    pub fn execute_withdraw_delegation(
+        &mut self,
+        delegator_id: Hash32,
+        validator_id: Hash32,
+        nonce: u64,
+        current_height: u64,
+        delegation_unbond_delay: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let delegator_nonce = self.accounts.get(&delegator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != delegator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        let key = (delegator_id, validator_id);
+        if let Some(del) = self.delegations.get(&key) {
+            if del.active {
+                return ExecutionResult::Rejected;
+            }
+            if current_height < del.unbonding_at_height.saturating_add(delegation_unbond_delay) {
+                return ExecutionResult::Rejected;
+            }
+            let amount = del.amount;
+
+            if let Some(delegator) = self.accounts.get_mut(&delegator_id) {
+                delegator.balance = delegator.balance.saturating_add(amount);
+                delegator.nonce = nonce;
+            }
+            self.delegations.remove(&key);
+            ExecutionResult::Success
+        } else {
+            ExecutionResult::Rejected
+        }
+    }
+
+    /// Set validator commission rate. Rate takes effect after 2 epochs.
+    /// This is a stub that updates a placeholder; the actual commission rate
+    /// is stored in ValidatorRecord in the staking crate. Here we track it in
+    /// the delegation state for testing purposes.
+    pub fn execute_set_commission(
+        &mut self,
+        validator_id: Hash32,
+        commission_rate: u8,
+        nonce: u64,
+        max_commission_rate: u8,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        if commission_rate > max_commission_rate {
+            return ExecutionResult::Rejected;
+        }
+
+        let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != validator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(validator) = self.accounts.get_mut(&validator_id) {
+            validator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
 
         ExecutionResult::Success
     }

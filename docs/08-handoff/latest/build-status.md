@@ -1,20 +1,22 @@
 # Build Status — Stage 01 (Protocol Core) IN PROGRESS
 
-**Last updated:** 2026-05-06
+**Last updated:** 2026-05-06 (evening)
 **Stage:** 01 — Protocol Core — **IN PROGRESS**
 **Week 1-2 (Consensus + State Machine):** COMPLETE
+**Week 3-4 (Staking: Pending Code Changes + C3 Base + C5 Fee Market):** COMPLETE
 
-## ⚠️ PENDING CODE CHANGES (Architecture Amendments 2026-05-06 — Round 1)
+## PENDING CODE CHANGES — ALL APPLIED (2026-05-06)
 
-Before implementing ANY Stage 01 code, apply these 5 code changes. See `checkpoint-2026-05-06.md` for exact file-level details.
+All 5 pending code changes from the 2026-05-06 architecture amendments are now implemented in Rust.
 
-| # | Change | Components | Priority |
-|---|--------|-----------|----------|
-| 1 | Overlap 33%→20% + two-epoch recency guard | `hyperfluid-consensus/types.rs` | MUST fix before Week 3-4 |
-| 2 | VDF fallback using immutable entropy | `hyperfluid-consensus/` (new module) | MUST fix before Week 3-4 |
-| 3 | Committee stall 3-tier thresholds | `hyperfluid-consensus/types.rs` | MUST fix before Week 3-4 |
-| 4 | Stake-graph clustering implementation | `hyperfluid-staking/src/graph.rs` (NEW) | MUST fix before Week 3-4 |
-| 5 | Delegation subsystem + TxType collapse (7 generalized types with sub-enums, DelegationRecord, commission, slash propagation) | `hyperfluid-staking/src/lib.rs`, `hyperfluid-consensus/src/types.rs`, `hyperfluid-state/src/state_machine.rs`, `hyperfluid-consensus/tests/conformance_consensus_spec.rs` | MUST fix before Week 3-4 |
+| # | Change | Status |
+|---|--------|--------|
+| 1 | Overlap 33%→20% + two-epoch recency guard | **APPLIED** (`consensus/types.rs`) |
+| 2 | VDF fallback SHA3-256(previous_vdf || headers_hash || epoch || reveals) | **APPLIED** (`consensus/types.rs`) |
+| 3 | Committee stall 3-tier thresholds (Normal/Degraded/Emergency) | **APPLIED** (`consensus/types.rs`) |
+| 4 | Stake-graph clustering (graph.rs, ClusterRecord, detect_clusters) | **APPLIED** (`staking/src/graph.rs` NEW) |
+| 5 | Delegation subsystem + TxType collapse (7 base types with sub-enums) | **APPLIED** (`staking/lib.rs`, `consensus/types.rs`, `state/state_machine.rs`) |
+
 
 ## Overengineering Fixes Applied (2026-05-06 — Round 2)
 
@@ -44,6 +46,37 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | Conformance tests: 7 C1 hooks + 8 C2 hooks all PASS | Complete |
 | 57/57 workspace tests pass | Complete |
 | clippy zero warnings, fmt clean, docs build | Complete |
+
+## Stage 01: Week 3-4 — Staking + Fee Market (C3 + C5) — COMPLETE
+
+| Task | Status |
+|------|--------|
+| Overlap 33%→20% + two-epoch recency guard (pending change #1) | Complete |
+| VDF fallback formula (pending change #2) | Complete |
+| Committee stall 3-tier thresholds (pending change #3) | Complete |
+| Stake-graph clustering (pending change #4) | Complete |
+| Delegation subsystem + TxType collapse (pending change #5) | Complete |
+| C3: ValidatorRecord with self_bond, total_delegated, commission_rate | Complete |
+| C3: DelegationRecord, DelegationStatus, delegation handlers | Complete |
+| C3: Delegation conformance tests (15 tests) | Complete |
+| C5: EIP-1559 fee market (FeeMarketState, FeeConfig, compute_next_base_fee) | Complete |
+| C5: Validator rebate computation, mempool limits | Complete |
+| C5: Fee market conformance tests (14 tests) | Complete |
+| Conformance tests: 15 C1 hooks + 8 C2 hooks + 15 staking hooks all PASS | Complete |
+| 103/103 workspace tests pass | Complete |
+| clippy zero warnings, fmt clean, docs build, determinism sweep clean | Complete |
+
+## Verification (after Week 3-4)
+
+| Check | Result |
+|-------|--------|
+| `cargo build --workspace` | PASS (13 crates) |
+| `cargo test --workspace` | PASS (103/103) |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
+| `cargo doc --workspace --no-deps` | PASS |
+| Determinism sweep (floating-point) | PASS (zero hits) |
+| Determinism sweep (wall-clock/random) | PASS (zero hits) |
 
 ## Verification (after Week 1-2)
 

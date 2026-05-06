@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 00 complete. Stage 01 next: Protocol Core — Minimum Viable Chain) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 Week 3-4 complete. Week 5-6 next: P2P Networking + Artifact Storage) |
 
 ---
 
@@ -98,15 +98,15 @@ Systemic patterns identified: B-01 incomplete migration recurrence (committee we
 
 ## Next Actions
 
-1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete. See `docs/08-handoff/latest/checkpoint-2026-05-04.md`.
-2. ~~Bug audit (code) completed. See `docs/01-research/_audit-bugs-2026-05-04.md`.~~
-3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013. See `checkpoint-2026-05-05.md`.~~
-4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5: 7 FRs, ADR-0014, 4 specs, planning. See `checkpoint-2026-05-05b.md` and `checkpoint-2026-05-05c.md`.~~
-5. ~~Documentation-layer bug audit completed. See `docs/01-research/_audit-bugs-2026-05-05.md`.~~
-6. ~~Stage 01 Week 1-2 (C1 + C2): Consensus Engine + State Machine & SMT. See `checkpoint-2026-05-05d.md`.~~
-7. ~~Architecture amendments (2026-05-06): 15% cap removed, overlap 33%→20%, VDF fallback hardened, stake-graph spec created, committee stall tiered, delegation spec'd. Changes across ~40 files. See `checkpoint-2026-05-06.md`.~~
-8. **PENDING:** 5 code changes required before Stage 01 Week 3-4: overlap+two-epoch guard, VDF fallback, stall thresholds, stake-graph clustering, delegation subsystem. See `checkpoint-2026-05-06.md` for exact file-level details.
-9. Stage 01 Week 3-4 (C3 + C5): Staking & Validator Manager + Fee Market. (Apply pending code changes first.)
+1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete.
+2. ~~Bug audit (code) completed.~~
+3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013.~~
+4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5.~~
+5. ~~Documentation-layer bug audit completed.~~
+6. ~~Stage 01 Week 1-2 (C1 + C2): Consensus Engine + State Machine & SMT.~~
+7. ~~Architecture amendments (2026-05-06): 15% cap removed, overlap 33%→20%, VDF fallback hardened, stake-graph spec created, committee stall tiered, delegation spec'd.~~
+8. ~~5 pending code changes applied: overlap+two-epoch guard, VDF fallback, stall thresholds, stake-graph clustering, delegation subsystem.~~
+9. ~~Stage 01 Week 3-4 (C3 + C5): Staking base & Fee Market implemented. See `checkpoint-2026-05-06-code.md`.~~
 10. Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.
 11. Stage 01 Week 7-8: Integration, soak test, polish.
 12. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.

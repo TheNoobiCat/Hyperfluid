@@ -14,3 +14,5 @@ hex.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+hyperfluid-consensus = { path = "../hyperfluid-consensus" }
+hyperfluid-state = { path = "../hyperfluid-state" }

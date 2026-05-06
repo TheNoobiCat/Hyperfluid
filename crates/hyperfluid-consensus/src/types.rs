@@ -17,6 +17,14 @@ fn hash_bytes(data: &[u8]) -> Hash32 {
     out
 }
 
+/// Committee liveness mode per three-tier stall model. Source: consensus-spec.md Section 1.2
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommitteeMode {
+    Normal,
+    Degraded,
+    Emergency,
+}
+
 /// Epoch committee. Source: consensus-spec.md Section 1.3
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Committee {
@@ -27,42 +35,123 @@ pub struct Committee {
 }
 
 impl Committee {
-    /// The minimum number of active validators required for block production.
-    /// 2f+1 safety threshold: with f=33, need 67.
-    pub const SAFETY_THRESHOLD: u64 = 67;
+    /// Normal threshold: 67+ validators for full consensus.
+    pub const NORMAL_THRESHOLD: u64 = 67;
+
+    /// Degraded threshold: 50-66 validators for critical txs only.
+    pub const DEGRADED_THRESHOLD: u64 = 50;
 
     /// Maximum committee size.
     pub const COMMITTEE_SIZE: u64 = 100;
 
+    /// Emergency idle blocks before auto-recovery triggers.
+    pub const EMERGENCY_IDLE_BLOCKS: u64 = 500;
+
     pub fn safety_threshold() -> u64 {
-        Self::SAFETY_THRESHOLD
+        Self::NORMAL_THRESHOLD
     }
 
-    pub fn can_produce(active_count: u64) -> bool {
-        active_count >= Self::SAFETY_THRESHOLD
+    /// Determine committee mode from active validator count and total pool size.
+    ///
+    /// SPEC_DEVIATION: Bootstrap scaling. When total_validators < COMMITTEE_SIZE,
+    /// thresholds are scaled proportionally so the chain can bootstrap from
+    /// fewer than 50 validators. Without this, a single-node testnet or early
+    /// network would enter Emergency mode immediately. Pending formal inclusion
+    /// in consensus-spec.md. See docs/08-handoff/latest/open-questions.md#Q1.
+    pub fn committee_mode(active_count: u64, total_validators: u64) -> CommitteeMode {
+        if active_count == 0 {
+            return CommitteeMode::Emergency;
+        }
+        let (normal, degraded) = Self::scaled_thresholds(total_validators);
+        if active_count >= normal {
+            CommitteeMode::Normal
+        } else if active_count >= degraded {
+            CommitteeMode::Degraded
+        } else {
+            CommitteeMode::Emergency
+        }
+    }
+
+    /// Block production is possible in Normal and Degraded modes.
+    /// Only Emergency mode halts production entirely.
+    ///
+    /// SPEC_DEVIATION: Uses scaled DEGRADED_THRESHOLD for bootstrap.
+    pub fn can_produce(active_count: u64, total_validators: u64) -> bool {
+        if active_count == 0 {
+            return false;
+        }
+        let (_, degraded) = Self::scaled_thresholds(total_validators);
+        active_count >= degraded
+    }
+
+    /// Scale NORMAL_THRESHOLD and DEGRADED_THRESHOLD proportionally
+    /// when the total validator pool is below COMMITTEE_SIZE. This allows
+    /// the chain to bootstrap with a small validator set.
+    fn scaled_thresholds(total_validators: u64) -> (u64, u64) {
+        if total_validators >= Self::COMMITTEE_SIZE {
+            return (Self::NORMAL_THRESHOLD, Self::DEGRADED_THRESHOLD);
+        }
+        let n = total_validators as u128;
+        let total = Self::COMMITTEE_SIZE as u128;
+        let normal = ((Self::NORMAL_THRESHOLD as u128 * n).div_ceil(total)).min(n) as u64;
+        let degraded = ((Self::DEGRADED_THRESHOLD as u128 * n).div_ceil(total)).min(n.saturating_sub(1)) as u64;
+        (normal, std::cmp::max(degraded, 1))
+    }
+
+    /// Compute VDF fallback seed when <33% of committee reveals.
+    /// Uses only finalized/historical entropy — no current-epoch malleable data.
+    ///
+    /// Formula: SHA3-256(previous_vdf_output || epoch_N-1_headers_hash || epoch_number || valid_reveals)
+    pub fn compute_vdf_fallback(
+        previous_vdf_output: &Hash32,
+        epoch_headers_hash: &Hash32,
+        epoch_number: u64,
+        valid_reveals: &[Hash32],
+    ) -> Hash32 {
+        let mut hasher = Sha3_256::new();
+        hasher.update(previous_vdf_output);
+        hasher.update(epoch_headers_hash);
+        hasher.update(epoch_number.to_le_bytes());
+        for reveal in valid_reveals {
+            hasher.update(reveal);
+        }
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&hasher.finalize());
+        out
+    }
+
+    /// Emergency epoch transition: sample a new committee from ALL validators
+    /// in active or paused states (not unbonding/withdrawn). Used when
+    /// the committee stalls for EMERGENCY_IDLE_BLOCKS.
+    pub fn emergency_transition(
+        epoch: u64,
+        seed: Hash32,
+        validators: &[Hash32],
+        stakes: &[u128],
+    ) -> Self {
+        Self::sample(epoch, seed, validators, stakes, Self::COMMITTEE_SIZE as usize, &[])
     }
 
     /// Deterministically sample a committee from the validator pool.
-    /// Given the same (epoch, seed, validators, stakes, committee_size),
-    /// the output MUST be identical across all nodes.
     ///
-    /// Uses SHA3-256-based weighted selection. For each committee seat,
-    /// a deterministic index is derived from SHA3-256(epoch || seed || seat_index).
-    ///
-    /// If `previous_members` is provided, enforces at most 33% overlap
-    /// (spec Section 1.4: at most 33% overlap, 67% minimum rotation).
+    /// `ineligible` contains validators who served 2 consecutive epochs
+    /// and must be excluded from this committee (two-epoch recency guard).
     pub fn sample(
         epoch: u64,
         seed: Hash32,
         validators: &[Hash32],
         stakes: &[u128],
         committee_size: usize,
+        ineligible: &[Hash32],
     ) -> Self {
-        Self::sample_with_rotation(epoch, seed, validators, stakes, committee_size, &[])
+        Self::sample_with_rotation(epoch, seed, validators, stakes, committee_size, &[], ineligible)
     }
 
-    /// Sample committee with rotation constraint against previous members.
+    /// Sample committee with rotation constraint and two-epoch recency guard.
     /// Uses integer arithmetic for determinism across all platforms.
+    ///
+    /// `previous_members` are the epoch N-1 committee members (max 20% overlap).
+    /// `ineligible` are validators who served epochs N-1 AND N-2 (two-epoch guard).
     pub fn sample_with_rotation(
         epoch: u64,
         seed: Hash32,
@@ -70,6 +159,7 @@ impl Committee {
         stakes: &[u128],
         committee_size: usize,
         previous_members: &[Hash32],
+        ineligible: &[Hash32],
     ) -> Self {
         assert_eq!(validators.len(), stakes.len());
         assert!(
@@ -84,8 +174,9 @@ impl Committee {
         let mut used = std::collections::HashSet::new();
 
         let previous_set: std::collections::HashSet<_> = previous_members.iter().collect();
-        // Integer arithmetic: ceil(committee_size * 33 / 100) — deterministic across all platforms
-        let max_overlap = (committee_size * 33).div_ceil(100);
+        let ineligible_set: std::collections::HashSet<_> = ineligible.iter().collect();
+        // Integer arithmetic: ceil(committee_size * 20 / 100) — deterministic across all platforms
+        let max_overlap = (committee_size * 20).div_ceil(100);
 
         for seat_index in 0..committee_size {
             let mut hasher = Sha3_256::new();
@@ -113,24 +204,72 @@ impl Committee {
                 }
             }
 
-            // Enforce rotation constraint: if we've reached max overlap,
-            // skip validators that were in the previous committee
+            // Priority-ordered constraint enforcement:
+            // 1. Not already used AND not ineligible AND doesn't exceed overlap
+            // 2. Not already used AND not ineligible (overlap relaxed)
+            // 3. Not already used (ineligible + overlap relaxed)
+            let mut found = false;
+
+            // Pass 1: all constraints
+            let mut idx = chosen_idx;
             let mut attempt = 0usize;
             while attempt < validators.len() {
-                let already_used = used.contains(&validators[chosen_idx]);
+                let already_used = used.contains(&validators[idx]);
+                let is_ineligible = ineligible_set.contains(&validators[idx]);
                 let would_exceed_overlap = if !already_used && !previous_set.is_empty() {
                     let current_overlap =
                         members.iter().filter(|m| previous_set.contains(m)).count();
-                    previous_set.contains(&validators[chosen_idx]) && current_overlap >= max_overlap
+                    previous_set.contains(&validators[idx]) && current_overlap >= max_overlap
                 } else {
                     false
                 };
 
-                if !already_used && !would_exceed_overlap {
+                if !already_used && !is_ineligible && !would_exceed_overlap {
+                    chosen_idx = idx;
+                    found = true;
                     break;
                 }
-                chosen_idx = (chosen_idx + 1) % validators.len();
+                idx = (idx + 1) % validators.len();
                 attempt += 1;
+            }
+
+            // Pass 2: relax overlap, keep ineligible guard
+            if !found {
+                let mut idx = chosen_idx;
+                let mut attempt = 0usize;
+                while attempt < validators.len() {
+                    let already_used = used.contains(&validators[idx]);
+                    let is_ineligible = ineligible_set.contains(&validators[idx]);
+                    if !already_used && !is_ineligible {
+                        chosen_idx = idx;
+                        found = true;
+                        break;
+                    }
+                    idx = (idx + 1) % validators.len();
+                    attempt += 1;
+                }
+            }
+
+            // Pass 3: only prevent duplicates
+            if !found {
+                let mut idx = chosen_idx;
+                let mut attempt = 0usize;
+                while attempt < validators.len() {
+                    let already_used = used.contains(&validators[idx]);
+                    if !already_used {
+                        chosen_idx = idx;
+                        found = true;
+                        break;
+                    }
+                    idx = (idx + 1) % validators.len();
+                    attempt += 1;
+                }
+            }
+
+            if !found {
+                // Every validator is already used; this shouldn't happen
+                // with validators.len() >= committee_size, but guard anyway.
+                panic!("cannot sample committee: all validators already used");
             }
 
             members.push(validators[chosen_idx]);
@@ -180,20 +319,41 @@ pub struct TransactionEnvelope {
 }
 
 /// All transaction types on the protocol. Source: consensus-spec.md Section 1.3
+/// Collapsed to 7 base types with action sub-enums (2026-05-06 simplification).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TxType {
     TransferTx,
-    StakeBondTx,
-    StakeRenewTx,
-    UnbondRequestTx,
-    WithdrawUnbondedTx,
+    StakingTx(StakingAction),
+    DelegationTx(DelegationAction),
     TaskCreateTx,
-    GovernanceProposeTx,
-    GovernanceVoteTx,
+    GovernanceTx(GovernanceAction),
     EvidenceTx,
-    FastPathProposalTx,
-    FastPathReviewTx,
-    FastPathChallengeTx,
+    FastPathTx,
+}
+
+/// Staking sub-actions. Source: consensus-spec.md Section 1.3
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StakingAction {
+    Bond,
+    Renew,
+    Unbond,
+    Withdraw,
+}
+
+/// Delegation sub-actions. Source: consensus-spec.md Section 1.3
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DelegationAction {
+    Delegate,
+    Undelegate,
+    WithdrawDelegation,
+    SetCommission,
+}
+
+/// Governance sub-actions. Source: consensus-spec.md Section 1.3
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GovernanceAction {
+    Propose,
+    Vote,
 }
 
 #[cfg(test)]
@@ -221,19 +381,21 @@ mod tests {
     fn tx_type_variants_are_exhaustive() {
         let types = [
             TxType::TransferTx,
-            TxType::StakeBondTx,
-            TxType::StakeRenewTx,
-            TxType::UnbondRequestTx,
-            TxType::WithdrawUnbondedTx,
+            TxType::StakingTx(StakingAction::Bond),
+            TxType::StakingTx(StakingAction::Renew),
+            TxType::StakingTx(StakingAction::Unbond),
+            TxType::StakingTx(StakingAction::Withdraw),
+            TxType::DelegationTx(DelegationAction::Delegate),
+            TxType::DelegationTx(DelegationAction::Undelegate),
+            TxType::DelegationTx(DelegationAction::WithdrawDelegation),
+            TxType::DelegationTx(DelegationAction::SetCommission),
             TxType::TaskCreateTx,
-            TxType::GovernanceProposeTx,
-            TxType::GovernanceVoteTx,
+            TxType::GovernanceTx(GovernanceAction::Propose),
+            TxType::GovernanceTx(GovernanceAction::Vote),
             TxType::EvidenceTx,
-            TxType::FastPathProposalTx,
-            TxType::FastPathReviewTx,
-            TxType::FastPathChallengeTx,
+            TxType::FastPathTx,
         ];
-        assert_eq!(types.len(), 12);
+        assert_eq!(types.len(), 14);
     }
 
     #[test]

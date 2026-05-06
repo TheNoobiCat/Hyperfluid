@@ -2,9 +2,21 @@
 //
 // Source: specs/protocol/staking-spec.md Sections 1-2
 
+pub mod graph;
+
 use serde::{Deserialize, Serialize};
 
 pub type Hash32 = [u8; 32];
+
+pub fn sha3_256(data: &[u8]) -> Hash32 {
+    use sha3::{Digest, Sha3_256};
+    let mut hasher = Sha3_256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&result);
+    out
+}
 
 /// Four canonical validator states. Source: staking-spec.md Section 1.3
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,22 +27,44 @@ pub enum ValidatorState {
     Withdrawn,
 }
 
+/// Delegation status. Source: staking-spec.md Section 1.3
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DelegationStatus {
+    Active,
+    Unbonding,
+    Withdrawn,
+}
+
 /// Validator record stored on-chain. Source: staking-spec.md Section 1.3
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorRecord {
     pub validator_id: Hash32,
     pub state: ValidatorState,
+    pub self_bond: u128,
+    pub total_delegated: u128,
     pub bonded_stake: u128,
+    // SPEC_DEVIATION: delegated_stake_balance computed as self_bond + total_delegated for
+    // backward compatibility during transition. After full delegation migration,
+    // bonded_stake should equal self_bond + total_delegated.
+    pub commission_rate: u8,
     pub bonding_height: u64,
     pub unbonding_height: u64,
     pub jail_until_height: u64,
     // SPEC_DEVIATION: liveness_bitmap is Vec<u8> instead of [u8; 1024]
-    // because serde does not natively derive Serialize/Deserialize for arrays > 32 elements.
-    // When SCALE encoding is added in Stage 01, this MUST become [u8; 1024] per spec.
     pub liveness_bitmap: Vec<u8>,
     pub slash_count: u32,
     pub missed_blocks: u32,
     pub last_renew_height: u64,
+}
+
+/// Delegation record stored on-chain. Source: staking-spec.md Section 1.3
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DelegationRecord {
+    pub delegator_id: Hash32,
+    pub validator_id: Hash32,
+    pub amount: u128,
+    pub unbonding_at_height: u64,
+    pub status: DelegationStatus,
 }
 
 /// Fault classification for slashing. Source: staking-spec.md Section 1.3
@@ -75,7 +109,10 @@ pub struct GovernanceVoteTx {
 pub struct SystemParameters {
     pub epoch_length: u64,
     pub committee_size: u64,
-    pub min_stake: u128,
+    pub min_self_bond: u128,
+    pub min_delegation: u128,
+    pub max_commission_rate: u8,
+    pub delegation_unbond_delay: u64,
     pub bond_delay: u64,
     pub unbond_delay: u64,
     pub max_governance_proposals: u64,
@@ -90,7 +127,11 @@ impl Default for SystemParameters {
             epoch_length: 8192,
             committee_size: 100,
             // 1,000 AGX = 1_000_000_000_000_000_000_000 atto-AGX (10^21)
-            min_stake: 1_000_000_000_000_000_000_000u128,
+            min_self_bond: 1_000_000_000_000_000_000_000u128,
+            // 1 AGX = 10^18 atto-AGX
+            min_delegation: 1_000_000_000_000_000_000u128,
+            max_commission_rate: 20,
+            delegation_unbond_delay: 60_480,
             bond_delay: 8640,
             unbond_delay: 120_960,
             max_governance_proposals: 32,
@@ -122,7 +163,10 @@ mod tests {
         let r = ValidatorRecord {
             validator_id: [0xAA; 32],
             state: ValidatorState::Active,
+            self_bond: 1_000_000_000_000_000_000_000u128,
+            total_delegated: 0,
             bonded_stake: 1_000_000_000_000_000_000_000u128,
+            commission_rate: 10,
             bonding_height: 0,
             unbonding_height: 0,
             jail_until_height: 0,
@@ -137,14 +181,36 @@ mod tests {
     }
 
     #[test]
+    fn delegation_record_serde_roundtrip() {
+        let d = DelegationRecord {
+            delegator_id: [0x11; 32],
+            validator_id: [0x22; 32],
+            amount: 500_000_000_000_000_000_000u128,
+            unbonding_at_height: 1000,
+            status: DelegationStatus::Active,
+        };
+        let json = serde_json::to_string(&d).unwrap();
+        let d2: DelegationRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(d, d2);
+    }
+
+    #[test]
     fn system_parameters_defaults_match_spec() {
         let p = SystemParameters::default();
         assert_eq!(p.epoch_length, 8192);
         assert_eq!(p.committee_size, 100);
-        assert_eq!(p.min_stake, 1_000_000_000_000_000_000_000u128);
+        assert_eq!(p.min_self_bond, 1_000_000_000_000_000_000_000u128);
         assert_eq!(p.proposal_deposit, 500_000_000_000_000_000_000u128);
         assert_eq!(p.unbond_delay, 120_960);
         assert_eq!(p.liveness_miss_threshold_pct, 20);
+    }
+
+    #[test]
+    fn system_parameters_delegation_defaults() {
+        let p = SystemParameters::default();
+        assert_eq!(p.min_delegation, 1_000_000_000_000_000_000u128);
+        assert_eq!(p.max_commission_rate, 20);
+        assert_eq!(p.delegation_unbond_delay, 60_480);
     }
 
     #[test]
