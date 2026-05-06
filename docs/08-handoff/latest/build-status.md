@@ -228,6 +228,19 @@ See `docs/01-research/_audit-bugs-2026-05-05.md` for full report.
 
 See `docs/01-research/_audit-bugs-2026-05-06.md` for full report.
 
+## Resolved Issues (Bug Audit 2026-05-06 — Round 2)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| Cluster detection non-transitive (B-15) | Major | Replaced pairwise-first-member with connected-components |
+| `compute_committee_weights` uses HashMap (B-16) | Major | Changed to BTreeMap for deterministic iteration |
+| Non-existent creator creates zero-cost tasks (B-17) | Medium | Added rejecting `None` arm in execute_task_create |
+| `max_adjustment_pct` stores per-mil named as pct (B-18) | Minor | Renamed to `max_adjustment_per_mil` |
+| Dead `safety_threshold()` function (B-19) | Minor | Removed |
+| No signal handler for shutdown (B-20) | Minor | Added `tokio::signal::ctrl_c()` |
+
+See `docs/01-research/_audit-bugs-2026-05-06-r2.md` for full report.
+
 ## Exit Criteria Status
 
 | Criterion | Status |

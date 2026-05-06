@@ -15,7 +15,9 @@ pub struct FeeMarketState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeeConfig {
     pub target_utilization_pct: u8,
-    pub max_adjustment_pct: u8,
+    /// Max adjustment expressed as per-mil (125 = 12.5%, i.e. 125/1000).
+    /// Named explicitly to avoid misconfiguration as a percentage.
+    pub max_adjustment_per_mil: u16,
     pub min_base_fee: u128,
     pub max_per_sender_tx: u32,
 }
@@ -24,7 +26,7 @@ impl Default for FeeConfig {
     fn default() -> Self {
         Self {
             target_utilization_pct: 50,
-            max_adjustment_pct: 125, // 12.5% expressed as per-mil (125/1000)
+            max_adjustment_per_mil: 125, // 12.5% expressed as per-mil (125/1000)
             min_base_fee: 1_000_000u128, // [TUNE] 1_000_000 atto-AGX
             max_per_sender_tx: 100,
         }
@@ -57,13 +59,13 @@ pub fn compute_next_base_fee(
     if utilization > target {
         let denom = target * adjustment_denominator;
         let delta = if denom > 0 { current_base_fee * (utilization - target) / denom } else { 0 };
-        let cap = current_base_fee * (config.max_adjustment_pct as u128) / 1000;
+        let cap = current_base_fee * (config.max_adjustment_per_mil as u128) / 1000;
         let increased = current_base_fee.saturating_add(delta);
         std::cmp::min(increased, current_base_fee.saturating_add(cap))
     } else if utilization < target {
         let denom = target * adjustment_denominator;
         let delta = if denom > 0 { current_base_fee * (target - utilization) / denom } else { 0 };
-        let cap = current_base_fee * (config.max_adjustment_pct as u128) / 1000;
+        let cap = current_base_fee * (config.max_adjustment_per_mil as u128) / 1000;
         let decreased = current_base_fee.saturating_sub(delta);
         let floor_reduced = current_base_fee.saturating_sub(cap);
         #[allow(clippy::comparison_chain)]

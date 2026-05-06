@@ -4,7 +4,7 @@
 // Detects correlated validator keys via on-chain funding trace.
 // Clusters are treated as a single entity for committee weight computation.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::{Hash32, ValidatorRecord};
 
@@ -105,35 +105,59 @@ pub fn detect_clusters(
 ) -> ClusterDetectionResult {
     let graph = build_stake_funding_graph(edges.to_vec());
 
-    let mut clusters: Vec<ClusterRecord> = Vec::new();
-    let mut clustered = HashSet::new();
-
     let validator_ids: Vec<Hash32> = validators.iter().map(|v| v.validator_id).collect();
 
+    // Build ancestor sets for every validator
+    let mut ancestor_sets: Vec<Vec<Hash32>> = Vec::with_capacity(validator_ids.len());
+    for vid in &validator_ids {
+        let ancestors = graph.get_ancestors(vid, max_hops);
+        ancestor_sets.push(ancestors);
+    }
+
+    // Build adjacency: edge between validators sharing a non-airdrop common ancestor
+    let mut adj: HashMap<usize, Vec<usize>> = HashMap::new();
     for i in 0..validator_ids.len() {
-        if clustered.contains(&validator_ids[i]) {
+        for j in (i + 1)..validator_ids.len() {
+            let common: Vec<&Hash32> = ancestor_sets[i]
+                .iter()
+                .filter(|a| ancestor_sets[j].contains(a) && **a != *airdrop_agent_id)
+                .collect();
+            if !common.is_empty() {
+                adj.entry(i).or_default().push(j);
+                adj.entry(j).or_default().push(i);
+            }
+        }
+    }
+
+    // Find connected components
+    let mut visited: HashSet<usize> = HashSet::new();
+    let mut clusters: Vec<ClusterRecord> = Vec::new();
+
+    for start in 0..validator_ids.len() {
+        if visited.contains(&start) {
             continue;
         }
 
-        let ancestors_i = graph.get_ancestors(&validator_ids[i], max_hops);
-        let mut group = vec![validator_ids[i]];
-
-        for (_j, vj_id) in validator_ids.iter().enumerate().skip(i + 1) {
-            if clustered.contains(vj_id) {
+        // BFS/DFS to find the full connected component
+        let mut stack = vec![start];
+        let mut component = Vec::new();
+        while let Some(node) = stack.pop() {
+            if !visited.insert(node) {
                 continue;
             }
-            let ancestors_j = graph.get_ancestors(vj_id, max_hops);
-            let common: Vec<&Hash32> =
-                ancestors_i.iter().filter(|a| ancestors_j.contains(a)).collect();
-
-            let has_non_airdrop_common = common.iter().any(|a| *a != airdrop_agent_id);
-            if has_non_airdrop_common {
-                group.push(*vj_id);
+            component.push(node);
+            if let Some(neighbors) = adj.get(&node) {
+                for &neighbor in neighbors {
+                    if !visited.contains(&neighbor) {
+                        stack.push(neighbor);
+                    }
+                }
             }
         }
 
-        if group.len() > 1 {
-            let mut sorted_members = group.clone();
+        if component.len() > 1 {
+            let mut sorted_members: Vec<Hash32> =
+                component.iter().map(|&idx| validator_ids[idx]).collect();
             sorted_members.sort();
 
             let concat: Vec<u8> = sorted_members.iter().flat_map(|m| m.to_vec()).collect();
@@ -146,7 +170,7 @@ pub fn detect_clusters(
                 .map(|v| v.bonded_stake)
                 .sum();
 
-            let diversity = usize::min(5, group.len()) as u8;
+            let diversity = usize::min(5, component.len()) as u8;
 
             clusters.push(ClusterRecord {
                 cluster_id,
@@ -156,15 +180,13 @@ pub fn detect_clusters(
                 cluster_size_diversity_bonus: diversity,
                 detected_at_epoch: epoch,
             });
-
-            for member in &group {
-                clustered.insert(*member);
-            }
         }
     }
 
+    let clustered_set: HashSet<Hash32> =
+        clusters.iter().flat_map(|c| c.members.iter().copied()).collect();
     let unclustered_validators: Vec<Hash32> =
-        validator_ids.iter().filter(|v| !clustered.contains(*v)).copied().collect();
+        validator_ids.iter().filter(|v| !clustered_set.contains(*v)).copied().collect();
 
     ClusterDetectionResult { epoch, clusters, unclustered_validators }
 }
@@ -172,8 +194,8 @@ pub fn detect_clusters(
 pub fn compute_committee_weights(
     validators: &[ValidatorRecord],
     clusters: &[ClusterRecord],
-) -> HashMap<Hash32, u128> {
-    let mut weights: HashMap<Hash32, u128> = HashMap::new();
+) -> BTreeMap<Hash32, u128> {
+    let mut weights: BTreeMap<Hash32, u128> = BTreeMap::new();
 
     for c in clusters {
         let weight_per_member = if !c.members.is_empty() {
@@ -341,6 +363,75 @@ mod tests {
         let v2w = weights[&[2u8; 32]];
         assert_eq!(v1w, v2w, "cluster stake should be evenly split");
         assert_eq!(v1w + v2w, 3000);
+    }
+
+    #[test]
+    fn cluster_detection_transitive_via_intermediate_validator() {
+        let funder = [0xAAu8; 32];
+        let intermediate = [0xBBu8; 32];
+        let v1 = make_validator(1, 1000);
+        let v2 = make_validator(2, 1000);
+        let v3 = make_validator(3, 1000);
+
+        // funder → intermediate → v1
+        // funder → v2
+        // intermediate → v3
+        // v1 and v3 share `intermediate` ancestor, v2 shares `funder` with both
+        let edges = vec![
+            FundingEdge { from_account: funder, to_account: intermediate, amount: 5000, height: 0 },
+            FundingEdge {
+                from_account: intermediate,
+                to_account: [1u8; 32],
+                amount: 1000,
+                height: 1,
+            },
+            FundingEdge { from_account: funder, to_account: [2u8; 32], amount: 1000, height: 0 },
+            FundingEdge {
+                from_account: intermediate,
+                to_account: [3u8; 32],
+                amount: 1000,
+                height: 1,
+            },
+        ];
+
+        let result = detect_clusters(&[v1, v2, v3], &edges, 3, &airdrop_id(), 42);
+        // All three share a common ancestor chain within 3 hops → one cluster of 3
+        assert_eq!(result.clusters.len(), 1, "transitive funding should produce one cluster");
+        assert_eq!(
+            result.clusters[0].members.len(),
+            3,
+            "all 3 validators should be in the cluster"
+        );
+    }
+
+    #[test]
+    fn cluster_detection_multi_chain_transitive() {
+        let funder_a = [0xCCu8; 32];
+        let _funder_b = [0xDDu8; 32];
+        let bridge = [0xEEu8; 32];
+        let v1 = make_validator(1, 1000);
+        let v2 = make_validator(2, 1000);
+        let v3 = make_validator(3, 1000);
+
+        // funder_a → v1
+        // funder_a → bridge → v2
+        // funder_a → bridge → v3
+        // v1 and v2 share funder_a directly.
+        // v2 and v3 share bridge (but v1 and v3 only connect through bridge → v2 → ... )
+        let edges = vec![
+            FundingEdge { from_account: funder_a, to_account: [1u8; 32], amount: 1000, height: 0 },
+            FundingEdge { from_account: funder_a, to_account: bridge, amount: 1000, height: 0 },
+            FundingEdge { from_account: bridge, to_account: [2u8; 32], amount: 1000, height: 1 },
+            FundingEdge { from_account: bridge, to_account: [3u8; 32], amount: 1000, height: 1 },
+        ];
+
+        let result = detect_clusters(&[v1, v2, v3], &edges, 3, &airdrop_id(), 42);
+        assert_eq!(
+            result.clusters.len(),
+            1,
+            "multi-chain transitive funding should produce one cluster"
+        );
+        assert_eq!(result.clusters[0].members.len(), 3, "all 3 validators should be clustered");
     }
 
     #[test]

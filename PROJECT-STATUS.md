@@ -96,6 +96,18 @@ Key findings:
 
 Systemic patterns identified: B-01 incomplete migration recurrence (committee weights), f64-in-deterministic recurrence (committee sampling), SMT proof correctness gap (no multi-leaf proof test).
 
+## Bug Audit (2026-05-06 — Round 2: Code Cross-Reference)
+
+**Result:** 6 bugs found and fixed across 4 crates. See `docs/01-research/_audit-bugs-2026-05-06-r2.md` for full report.
+
+Key findings:
+1. **MAJOR:** Cluster detection algorithm was non-transitive — validators sharing a common ancestor through an intermediate validator escaped clustering. Replaced pairwise-first-member comparison with connected-components algorithm.
+2. **MAJOR:** `compute_committee_weights` returned `HashMap` (non-deterministic iteration) instead of `BTreeMap`. Fixed.
+3. **MEDIUM:** `execute_task_create` silently skipped debit for non-existent accounts with zero-cost tasks (no `else` arm). Fixed. Two additional `if let Some` silent-skip instances found by grep and fixed in `execute_undelegate` and `execute_withdraw_delegation`.
+4. TDD process improved: 3 generic guards added to `execute-build.md` (HashMap→BTreeMap, transitive graph tests, `if let Some.get_mut` rejecting arms).
+
+Systemic patterns identified: `if let Some` + `get_mut` silent skip (3 instances), HashMap in deterministic return paths, graph algorithm non-transitivity.
+
 ## Next Actions
 
 1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete.

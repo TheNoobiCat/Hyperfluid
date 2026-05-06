@@ -124,6 +124,13 @@ async fn main() {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 
+    // Register signal handler for clean shutdown (ctrl-c, SIGTERM)
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        tracing::info!("Shutdown signal received, stopping consensus loop...");
+        running.store(false, Ordering::SeqCst);
+    });
+
     let mut height: u64 = 0;
     let mut epoch: u64 = 0;
 

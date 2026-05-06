@@ -47,10 +47,6 @@ impl Committee {
     /// Emergency idle blocks before auto-recovery triggers.
     pub const EMERGENCY_IDLE_BLOCKS: u64 = 500;
 
-    pub fn safety_threshold() -> u64 {
-        Self::NORMAL_THRESHOLD
-    }
-
     /// Determine committee mode from active validator count and total pool size.
     ///
     /// SPEC_DEVIATION: Bootstrap scaling. When total_validators < COMMITTEE_SIZE,
@@ -94,7 +90,8 @@ impl Committee {
         let n = total_validators as u128;
         let total = Self::COMMITTEE_SIZE as u128;
         let normal = ((Self::NORMAL_THRESHOLD as u128 * n).div_ceil(total)).min(n) as u64;
-        let degraded = ((Self::DEGRADED_THRESHOLD as u128 * n).div_ceil(total)).min(n.saturating_sub(1)) as u64;
+        let degraded = ((Self::DEGRADED_THRESHOLD as u128 * n).div_ceil(total))
+            .min(n.saturating_sub(1)) as u64;
         (normal, std::cmp::max(degraded, 1))
     }
 

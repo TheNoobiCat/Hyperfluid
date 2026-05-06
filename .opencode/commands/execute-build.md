@@ -49,6 +49,9 @@ If you discover a trust assumption or centralised dependency not listed in the s
   - `grep -rn "as f64\|as f32\|f64::\|f32::" crates/` — flag any floating-point in deterministic paths
   - `grep -rn "Instant::now\|SystemTime::now\|thread_rng\|rand::random" crates/` — flag wall-clock/random sources in protocol logic
   - Verify all new `HashMap`/`HashSet` usages in protocol code don't leak iteration order into consensus decisions
+  - Verify every `pub fn` that returns `HashMap` cannot feed into deterministic state (should use `BTreeMap` or sorted `Vec` instead)
+  - For any new graph/clustering/connectivity algorithm, add a transitive-closure test case: three-or-more hop chains must produce the same cluster as direct connections
+  - In state-machine transaction handlers, grep for `if let Some.*get_mut` — every such expression must have an `else` arm that rejects, not silently skip
 - File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
 
 When the week's tasks are complete:

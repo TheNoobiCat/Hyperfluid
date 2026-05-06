@@ -177,10 +177,13 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
 
-        // Debit creator
-        if let Some(creator) = self.accounts.get_mut(&creator_id) {
-            creator.balance -= total_cost;
-            creator.nonce = nonce;
+        // Debit creator (must exist)
+        match self.accounts.get_mut(&creator_id) {
+            Some(creator) => {
+                creator.balance -= total_cost;
+                creator.nonce = nonce;
+            }
+            None => return ExecutionResult::Rejected,
         }
 
         // Record task for deduplication
@@ -259,8 +262,11 @@ impl StateMachine {
             del.active = false;
             del.unbonding_at_height = current_height;
 
-            if let Some(delegator) = self.accounts.get_mut(&delegator_id) {
-                delegator.nonce = nonce;
+            match self.accounts.get_mut(&delegator_id) {
+                Some(delegator) => {
+                    delegator.nonce = nonce;
+                }
+                None => return ExecutionResult::Rejected,
             }
             ExecutionResult::Success
         } else {
@@ -293,9 +299,12 @@ impl StateMachine {
             }
             let amount = del.amount;
 
-            if let Some(delegator) = self.accounts.get_mut(&delegator_id) {
-                delegator.balance = delegator.balance.saturating_add(amount);
-                delegator.nonce = nonce;
+            match self.accounts.get_mut(&delegator_id) {
+                Some(delegator) => {
+                    delegator.balance = delegator.balance.saturating_add(amount);
+                    delegator.nonce = nonce;
+                }
+                None => return ExecutionResult::Rejected,
             }
             self.delegations.remove(&key);
             ExecutionResult::Success
