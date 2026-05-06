@@ -58,13 +58,19 @@ pub fn compute_next_base_fee(
 
     if utilization > target {
         let denom = target * adjustment_denominator;
-        let delta = if denom > 0 { current_base_fee * (utilization - target) / denom } else { 0 };
+        let delta = current_base_fee
+            .checked_mul(utilization.saturating_sub(target))
+            .and_then(|v| v.checked_div(denom))
+            .unwrap_or(0);
         let cap = current_base_fee * (config.max_adjustment_per_mil as u128) / 1000;
         let increased = current_base_fee.saturating_add(delta);
         std::cmp::min(increased, current_base_fee.saturating_add(cap))
     } else if utilization < target {
         let denom = target * adjustment_denominator;
-        let delta = if denom > 0 { current_base_fee * (target - utilization) / denom } else { 0 };
+        let delta = current_base_fee
+            .checked_mul(target.saturating_sub(utilization))
+            .and_then(|v| v.checked_div(denom))
+            .unwrap_or(0);
         let cap = current_base_fee * (config.max_adjustment_per_mil as u128) / 1000;
         let decreased = current_base_fee.saturating_sub(delta);
         let floor_reduced = current_base_fee.saturating_sub(cap);
