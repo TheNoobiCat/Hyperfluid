@@ -49,11 +49,11 @@ impl Committee {
 
     /// Determine committee mode from active validator count and total pool size.
     ///
-    /// SPEC_DEVIATION: Bootstrap scaling. When total_validators < COMMITTEE_SIZE,
+    /// SPEC_DEVIATION: Bootstrap scaling (IMPLEMENTED). When total_validators < COMMITTEE_SIZE,
     /// thresholds are scaled proportionally so the chain can bootstrap from
     /// fewer than 50 validators. Without this, a single-node testnet or early
-    /// network would enter Emergency mode immediately. Pending formal inclusion
-    /// in consensus-spec.md. See docs/08-handoff/latest/open-questions.md#Q1.
+    /// network would enter Emergency mode immediately. Formal spec revision
+    /// of consensus-spec.md §1.2 still pending. See docs/08-handoff/latest/open-questions.md#Q1.
     pub fn committee_mode(active_count: u64, total_validators: u64) -> CommitteeMode {
         if active_count == 0 {
             return CommitteeMode::Emergency;
@@ -71,7 +71,7 @@ impl Committee {
     /// Block production is possible in Normal and Degraded modes.
     /// Only Emergency mode halts production entirely.
     ///
-    /// SPEC_DEVIATION: Uses scaled DEGRADED_THRESHOLD for bootstrap.
+    /// SPEC_DEVIATION: Uses scaled DEGRADED_THRESHOLD for bootstrap (IMPLEMENTED).
     pub fn can_produce(active_count: u64, total_validators: u64) -> bool {
         if active_count == 0 {
             return false;

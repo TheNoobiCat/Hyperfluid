@@ -57,7 +57,7 @@
 6. Integration test: 3-validator network with staking lifecycle and fee market.
 7. Exit checkpoint: validators bond/unbond correctly; fees adjust to load; slashing fires on detected byzantine behavior.
 
-### Week 5–6: P2P Networking + Artifact Storage (C7 + C8)
+### Week 5–6: P2P Networking + Artifact Storage (C7 + C8) — **COMPLETE (2026-05-08)**
 1. Peer discovery: bootstrap nodes, Kademlia DHT for validator discovery, connection state machine (outbound/inbound, keepalive, backoff).
 2. Gossip protocol: transaction gossip (push), block gossip (push), mempool fee-ordered priority queue.
 3. Relay mechanism: nodes behind NAT connect via relay nodes; relay transmits consensus messages.

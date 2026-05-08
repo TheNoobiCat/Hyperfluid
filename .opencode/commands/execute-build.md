@@ -52,6 +52,9 @@ If you discover a trust assumption or centralised dependency not listed in the s
   - Verify every `pub fn` that returns `HashMap` cannot feed into deterministic state (should use `BTreeMap` or sorted `Vec` instead)
   - For any new graph/clustering/connectivity algorithm, add a transitive-closure test case: three-or-more hop chains must produce the same cluster as direct connections
   - In state-machine transaction handlers, grep for `if let Some.*get_mut` — every such expression must have an `else` arm that rejects, not silently skip
+  - In state-machine transaction handlers, verify the **validate-then-mutate** ordering: every mutation must be preceded by all validations. Scan for state mutated before a subsequent `?`/`return` path can exit without completing related mutations
+  - After adding a new in-memory entity collection (HashMap/Set) to the state machine, verify that `compute_state_root()` includes it — grep for the new field in the `compute_state_root` implementation
+  - After any code field rename that changes a type's semantic meaning (e.g., `pct`→`per_mil`, single-value→pair), grep all spec `.md` files for the old field name to catch documentation drift
 - File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
 
 When the week's tasks are complete:

@@ -8,7 +8,7 @@
         "edit": "allow",
         "glob": "allow",
         "grep": "allow",
-        "bash": "ask",
+        "bash": "allow",
         "webfetch": "allow",
         "websearch": "allow",
         "skill": "allow",

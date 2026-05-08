@@ -38,7 +38,7 @@ struct FeeMarketState {
 
 struct FeeConfig {
     target_utilization_pct: u8,      // 50 (%)
-    max_adjustment_pct: u8,          // 12.5 (%)
+    max_adjustment_per_mil: u16,     // 125 = 12.5% (expressed as per-mil to avoid floating-point)
     min_base_fee: u128,              // floor in atto-AGX — [TUNE] default 1_000_000 atto-AGX
     max_per_sender_tx: u32,          // 100 per block
 }
@@ -51,10 +51,10 @@ struct FeeConfig {
 ```
 if current_block.utilization > target_utilization:
     delta = base_fee * (utilization - target) / target / adjustment_denominator
-    new_base_fee = min(base_fee + delta, base_fee * (1 + max_adjustment_pct))
+    new_base_fee = min(base_fee + delta, base_fee + base_fee * max_adjustment_per_mil / 1000)
 elif current_block.utilization < target_utilization:
     delta = base_fee * (target - utilization) / target / adjustment_denominator
-    new_base_fee = max(base_fee - delta, base_fee * (1 - max_adjustment_pct), min_fee_floor)
+    new_base_fee = max(base_fee - delta, base_fee - base_fee * max_adjustment_per_mil / 1000, min_fee_floor)
 else:
     new_base_fee = base_fee
 ```

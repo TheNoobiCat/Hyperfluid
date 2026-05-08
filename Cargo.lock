@@ -154,6 +154,10 @@ version = "0.1.0"
 [[package]]
 name = "hyperfluid-artifact"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "sha3",
+]
 
 [[package]]
 name = "hyperfluid-collaboration"
@@ -204,6 +208,10 @@ dependencies = [
 [[package]]
 name = "hyperfluid-p2p"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "sha3",
+]
 
 [[package]]
 name = "hyperfluid-pdp"

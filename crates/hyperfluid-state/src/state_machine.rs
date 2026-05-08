@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use parity_scale_codec::Encode;
+use parity_scale_codec::{Decode, Encode};
 
 use crate::smt::SparseMerkleTree;
 use crate::{state_key, Account, Hash32, KeyPrefix};
@@ -40,7 +40,7 @@ pub struct StateMachine {
 
 /// In-memory delegation state tracked by the state machine.
 /// Mirrors on-chain DelegationRecord from staking-spec.md Section 1.3.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 struct DelegationState {
     amount: u128,
     unbonding_at_height: u64,
@@ -254,24 +254,31 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
 
+        // Validate delegation exists and is active
         let key = (delegator_id, validator_id);
-        if let Some(del) = self.delegations.get_mut(&key) {
-            if !del.active {
-                return ExecutionResult::Rejected;
+        match self.delegations.get(&key) {
+            Some(del) => {
+                if !del.active {
+                    return ExecutionResult::Rejected;
+                }
             }
+            None => return ExecutionResult::Rejected,
+        }
+
+        // Confirm account exists before mutating any state
+        match self.accounts.get_mut(&delegator_id) {
+            Some(delegator) => {
+                delegator.nonce = nonce;
+            }
+            None => return ExecutionResult::Rejected,
+        }
+
+        // All checks passed — now mutate delegation state
+        if let Some(del) = self.delegations.get_mut(&key) {
             del.active = false;
             del.unbonding_at_height = current_height;
-
-            match self.accounts.get_mut(&delegator_id) {
-                Some(delegator) => {
-                    delegator.nonce = nonce;
-                }
-                None => return ExecutionResult::Rejected,
-            }
-            ExecutionResult::Success
-        } else {
-            ExecutionResult::Rejected
         }
+        ExecutionResult::Success
     }
 
     /// Withdraw delegation after unbonding delay expires.
@@ -344,8 +351,9 @@ impl StateMachine {
     }
 
     /// Compute the SMT root from the current state machine state.
-    /// All accounts are serialised with SCALE encoding and inserted
-    /// into the SMT sorted by state key (spec 2.2).
+    /// All accounts and delegation records are serialised with SCALE encoding
+    /// and inserted into the SMT sorted by state key (spec 2.2).
+    /// Delegation records use key prefix 0x0E per state-model.md.
     pub fn compute_state_root(&self) -> Hash32 {
         let mut tree = SparseMerkleTree::new();
 
@@ -355,12 +363,29 @@ impl StateMachine {
             tree.insert(key, value);
         }
 
+        for ((delegator_id, validator_id), del) in &self.delegations {
+            let delegation_key = {
+                let mut preimage = Vec::with_capacity(64);
+                preimage.extend_from_slice(delegator_id);
+                preimage.extend_from_slice(validator_id);
+                let id = crate::sha3_256(&preimage);
+                state_key(KeyPrefix::Delegation, &id)
+            };
+            let value = del.encode();
+            tree.insert(delegation_key, value);
+        }
+
         tree.root()
     }
 
     /// Return the number of accounts tracked.
     pub fn account_count(&self) -> usize {
         self.accounts.len()
+    }
+
+    /// Iterate over all accounts.
+    pub fn accounts_iter(&self) -> impl Iterator<Item = (&Hash32, &Account)> {
+        self.accounts.iter()
     }
 }
 

@@ -1,9 +1,10 @@
 # Build Status — Stage 01 (Protocol Core) IN PROGRESS
 
-**Last updated:** 2026-05-06 (evening)
+**Last updated:** 2026-05-08
 **Stage:** 01 — Protocol Core — **IN PROGRESS**
 **Week 1-2 (Consensus + State Machine):** COMPLETE
 **Week 3-4 (Staking: Pending Code Changes + C3 Base + C5 Fee Market):** COMPLETE
+**Week 5-6 (P2P Networking + Artifact Storage + State Sync):** COMPLETE
 
 ## PENDING CODE CHANGES — ALL APPLIED (2026-05-06)
 
@@ -65,6 +66,42 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | Conformance tests: 15 C1 hooks + 8 C2 hooks + 15 staking hooks all PASS | Complete |
 | 103/103 workspace tests pass | Complete |
 | clippy zero warnings, fmt clean, docs build, determinism sweep clean | Complete |
+
+## Stage 01: Week 5-6 — P2P + Artifact Storage + State Sync (C7 + C8) — COMPLETE
+
+| Task | Status |
+|------|--------|
+| C7: PeerInfo, ConnectionState, ConnState, DHTEntry, GossipMessage types | Complete |
+| C7: Connection state machine (Unknown→DirectProbing→DirectActive, relay fallback) | Complete |
+| C7: DiscoveryConfig with DHT k=20, refresh 1800s, fanout/TTL bounds | Complete |
+| C7: GossipBloomFilter (100k entries, 1% FPR) for deduplication | Complete |
+| C7: MempoolConfig with single fee-ordered pool, evidence/governance discounts | Complete |
+| C7: Mempool admission/sorting/eviction logic (no lane reservation) | Complete |
+| C8: ArtifactManifest, ArtifactClass, RetentionTier, ReplicationLease types | Complete |
+| C8: Manifest root hash (deterministic, excludes artifact_root_hash + signature) | Complete |
+| C8: Chunk Merkle tree root, inclusion proofs, ProofOfPossession build/verify | Complete |
+| C8: RepairQueue with governance-priority sorting | Complete |
+| C8: Artifact expiry logic (Pinned never expires, ShortTerm/MediumTerm do) | Complete |
+| C2: Snapshot, SyncMode, SyncState types | Complete |
+| C2: snapshot_state(), build_smt_from_keys(), verify_state_root_quorum() | Complete |
+| C2: Checksum computation and verification for backup integrity | Complete |
+| Conformance tests: 16 P2P hooks (12 PASS, 2 deferred) | Complete |
+| Conformance tests: 17 artifact hooks (15 PASS, 2 deferred) | Complete |
+| Conformance tests: 10 state sync hooks (10 PASS) | Complete |
+| 181/181 workspace tests pass | Complete |
+| clippy zero warnings, fmt clean, determinism sweep clean | Complete |
+
+## Verification (after Week 5-6)
+
+| Check | Result |
+|-------|--------|
+| `cargo build --workspace` | PASS (13 crates) |
+| `cargo test --workspace` | PASS (181/181) |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
+| Determinism sweep (floating-point) | PASS (zero hits in new crates) |
+| Determinism sweep (HashMap in consensus returns) | PASS (zero in new crates) |
+| `if let Some.get_mut` guard | PASS (zero in new crates) |
 
 ## Verification (after Week 3-4)
 
@@ -240,6 +277,16 @@ See `docs/01-research/_audit-bugs-2026-05-06.md` for full report.
 | No signal handler for shutdown (B-20) | Minor | Added `tokio::signal::ctrl_c()` |
 
 See `docs/01-research/_audit-bugs-2026-05-06-r2.md` for full report.
+
+## Resolved Issues (Bug Audit 2026-05-08 — Round 3)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| Delegation state not committed to SMT root (B-22) | Medium | Added delegation iteration to `compute_state_root()` with SCALE encoding |
+| `execute_undelegate` partial mutation before validation (B-21) | Minor | Reordered to validate all conditions before mutating any state |
+| Spec still references `max_adjustment_pct` after B-18 rename (B-23) | Minor | Updated `fee-market-spec.md` struct and formulas |
+
+See `docs/01-research/_audit-bugs-2026-05-08.md` for full report.
 
 ## Exit Criteria Status
 

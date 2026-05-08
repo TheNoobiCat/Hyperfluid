@@ -4,6 +4,7 @@
 
 pub mod smt;
 pub mod state_machine;
+pub mod state_sync;
 
 use parity_scale_codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};

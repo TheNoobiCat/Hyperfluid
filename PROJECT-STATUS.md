@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 Week 3-4 complete. Week 5-6 next: P2P Networking + Artifact Storage) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 Week 1-6 complete. Week 7-8 next: Integration, Soak, Polish) |
 
 ---
 
@@ -108,6 +108,17 @@ Key findings:
 
 Systemic patterns identified: `if let Some` + `get_mut` silent skip (3 instances), HashMap in deterministic return paths, graph algorithm non-transitivity.
 
+## Bug Audit (2026-05-08) — Code Cross-Reference Round 3
+
+**Result:** 3 bugs found and fixed across 2 crates and 1 spec document. See `docs/01-research/_audit-bugs-2026-05-08.md` for full report.
+
+Key findings:
+1. **MEDIUM:** Delegation state tracked in-memory but not committed to SMT root (`compute_state_root()` only included accounts). Fixed by adding delegation key-value insertion with key prefix `0x0E` per state-model.md.
+2. **MINOR:** `execute_undelegate` mutated delegation state before confirming account existed for nonce update. Fixed by reordering validation before mutation.
+3. **MINOR:** `fee-market-spec.md` still referenced `max_adjustment_pct: u8` after B-18's code rename to `max_adjustment_per_mil: u16`. Fixed by updating spec struct and formulas.
+
+Systemic patterns identified: SMT root completeness gap (new entity added but root not updated), validate-then-mutate ordering violation in state handlers, spec-code field name drift recurrence.
+
 ## Next Actions
 
 1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete.
@@ -119,12 +130,13 @@ Systemic patterns identified: `if let Some` + `get_mut` silent skip (3 instances
 7. ~~Architecture amendments (2026-05-06): 15% cap removed, overlap 33%→20%, VDF fallback hardened, stake-graph spec created, committee stall tiered, delegation spec'd.~~
 8. ~~5 pending code changes applied: overlap+two-epoch guard, VDF fallback, stall thresholds, stake-graph clustering, delegation subsystem.~~
 9. ~~Stage 01 Week 3-4 (C3 + C5): Staking base & Fee Market implemented. See `checkpoint-2026-05-06-code.md`.~~
-10. Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.
-11. Stage 01 Week 7-8: Integration, soak test, polish.
-12. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-13. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-14. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-15. Freeze all 15 specs before Stage 01 implementation continues. Post-freeze spec changes require governance proposals.
+10. ~~Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.~~ COMPLETE (2026-05-08)
+11. ~~Bug audit (2026-05-08) completed.~~
+12. Stage 01 Week 7-8: Integration, soak test, polish.
+13. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+14. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
+15. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
+16. Freeze all 15 specs before Stage 01 implementation continues. Post-freeze spec changes require governance proposals.
 
 ## Layer 4 Spec Inventory (delivered)
 

@@ -8,3 +8,5 @@ rust-version.workspace = true
 description = "C8 Artifact Availability: Content-addressed storage, proof-of-possession, retention, repair"
 
 [dependencies]
+sha3.workspace = true
+serde.workspace = true
