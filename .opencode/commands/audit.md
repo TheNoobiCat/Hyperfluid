@@ -52,8 +52,12 @@ Read `BUILD-SYSTEM.md`, `GLOSSARY.md`, then:
    - Update `build-status.md`
    - Create `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`
    - Update `PROJECT-STATUS.md`
-   - `cargo build --workspace` passes
-   - `cargo test --workspace` passes
-   - `cargo fmt --all -- --check` passes
-   - `cargo clippy --workspace --all-targets -- -D warnings` passes
-   - `cargo doc --workspace --no-deps` passes
+   - **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
+     - `cargo fmt --all -- --check`
+     - `cargo clippy --workspace --all-targets -- -D warnings`
+     - `cargo test --workspace`
+     - `cargo doc --workspace --no-deps --document-private-items`
+     - `cargo deny check`
+     - `cargo bench --workspace --no-run`
+   
+   If any step fails, fix the issue before proceeding. Do not actually commit or push to github.

@@ -35,3 +35,13 @@ Read `GLOSSARY.md`, then:
    - What to do: DELETE, SIMPLIFY (describe how), or FLAG (needs design decision)
 
 4. **Apply the fixes** unless the finding is FLAG'd. For FLAG'd items, write to `PROJECT-STATUS.md` under "Open Design Questions".
+
+5. **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
+   - `cargo fmt --all -- --check`
+   - `cargo clippy --workspace --all-targets -- -D warnings`
+   - `cargo test --workspace`
+   - `cargo doc --workspace --no-deps --document-private-items`
+   - `cargo deny check`
+   - `cargo bench --workspace --no-run`
+   
+   If any step fails, stop and fix before proceeding. Do not actually commit or push to github.

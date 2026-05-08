@@ -62,4 +62,14 @@ When the week's tasks are complete:
 2. Update `build-status.md`.
 3. Update `PROJECT-STATUS.md`.
 
+4. **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
+   - `cargo fmt --all -- --check`
+   - `cargo clippy --workspace --all-targets -- -D warnings`
+   - `cargo test --workspace`
+   - `cargo doc --workspace --no-deps --document-private-items`
+   - `cargo deny check`
+   - `cargo bench --workspace --no-run`
+
+If any step fails, fix the issue before proceeding. Do not actually commit or push to github.
+
 Then stop and wait for next prompt.

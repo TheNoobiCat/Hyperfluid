@@ -31,13 +31,15 @@ Read the prompt left by the user at the end of this message, then read `BUILD-SY
    - If a week boundary was crossed or new tasks were injected into the stage plan, update the stage file's week-by-week breakdown.
    - Update `PROJECT-STATUS.md`: record the fix, update "Next Actions" and "Last updated".
 
-5. **Verify:**
-   - `cargo build --workspace` passes.
-   - `cargo test --workspace` passes (new and existing tests).
-   - `cargo fmt --all -- --check` passes.
-   - `cargo clippy --workspace --all-targets -- -D warnings` passes.
-   - `cargo doc --workspace --no-deps` passes.
-   - If any verification step fails, fix the issue before proceeding.
+5. **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
+   - `cargo fmt --all -- --check`
+   - `cargo clippy --workspace --all-targets -- -D warnings`
+   - `cargo test --workspace`
+   - `cargo doc --workspace --no-deps --document-private-items`
+   - `cargo deny check`
+   - `cargo bench --workspace --no-run`
+   
+   If any step fails, fix the issue before proceeding. Do not actually commit or push to github.
 
 6. **Report back:** Summarise what was found, what code files were changed, what docs were updated, and any remaining open questions or gaps.
 
