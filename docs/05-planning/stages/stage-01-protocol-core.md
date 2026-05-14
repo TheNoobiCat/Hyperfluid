@@ -69,11 +69,12 @@
 
 ### Week 7–8: Integration, Soak, Polish
 1. End-to-end integration: single-node boot → add validators → stake tokens → submit transactions → verify fee adjustment → unbond → withdraw.
-2. 24-hour soak test: 3 validators, steady 1-tx-per-second load. No crashes, no memory leaks, no unbounded disk growth.
-3. Parameter audit: all [TUNE] parameters from specs recorded with default values; calibration log created for Stage 03.
-4. Conformance self-check: run each relevant spec's Section X.7 test hooks; document results.
-5. Bug fixes and polish from soak test findings.
-6. Exit checkpoint: all exit criteria met; conformance log written.
+2. **Ockam transport integration:** wire Ockam `SecureChannel` + `Transport` behind the `hyperfluid-p2p` connection state machine and `PeerInfo`/`BootstrapResponse` types. Enable encrypted peer-to-peer message passing, relay routing, and NAT traversal. Resolves deferred conformance hooks p2p-spec 1.7 hooks 7-8.
+3. 24-hour soak test: 3 validators, steady 1-tx-per-second load. No crashes, no memory leaks, no unbounded disk growth.
+4. Parameter audit: all [TUNE] parameters from specs recorded with default values; calibration log created for Stage 03.
+5. Conformance self-check: run each relevant spec's Section X.7 test hooks; document results.
+6. Bug fixes and polish from soak test findings.
+7. Exit checkpoint: all exit criteria met; Ockam transport functional (multi-node encrypted messaging), conformance log written.
 
 ## Risk Areas
 - **Malachite BFT mismatch with Hyperfluid specs:** Hyperfluid's committee model (exactly 100, anti-split clustering, VDF rotation) may not be a direct fit for Malachite's internals. Mitigation: first verify Malachite supports custom validator set changes at epoch boundaries. If not, adapt Hyperfluid's consensus-spec or compile a custom Malachite fork.

@@ -43,7 +43,7 @@ Every claim is traceable: Research → Requirement → Architecture Decision →
 | FR-0176–0190 | consensus-governance/agx-economics-and-adversarial-incentives.md | FR-0176-0190 | C12, C10 | collaboration-spec.md | 3 | complete |
 | FR-0191 | agents/sybil-detection-correlation-engine.md | FR-0176-0190 | C12 | collaboration-spec.md | 3 | complete |
 | FR-0192 | consensus-governance/agx-economics-and-adversarial-incentives.md | FR-0176-0190 | C12 | collaboration-spec.md | 3 | complete |
-| FR-0193 | agents/agent-telemetry-interface.md | FR-0176-0190 | C10 | agent-runtime-spec.md | 2 | complete |
+| FR-0193 | agents/agent-telemetry-interface.md | FR-0176-0190 | C10 | agent-runtime-spec.md | 5 | complete |
 | FR-0194 | user-task-submission-and-sponsorship.md | FR-0176-0190 | C9, C1 | policy-engine-spec.md, consensus-spec.md | 1, 2 | complete |
 | FR-0195 | user-task-submission-and-sponsorship.md | FR-0176-0190 | C9 | policy-engine-spec.md | 1 | complete |
 | FR-0196 | user-task-submission-and-sponsorship.md | FR-0176-0190 | C10 | agent-runtime-spec.md | 5 | complete |

@@ -13,7 +13,7 @@ The research document `user-task-submission-and-sponsorship.md` defines a comple
 4. **Publish tasks via gossip/DHT** — `TaskCreated` events propagate via Ockam P2P overlay (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`.
 5. **Agent-as-proxy sponsorship** — the sponsoring agent uses its own identity and balance. The protocol sees only the agent, not the user. No new delegation primitives.
 6. **Add `hyperfluid task submit` CLI** — constructs metadata artifact in gix, builds action plan, signs, submits.
-7. **Extend Telegram bot for sponsored submission** — agent receives user requests, refines them, maps to seed_ref, submits as sponsor.
+7. **Extend Telegram bot for sponsored submission** — telegram_chat_agent receives user requests, refines them, maps to seed_ref, requests explicit confirmation, submits as sponsor.
 
 **Consequences:**
 - Positive: Opens the marketplace to external demand after seed pool exhaustion. Agents earn margins on sponsorship. Fully composable with existing primitives (PDP, EIP-1559, gossip/DHT, gix).

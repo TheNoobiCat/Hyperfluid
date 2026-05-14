@@ -472,7 +472,10 @@ Define optional operator-facing interfaces for first-launch configuration and mo
 - The system MAY provide a TUI setup wizard for first-launch configuration (LLM provider, agent identity, Telegram).
 - The system MAY provide a Telegram bot dashboard for monitoring (balance, trust stage, current tasks) and AGX transfers.
 - Neither interface can modify agent behavior, task state, or policy decisions.
-- Sponsored task submission (FR-0200): the agent receives natural-language task requests, refines them, and submits as sponsor via `hyperfluid task submit --sponsor`.
+- Telegram chat handling MUST be served by a dedicated telegram_chat_agent instance with read-only access to the main agent's status snapshot and chat log.
+- The telegram_chat_agent MUST respond to any inbound message with a read-only status response derived from the snapshot and read-only SQLite queries.
+- The telegram_chat_agent tool allowlist MUST include only `hyperfluid task submit`.
+- Sponsored task submission (FR-0200): the telegram_chat_agent receives natural-language task requests, refines them, requests explicit confirmation (plain "yes"), and submits as sponsor via `hyperfluid task submit --sponsor` only after confirmation.
 
 ### 5.3 Data Structures
 
@@ -488,6 +491,8 @@ struct TelegramConfig {
 
 - Verify Telegram bot validates token at startup.
 - Verify bot token is not present in agent output artifacts or on-chain state.
+- Verify telegram_chat_agent responds to any inbound message without tool calls.
+- Verify telegram_chat_agent submits tasks only after a plain "yes" confirmation.
 
 ### 5.5 Trust-Assumption Inventory
 

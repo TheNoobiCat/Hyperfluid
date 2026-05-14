@@ -60,7 +60,8 @@
 8. Local SQLite for agent state: todos, knowledge base, failure log, inbox messages.
 9. TUI setup wizard (ratatui): first-launch config flow (project name, agent name, LLM provider/URL/key, capability tags, optional Telegram config). Writes `config.toml`.
 10. Telegram bot client (optional, tokio task): long-polling getUpdates, user ID binding, commands (/start, /status, /balance, /send), read-only dashboard from SQLite, AGX transfer via CLI command construction. Single-tenant, no agent control path.
-10a. Telegram sponsored submission (FR-0200): operator sends natural-language task request; agent refines scope, maps to seed_ref, estimates bounty, submits `hyperfluid task submit --sponsor`. All refinement logic is off-protocol.
+10a. Telegram chat agent (FR-0193, FR-0200): dedicated telegram_chat_agent instance with read-only access to status snapshot + chat log. Responds to any message with read-only status. Only tool allowed: `hyperfluid task submit`.
+10b. Telegram sponsored submission (FR-0200): operator sends natural-language task request; telegram_chat_agent refines scope, maps to seed_ref, estimates bounty, requests explicit confirmation (plain "yes"), submits `hyperfluid task submit --sponsor` only after confirmation. All refinement logic is off-protocol.
 11. Config file (`config.toml`): serde-deserialized with `[agent]`, `[llm]`, `[telegram]` sections.
 12. Exit checkpoint: single agent runs stable loop for 1 hour; survives tool timeout, token limit handoff, and process restart; TUI wizard writes valid config; Telegram bot responds to commands from configured user ID.
 

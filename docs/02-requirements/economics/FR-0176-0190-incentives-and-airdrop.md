@@ -369,7 +369,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall support an optional single-tenant Telegram bot dashboard for agent operators, providing read-only status and basic AGX transfer capability. The system shall also include a ratatui-based TUI setup wizard for first-launch configuration.
+**Statement:** The system shall support an optional single-tenant Telegram bot interface for agent operators, providing read-only status responses to free-form chat messages and basic AGX transfer capability. The system shall also include a ratatui-based TUI setup wizard for first-launch configuration.
 
 **Rationale:** Operators need lightweight visibility without SSH. The Telegram bot is a window, not a steering wheel — it cannot prompt the agent or modify agent state. See `agent-telemetry-interface.md`.
 
@@ -385,6 +385,7 @@
 - [ ] Telegram bot spawns as `tokio::spawn` task if `[telegram]` config is present.
   - [ ] Long-polling getUpdates. User ID binding — rejects all messages from non-configured ID.
   - [ ] Commands: `/start` (dashboard), `/status`, `/balance`, `/send` (interactive transfer), `/help`.
+  - [ ] Bot responds to any free-form message with read-only status derived from the agent status snapshot and read-only SQLite queries.
   - [ ] Bot reads SQLite (read-only) and calls `hyperfluid` CLI for node API queries.
   - [ ] No agent control path — bot cannot prompt the agent, modify task state, or influence decisions.
   - [ ] Token validation at startup (getMe call). Invalid token = log warning, run without Telegram.
@@ -544,7 +545,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall extend the Telegram bot interface to support sponsored task submission. When an operator sends an underspecified task request (e.g., "analyse this CSV"), the receiving agent shall: (1) refine the prompt into a properly-scoped task, (2) identify required skills, (3) estimate a fair bounty, (4) map the request to the most appropriate seed idea via `seed_ref`, (5) submit the `task_create` action plan as a sponsor (using its own identity and balance), and (6) communicate progress back to the operator (task claimed, in progress, completed). If no suitable seed idea exists, the agent shall advise the operator that a new seed must be proposed via governance first.
+**Statement:** The system shall extend the Telegram bot interface to support sponsored task submission. When an operator sends an underspecified task request (e.g., "analyse this CSV"), the receiving agent shall: (1) refine the prompt into a properly-scoped task, (2) identify required skills, (3) estimate a fair bounty, (4) map the request to the most appropriate seed idea via `seed_ref`, (5) request explicit confirmation from the operator (plain "yes"), (6) submit the `task_create` action plan as a sponsor (using its own identity and balance) only after confirmation, and (7) communicate progress back to the operator (task claimed, in progress, completed). If no suitable seed idea exists, the agent shall advise the operator that a new seed must be proposed via governance first.
 
 **Rationale:** The Telegram bot is the thinnest possible user-facing layer. Operators express intent in natural language; the agent handles all refinement, topic-mapping, and on-chain submission. This separates from the read-only dashboard (FR-0193) — the sponsored submission flow requires agent decision-making, which is an entirely different security domain. See `user-task-submission-and-sponsorship.md` Section 5 (Telegram bot integration for sponsored submission).
 
@@ -556,7 +557,8 @@
 - [ ] Operator sends natural-language task request via Telegram.
 - [ ] Agent refines scope, identifies skills, estimates bounty, and maps to seed_ref.
 - [ ] If no seed fits, agent advises governance proposal instead.
-- [ ] Agent submits `task_create` as sponsor via `hyperfluid task submit --sponsor`.
+- [ ] Agent asks for explicit confirmation; only plain "yes" triggers submission.
+- [ ] Agent submits `task_create` as sponsor via `hyperfluid task submit --sponsor` only after confirmation.
 - [ ] Agent reports progress (claimed, in progress, complete) back via Telegram.
 - [ ] All refinement and topic-mapping logic is off-protocol; the protocol sees only a valid `task_create` action plan from the sponsoring agent.
 
