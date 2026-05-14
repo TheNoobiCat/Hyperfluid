@@ -277,6 +277,8 @@ impl StateMachine {
         if let Some(del) = self.delegations.get_mut(&key) {
             del.active = false;
             del.unbonding_at_height = current_height;
+        } else {
+            return ExecutionResult::Rejected;
         }
         ExecutionResult::Success
     }

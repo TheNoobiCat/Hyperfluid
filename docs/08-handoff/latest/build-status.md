@@ -1,6 +1,6 @@
 # Build Status — Stage 01 (Protocol Core) COMPLETE | Stage 02 (Agent Runtime) PENDING
 
-**Last updated:** 2026-05-14
+**Last updated:** 2026-05-14 (bug audit B-24 fixed)
 **Stage:** 01 — Protocol Core — **COMPLETE**
 **Stage:** 02 — Agent Runtime — **NOT STARTED** (blocked on clatter+ml-dsa)
 **Week 1-2 (Consensus + State Machine):** COMPLETE
@@ -120,7 +120,7 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | `cargo bench --workspace --no-run` | PASS |
 | Determinism sweep (floating-point) | PASS (zero hits in protocol code) |
 | Determinism sweep (wall-clock/random) | PASS (zero hits in protocol code) |
-| `if let Some.get_mut` guard | PASS (4 instances all with rejecting else arms) |
+| `if let Some.get_mut` guard | PASS (4 instances all with rejecting else arms after B-24 fix) |
 
 ## Verification (after Week 5-6)
 
@@ -318,6 +318,14 @@ See `docs/01-research/_audit-bugs-2026-05-06-r2.md` for full report.
 | Spec still references `max_adjustment_pct` after B-18 rename (B-23) | Minor | Updated `fee-market-spec.md` struct and formulas |
 
 See `docs/01-research/_audit-bugs-2026-05-08.md` for full report.
+
+## Resolved Issues (Bug Audit 2026-05-14)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| `execute_undelegate` missing else arm on `get_mut` (B-24) | Minor | Added `else { return ExecutionResult::Rejected; }` — delegation HashMap `get_mut` lacked the rejecting arm that all other `get_mut` calls have |
+
+See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
 
 ## Exit Criteria Status
 

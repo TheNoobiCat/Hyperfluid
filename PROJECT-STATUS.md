@@ -119,6 +119,17 @@ Key findings:
 
 Systemic patterns identified: SMT root completeness gap (new entity added but root not updated), validate-then-mutate ordering violation in state handlers, spec-code field name drift recurrence.
 
+## Bug Audit (2026-05-14) — Post-Stage-01 Full Code Audit
+
+**Result:** 1 bug found and fixed across 1 crate. See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
+
+Key findings:
+1. **MINOR:** `execute_undelegate` missing `else` arm on `if let Some(del) = self.delegations.get_mut(&key)` — the only `get_mut` call in the state machine without a rejecting else arm. Fixed by adding `else { return ExecutionResult::Rejected; }`.
+
+Systemic pattern identified: `get_mut` guard scope drift — when the delegation HashMap was added to the state machine, the existing `if let Some.*get_mut` guard was not re-run against it. All 3 `self.accounts.get_mut()` calls had else arms, but the new `self.delegations.get_mut()` did not. After adding any new entity collection, all existing grep guards must be re-scanned against the full file.
+
+CI mimic: all 6 checks pass (fmt, clippy, test, doc, deny, bench-check).
+
 ## Next Actions
 
 1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete.
@@ -231,4 +242,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-14 (ADR-0016: Ockam→clatter+ml-dsa; Stage 01 Week 7-8 complete; all deferred hooks resolved)*
+*Last updated: 2026-05-14 (ADR-0016: Ockam→clatter+ml-dsa; Stage 01 complete; bug audit complete — B-24 fixed)*
