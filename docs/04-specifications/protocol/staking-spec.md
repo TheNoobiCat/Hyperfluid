@@ -129,7 +129,7 @@ DelegationTx(SetCommission) ──► ValidatorRecord.commission_rate updated (a
 
 **Liveness tracking:** A rolling counter of missed blocks per validator. The counter increments when a validator misses a block in the liveness window and resets on renewal. At >20% miss rate within the window, the validator transitions to paused.
 
-**StakeRenewTx:** This is the exclusive mechanism to resume from paused. No separate ResumeTx exists. The tx contains the validator's signature and takes effect after 1 epoch.
+**StakingTx(Renew):** This is the exclusive mechanism to resume from paused. No separate ResumeTx exists. The tx contains the validator's signature and takes effect after 1 epoch.
 
 ### 1.5 Failure Behavior
 
@@ -138,7 +138,7 @@ DelegationTx(SetCommission) ──► ValidatorRecord.commission_rate updated (a
 - **Double-bind:** StakingTx(Bond) from an account that already has a VALIDATOR in non-withdrawn state is rejected.
 - **Delegation to inactive validator:** DelegationTx(Delegate) to a validator not in `active` state is rejected.
 - **Self-delegation:** An account cannot delegate to itself; StakingTx(Bond) is the mechanism for self-staking.
-- **Premature withdrawal:** WithdrawUnbondedTx before unbond_delay expiry is rejected.
+- **Premature withdrawal:** StakingTx(Withdraw) before unbond_delay expiry is rejected.
 - **Premature delegation withdrawal:** WithdrawDelegationTx before delegation_unbond_delay expiry is rejected.
 - **Delayed evidence:** Equivocation evidence submitted more than 8,640 blocks after the event cancels the slash but marks the validator for governance review.
 - **Invalid evidence:** EvidenceTx with non-verifiable proof is rejected; reporter may be penalized for repeated false submissions.

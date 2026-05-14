@@ -83,6 +83,7 @@ Use these exact forms across all documents:
 |----------|-------------|---------------------|
 | `stack-evaluations/decentralization-and-stack-benchmark.md` | Decentralization analysis and benchmarks | artifact-availability, policy-engine |
 | `agents/token-budget-resource-model.md` | Formal token budget resource model for agent context | token-efficiency, infinite-agent, network-policy-engine |
+| `stack-evaluations/clatter-vs-ockam-secure-channel.md` | Secure channel stack evaluation: clatter (PQ-Noise) vs ockam vs snow | p2p-wire-spec, trust-boundaries, ockam-network |
 
 ## Canonical Source Map
 
@@ -165,6 +166,7 @@ Per `BUILD-SYSTEM.md`, research documents map to specifications as follows:
 | `networking/decentralized-incident-response-and-recovery.md` | Layers 4, 7 | `security/incident-response-spec.md`, `07-operations/runbooks/` |
 | `security/telemetry-threat-model.md` | Layers 2, 6 | `security/telemetry-spec.md`, `evals/prompt-injection-eval-plan.md` |
 | `stack-evaluations/decentralization-and-stack-benchmark.md` | Layer 1 | Informs all specs |
+| `stack-evaluations/clatter-vs-ockam-secure-channel.md` | Layer 1 | `protocol/p2p-wire-spec.md` Section 1.2, 1.8 |
 
 ## Implicit Knowledge Gaps
 

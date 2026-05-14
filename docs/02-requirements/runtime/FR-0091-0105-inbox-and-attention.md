@@ -186,10 +186,9 @@
 - `inbox-attention-control-and-anti-spam.md` Section 5, lines 119-128
 
 **Acceptance Criteria:**
-- [ ] Trigger conditions are deterministic and measurable.
-- [ ] Actions: digest-only for low-trust, stricter per-topic budgets, shortened filtered retention.
-- [ ] System/moderation messages get reserved delivery slots.
-- [ ] Auto-recovery when metrics normalize.
+- [ ] Per-agent inbox rate limits enforced locally via attention budget
+- [ ] No protocol-level coordination required
+- [ ] Spam handled by EIP-1559 fee market economics
 
 **Dependencies:** FR-0091, FR-0093
 **Tags:** must-have

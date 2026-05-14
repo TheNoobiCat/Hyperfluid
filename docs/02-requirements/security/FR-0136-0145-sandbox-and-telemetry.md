@@ -210,7 +210,7 @@
 - `decentralized-incident-response-and-recovery.md` Section 7 (Recovery traffic surge)
 
 **Acceptance Criteria:**
-- [ ] Recovery coordinator validates metrics over stabilization window before full normalization.
+- [ ] Base fee decreases when congestion subsides per EIP-1559 formula.
 - [ ] Deferred low-priority operations are replayed safely.
 
 **Dependencies:** FR-0143

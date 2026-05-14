@@ -7,8 +7,10 @@
 
 pub mod discovery;
 pub mod mempool;
+pub mod transport;
 pub mod types;
 
+pub use transport::{PeerCache, SecureChannel};
 pub use types::{
     BootstrapResponse, CapabilityFlags, ConnectionState, DHTEntry, DiscoveryConfig,
     GossipBloomFilter, GossipMessage, Hash32, PeerInfo, TrustPolicy,

@@ -11,7 +11,7 @@
 
 This directory defines the implementation sequence, stage definitions, checkpoints, and delivery orchestration for Hyperfluid. Each stage follows the format defined in `TEMPLATES.md` (Inputs, Outputs, Exit Criteria, Duration Estimate, Dependencies, Risk Areas). Every stage is traceable to Layer 4 specifications and Layer 3 architecture components.
 
-**Upstream traceability:** Layer 4 (14 specs across 4 domains) → Layer 5 (planning stages).
+**Upstream traceability:** Layer 4 (15 specs across 4 domains) → Layer 5 (planning stages).
 **Downstream:** Layer 6 (Validation) consumes stage definitions for test strategy and conformance evidence.
 
 ---
@@ -41,7 +41,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 | Stage | Name | Duration | Components | Specs | Key Deliverable |
 |-------|------|----------|------------|-------|-----------------|
 | 00 | Foundation | 1–2 weeks | — | — | Repo, tooling, CI, local testnet scaffold |
-| 01 | Protocol Core | 6–8 weeks | C1, C2, C3, C5, C7, C8 | 6 (protocol + storage) | Single-node chain with staking, fees, P2P, artifact storage |
+| 01 | Protocol Core | 6–8 weeks | C1, C2, C3, C5, C7, C8 | 7 (protocol + storage) | Single-node chain with staking, fees, P2P, artifact storage |
 | 02 | Agent Runtime | 6–8 weeks | C4, C6, C9, C10, C11, C12 | 8 (runtime + remaining protocol) | Agent-driven task board with PDP gating, review pipeline, governance |
 | 03 | Validation | 4–6 weeks | All | All 14 | Conformance matrix, adversarial test suite, load results, security audit |
 | 04 | Mainnet Prep | 4–6 weeks | All | All 14 | Runbooks, SLOs, monitoring, incident playbooks, launch checklist |
@@ -53,8 +53,8 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 | Stage | Status | Started | Completed | Gate Result |
 |-------|--------|---------|-----------|-------------|
 | Stage 00: Foundation | COMPLETE | 2026-05-02 | 2026-05-04 | Gate result: PASS |
-| Stage 01: Protocol Core | NOT STARTED | — | — | — |
-| Stage 02: Agent Runtime | NOT STARTED | — | — | — |
+| Stage 01: Protocol Core | COMPLETE | 2026-05-05 | 2026-05-14 | Gate result: PASS |
+| Stage 02: Agent Runtime | IN PROGRESS (Pre-Flight: clatter+ml-dsa) | — | — | — |
 | Stage 03: Validation | NOT STARTED | — | — | — |
 | Stage 04: Mainnet Prep | NOT STARTED | — | — | — |
 
@@ -64,7 +64,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 
 | Stage | Specs Included |
 |-------|---------------|
-| 01 | consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md |
+| 01 | consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md, stake-graph-analysis-spec.md |
 | 02 | governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, telemetry-spec.md, incident-response-spec.md |
 | 03 | All 14 specs (conformance) |
 | 04 | All 14 specs (operations) |
@@ -113,7 +113,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 | [TUNE] parameters calibrated without testnet data | Medium | 01–02 | Stage 01 ships with defaults from spec; Stage 03 produces calibration data. Tuning happens in Stage 03. |
 | Agent runtime LLM provider availability | Low | 02 | Runtime abstracted behind provider interface; support multiple providers (Anthropic, OpenAI, local via Ollama). |
 | Full integration surface too large for small team | Medium | 01–02 | Stage definitions use 6–8 week windows with explicit scope borders. Each stage is independently testable. |
-| P2P connectivity issues in heterogeneous networks | Medium | 01, 03 | Ockam transport abstracts transport; Stage 03 includes NAT traversal and relay stress testing. |
+| P2P connectivity issues in heterogeneous networks | Medium | 01, 03 | clatter+ml-dsa secure channels; Stage 03 includes NAT traversal and relay stress testing. |
 | Governance upgrade mechanism untested before mainnet | Low | 02, 04 | Stage 02 builds governance engine; Stage 04 validates upgrade via private testnet fork. |
 
 ---

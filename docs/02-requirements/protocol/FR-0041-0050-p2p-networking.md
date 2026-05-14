@@ -103,7 +103,7 @@
 - `ockam-decentralized-network-architecture.md` Section 5 (Ockam internals mapped)
 
 **Acceptance Criteria:**
-- [ ] Ockam secure channels provide mutual authentication and encrypted transport over any route.
+- [ ] clatter Noise hybrid channels provide mutual authentication and encrypted transport over any route.
 - [ ] Message tampering or man-in-the-middle is cryptographically prevented regardless of relay hops.
 - [ ] Secure channel identity is bound to the same ML-DSA key used for consensus.
 

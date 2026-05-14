@@ -120,8 +120,6 @@ erDiagram
         bytes32 reviewer_id "reviewer agent_id"
         bytes32 review_record_ref "content hash of review"
         string verdict "approve | deny"
-        uint8 quality_score "0-100 normalized"
-        bytes32 objective_check_ref "reference to objective pass/fail"
         uint64 challenged_at_height "0 if unchallenged"
         string challenge_outcome "pending | upheld | overturned"
     }

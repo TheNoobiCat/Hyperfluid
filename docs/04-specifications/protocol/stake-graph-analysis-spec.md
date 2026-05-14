@@ -20,7 +20,7 @@ Define the deterministic, on-chain algorithm for detecting correlated validator 
 
 ### 1.2 Normative Behavior
 
-- The system MUST build a directed stake-funding graph from on-chain `TransferTx`, `StakeBondTx`, and airdrop disbursement records.
+- The system MUST build a directed stake-funding graph from on-chain `TransferTx`, `StakingTx(Bond)`, and airdrop disbursement records.
 - For each validator, the system MUST trace backwards up to N=3 hops to find all ancestor accounts that contributed AGX to the validator's stake.
 - Two or more validators that share a common ancestor within N hops MUST be grouped into the same cluster.
 - The cluster's effective weight for committee selection MUST be computed as the sum of all member validators' bonded stake, but only the first M members (where M = min(5, cluster_size)) count toward diversity metrics.
@@ -65,7 +65,7 @@ struct ClusterDetectionResult {
 
 1. Read all validators in `active` and `paused` states from SMT state.
 2. For each validator V_i:
-   a. Walk backwards up to N=3 hops following TransferTx and StakeBondTx records.
+   a. Walk backwards up to N=3 hops following TransferTx and StakingTx(Bond) records.
    b. Collect all ancestor accounts reachable within 3 hops.
    c. If any ancestor account is shared with another validator V_j, mark V_i and V_j as same cluster.
 3. Assign cluster IDs deterministically: `SHA3-256(sorted(member_ids))`.
@@ -90,7 +90,7 @@ fn select_committee_with_clusters(epoch, validator_pool, clusters, seed):
 - **Stake-graph traversal depth insufficient:** With N=3 hops, a deeply hidden funding chain (A→B→C→D→validator) may not be detected. This is an accepted residual risk — deeper traversal increases state I/O cost per epoch. The behavioral Sybil detection engine (see `sybil-detection-correlation-engine.md`) provides a secondary detection layer.
 - **Large cluster dominates committee:** A cluster with >33% of total active stake could theoretically approach the Byzantine threshold. The 80% committee rotation (FR-0004) and two-epoch recency limit mitigate persistent capture. No per-cluster seat cap exists — the market distribution of stake is the primary guard.
 - **False positive clustering:** Two independent validators that received AGX from the same exchange hot wallet could be falsely clustered. Mitigation: exchanges should document deposit addresses; governance can petition for cluster splitting via EvidenceTx with proof of independent operation.
-- **State growth from edge storage:** Every TransferTx and StakeBondTx creates a FundingEdge record. Growth is bounded to approximately 100k transactions/day = 100k edges/day. Pruning: edges older than 100,000 blocks are archived. SMT retains only the root and the cluster detection result.
+- **State growth from edge storage:** Every TransferTx and StakingTx(Bond) creates a FundingEdge record. Growth is bounded to approximately 100k transactions/day = 100k edges/day. Pruning: edges older than 100,000 blocks are archived. SMT retains only the root and the cluster detection result.
 
 ### 1.6 Versioning and Compatibility
 

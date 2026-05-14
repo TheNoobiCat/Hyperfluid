@@ -1,9 +1,9 @@
 # Layer 3: Architecture
 
 **Status:** COMPLETE
-**Last updated:** 2026-05-05
+**Last updated:** 2026-05-14
 **Total components:** 12
-**ADRs:** 14
+**ADRs:** 16
 
 ---
 
@@ -91,10 +91,11 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0009 | EIP-1559 Fee Market | Accepted |
 | ADR-0010 | Two-Stage Trust Ladder | Accepted |
 | ADR-0011 | Review Sandbox Isolation | Accepted |
-| ADR-0012 | Congestion Response via EIP-1559 Base Fee | Accepted |
+| ADR-0012 | Congestion Response via EIP-1559 Base Fee | Superseded |
 | ADR-0013 | Expanded Agent Tool Set, CLI Seed Index Discovery, and Seed-Centric Task Model | Accepted |
 | ADR-0014 | User Task Submission and Agent Sponsorship | Accepted |
 | ADR-0015 | Stake Delegation | Accepted |
+| ADR-0016 | clatter + ml-dsa Secure Channel Stack (replaces Ockam) | Accepted |
 
 ---
 

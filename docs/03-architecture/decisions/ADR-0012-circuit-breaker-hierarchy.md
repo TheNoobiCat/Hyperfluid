@@ -1,6 +1,6 @@
 ## ADR-0012: Congestion Response via EIP-1559 Base Fee
 
-**Status:** accepted
+**Status:** superseded
 
 **Note:** Circuit breaker system is removed. Congestion control is handled by EIP-1559 base fee adjustment and fee discounts for evidence/governance transactions (see p2p-wire-spec.md §2).
 

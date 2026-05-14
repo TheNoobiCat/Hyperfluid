@@ -195,11 +195,15 @@ name = "hyperfluid-node"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "hyperfluid-artifact",
  "hyperfluid-consensus",
+ "hyperfluid-fee-market",
+ "hyperfluid-p2p",
  "hyperfluid-staking",
  "hyperfluid-state",
  "serde",
  "serde_json",
+ "sha3",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -18,7 +18,6 @@ flowchart TD
         PDP[Policy Decision Point]
         AUDIT_LOG[Audit Log]
         QUOTA_TRACK[Quota Tracker]
-        TAINT_TRACK[Taint Tracker]
     end
 
     subgraph ZONE1[Zone 1: Protocol-Enforced - Trusted]
@@ -216,6 +215,6 @@ Per `BUILD-SYSTEM.md` decentralisation audit gate:
 
 3. **Verifiable economic signals:** PASS. All rewards and penalties reference cryptographically verifiable on-chain records. Self-reported local metrics are excluded from reward calculations.
 
-4. **Single points of failure:** PASS. No component whose failure stalls the entire system. Committee overlap and relay diversity provide redundancy. Circuit-breakers handle degradation gracefully.
+4. **Single points of failure:** PASS. No component whose failure stalls the entire system. Committee overlap and relay diversity provide redundancy. EIP-1559 base fee dynamics handle congestion gracefully.
 
 5. **Sybil resistance:** PASS. Anti-Sybil relies on three-layered defense: SHA3-256 HashCash proof-of-agent with dynamic difficulty (FR-0176), progressive 20 AGX bond with work-gated release (FR-0157), and continuous behavioral correlation detection with automated adjudication (FR-0191). No IP-based limits.

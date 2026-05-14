@@ -3,7 +3,7 @@
 ## Inputs
 - From Stage 00: Cargo workspace, CI pipeline, local testnet scaffold.
 - From Layer 4 specs: consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md.
-- External: Malachite BFT library, Ockam P2P library, ML-DSA-65 crate, Blake3 crate, SQLite via `rusqlite`, content-addressed storage via gix.
+- External: Malachite BFT library, clatter PQ-Noise library, ml-dsa crate, Blake3 crate, SQLite via `rusqlite`, content-addressed storage via gix.
 
 ## Outputs
 - C1 Consensus Engine: committee BFT integration (Malachite), VDF-based committee rotation, block production, SMT root commitment.
@@ -34,7 +34,7 @@
 ## Dependencies
 - Stage 00 complete (workspace, CI, testnet scaffold).
 - Malachite BFT v0.x stable release (or vendored commit with known-good hash).
-- Ockam P2P library stable release.
+- clatter PQ-Noise library stable release.
 - gix (Gitoxide) for content-addressed storage operations.
 
 ## Week-by-Week Breakdown
@@ -67,18 +67,18 @@
 7. State sync: snap-sync (download SMT snapshot + recent blocks), full-sync (replay from genesis).
 8. Exit checkpoint: 5-node network achieves consensus with 2 relay nodes. Artifact write/read/repair lifecycle works.
 
-### Week 7–8: Integration, Soak, Polish
+### Week 7–8: Integration, Soak, Polish — **COMPLETE (2026-05-14)**
 1. End-to-end integration: single-node boot → add validators → stake tokens → submit transactions → verify fee adjustment → unbond → withdraw.
-2. **Ockam transport integration:** wire Ockam `SecureChannel` + `Transport` behind the `hyperfluid-p2p` connection state machine and `PeerInfo`/`BootstrapResponse` types. Enable encrypted peer-to-peer message passing, relay routing, and NAT traversal. Resolves deferred conformance hooks p2p-spec 1.7 hooks 7-8.
+2. **clatter+ml-dsa secure channel integration:** wire clatter `HybridHandshake` (Noise hybrid XX) + `TransportState` behind the `hyperfluid-p2p` `SecureChannel` trait. ML-DSA-65 keypairs for peer identity. Enable encrypted peer-to-peer message passing, relay routing, and NAT traversal. Resolves deferred conformance hooks p2p-spec 1.7 hooks 7-8.
 3. 24-hour soak test: 3 validators, steady 1-tx-per-second load. No crashes, no memory leaks, no unbounded disk growth.
 4. Parameter audit: all [TUNE] parameters from specs recorded with default values; calibration log created for Stage 03.
 5. Conformance self-check: run each relevant spec's Section X.7 test hooks; document results.
 6. Bug fixes and polish from soak test findings.
-7. Exit checkpoint: all exit criteria met; Ockam transport functional (multi-node encrypted messaging), conformance log written.
+7. Exit checkpoint: all exit criteria met; clatter+ml-dsa secure channels functional (multi-node encrypted messaging), conformance log written.
 
 ## Risk Areas
 - **Malachite BFT mismatch with Hyperfluid specs:** Hyperfluid's committee model (exactly 100, anti-split clustering, VDF rotation) may not be a direct fit for Malachite's internals. Mitigation: first verify Malachite supports custom validator set changes at epoch boundaries. If not, adapt Hyperfluid's consensus-spec or compile a custom Malachite fork.
-- **Ockam P2P version compatibility:** Ockam APIs may change between versions. Mitigation: pin Ockam dependency to a specific git commit hash. Re-evaluate at the start of each week.
+- **clatter+ml-dsa version compatibility:** clatter is a single-maintainer project (MIT licensed). Mitigation: vendor clatter source at integration time. Pin to exact commit. For ml-dsa, use RustCrypto's FIPS 204 implementation pinned to v0.1.0-rc.11.
 - **State sync correctness:** Snap-sync reconstructed state must match SMT root exactly; divergence = network split risk. Mitigation: automated differential fuzzing: replay same transaction stream via full-sync and snap-sync; assert identical state roots.
 - **gix repository-scale performance:** Content-addressed blob store may become a bottleneck at scale. Mitigation: benchmark with 100k+ blobs in Week 5; if performance degrades, add RocksDB-backed blob index.
 - **Mempool congestion:** Cheaper transactions must not starve governance/evidence transactions. Mitigation: evidence/governance fee discounts per `p2p-wire-spec.md` Section 2; test with adversarial cheap-transaction flood.

@@ -3,7 +3,7 @@
 **Component:** C7 P2P Networking & Connection Manager
 **Source ADRs:** ADR-0001 (12-Component Architecture)
 **Covered FRs:** FR-0041, FR-0042, FR-0043, FR-0044, FR-0045, FR-0046, FR-0047, FR-0048, FR-0049, FR-0050, FR-0152
-**Dependencies:** Ockam P2P framework, ML-DSA-65 identity keys
+**Dependencies:** clatter (PQ-Noise hybrid handshake), ml-dsa (ML-DSA-65 identity keys)
 
 ---
 
@@ -125,9 +125,9 @@ RelayActive ──(all relay paths lost)──► Unknown
 - Bootstrap node availability
   - Justification: Cold start requires at least one bootstrap node. Multiple fallback sources and caching mitigate.
   - Trust-minimised alternative: Hardcoded genesis peer list in genesis block; bootstrap nodes are validators (decentralized).
-- Ockam secure channel correctness
-  - Justification: End-to-end encryption and authentication depend on Ockam or equivalent.
-  - Trust-minimised alternative: Noise protocol framework with ML-DSA — same trust model.
+- clatter secure channel correctness
+  - Justification: End-to-end encryption and authentication depend on the clatter Noise hybrid handshake (X25519 + ML-KEM-768) with ML-DSA-65 identity signatures.
+  - Trust-minimised alternative: snow (classical Noise) with ML-DSA — same trust model for signatures, no PQ key exchange. clatter closes the PQ key exchange gap.
 - STUN server availability
   - Justification: NAT traversal depends on at least one STUN server. Minimum 3 geographically distributed required.
   - Trust-minimised alternative: TURN relays as fallback; relay infrastructure is decentralized.

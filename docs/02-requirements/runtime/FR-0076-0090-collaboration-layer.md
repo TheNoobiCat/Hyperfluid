@@ -212,10 +212,9 @@
 **Rationale:** Protocol-level circuit breakers are overengineered for the problem they solve. EIP-1559 base fee handles congestion automatically. Local rate limiting is an agent runtime concern.
 
 **Acceptance Criteria:**
-- [ ] Trigger conditions are deterministic and logged.
-- [ ] Actions: freeze new low-trust claims, tighten merge quotas, force digest-only for low-trust senders.
-- [ ] Circuit-breaker exits when metrics normalize for sustained window.
-- [ ] No manual override required.
+- [ ] Per-sender rate limits enforced locally
+- [ ] No protocol-level coordination required
+- [ ] Congestion handled by EIP-1559 base fee dynamics
 
 **Dependencies:** FR-0076, FR-0091
 **Tags:** must-have

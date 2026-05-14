@@ -1,7 +1,7 @@
 # Protocol Spec: Fee Market
 
 **Component:** C5 Fee Market
-**Source ADRs:** ADR-0009 (EIP-1559 Fee Market), ADR-0012 (Circuit-Breaker Hierarchy)
+**Source ADRs:** ADR-0009 (EIP-1559 Fee Market), ADR-0012 (Congestion Response via EIP-1559)
 **Covered FRs:** FR-0146, FR-0147, FR-0159, FR-0160
 **Dependencies:** C1 Consensus Engine, C3 Staking & Validator Manager
 

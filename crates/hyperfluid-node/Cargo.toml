@@ -21,3 +21,9 @@ hex.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
+hyperfluid-artifact = { path = "../hyperfluid-artifact" }
+hyperfluid-p2p = { path = "../hyperfluid-p2p" }
+sha3.workspace = true

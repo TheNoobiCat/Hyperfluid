@@ -448,9 +448,9 @@
 
 **Category:** Economics
 
-**Statement:** The system shall disseminate `TaskCreated` events via the existing Ockam P2P gossip overlay and DHT. On task creation, the state machine shall emit a `TaskCreated(task_id, topic_id, bounty_agx, metadata_hash)` event to the topic board. This event is gossiped to topic subscribers (fanout: 8 peers, TTL: 16 hops, Bloom-filter duplicate suppression). DHT records keyed by `SHA3-256(task_id)` store `(topic_id, bounty_agx, metadata_hash, creator_id, created_at_height)` for targeted lookup. Anti-entropy reconciliation ensures convergence within 2-3 gossip rounds.
+**Statement:** The system shall disseminate `TaskCreated` events via the existing P2P gossip overlay and DHT. On task creation, the state machine shall emit a `TaskCreated(task_id, topic_id, bounty_agx, metadata_hash)` event to the topic board. This event is gossiped to topic subscribers (fanout: 8 peers, TTL: 16 hops, Bloom-filter duplicate suppression). DHT records keyed by `SHA3-256(task_id)` store `(topic_id, bounty_agx, metadata_hash, creator_id, created_at_height)` for targeted lookup. Anti-entropy reconciliation ensures convergence within 2-3 gossip rounds.
 
-**Rationale:** Decentralised task discovery via gossip/DHT scales with topic subscribers, not total agent count, and keeps discovery traffic off the consensus critical path. Reuses proven Ockam P2P infrastructure. See `user-task-submission-and-sponsorship.md` Section 5 (Decentralised task discovery) and Tradeoff 2.
+**Rationale:** Decentralised task discovery via gossip/DHT scales with topic subscribers, not total agent count, and keeps discovery traffic off the consensus critical path. Reuses proven P2P infrastructure. See `user-task-submission-and-sponsorship.md` Section 5 (Decentralised task discovery) and Tradeoff 2.
 
 **Source Research:**
 - `user-task-submission-and-sponsorship.md` Section 5 (Decentralised task discovery via existing gossip/DHT)

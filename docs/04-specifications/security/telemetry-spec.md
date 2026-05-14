@@ -1,7 +1,7 @@
 # Security Spec: Telemetry Integrity
 
 **Components:** C1 Consensus (telemetry producer), C2 State Machine (telemetry records)
-**Source ADRs:** ADR-0012 (Circuit-Breaker Hierarchy)
+**Source ADRs:** ADR-0012 (Congestion Response via EIP-1559)
 **Covered FRs:** FR-0060, FR-0139, FR-0140, FR-0141, NFR-0020, NFR-0021
 **Dependencies:** C1 Consensus Engine, C2 State Machine, C8 Artifact Availability
 
@@ -73,7 +73,7 @@ enum ReconciliationStatus {
 1. Validator or reporting agent observes a protocol metric at a given height.
 2. Constructs TelemetryEnvelope with producer_id, metric_class, value, height, seq_no (last_seq_no + 1).
 3. Signs envelope with producer's ML-DSA key.
-4. Broadcasts envelope via gossip or includes in block (mempool telemetry lane).
+4. Broadcasts envelope via gossip or includes in block (via standard mempool admission).
 5. Receiving nodes validate: signature, height bound, seq_no monotonicity.
 6. Valid envelopes stored in SMT (key prefix 0x07) for current epoch.
 
@@ -98,7 +98,7 @@ enum ReconciliationStatus {
 - **Reporter suppression:** Validator stops reporting during incident → suppression detection flag (producer reporting 0 envelopes during active epoch).
 - **Metric spoofing:** Producer submits fabricated metric → reconciliation against block headers flags discrepancy. Repeated spoofing triggers anomaly report and potential trust regression penalty.
 - **Outlier gaming:** Producer submits extreme value to bias trimmed mean → trimmed mean discards top/bottom 10%; outlier flagging for z > 3.0.
-- **Low reporter count:** Summary marked low-confidence. Circuit-breaker excludes that metric from automated triggers. Governance alert generated.
+- **Low reporter count:** Summary marked low-confidence. Metric excluded from governance-alert triggers. Governance alert generated.
 - **Reconciliation failure:** Aggregated metric differs from independent observable by >10% → DiscrepancyDetected. Metric excluded from trust calculations for that epoch.
 - **Signature failure:** Envelope signature validation fails → envelope discarded.
 - **Replay attack:** seq_no <= last_seq_no → envelope rejected.

@@ -9,7 +9,7 @@
 - SLO definitions: uptime, block finality latency, transaction inclusion latency, artifact availability, review pipeline latency.
 - Monitoring dashboards: chain health (block height, finality, validator set), agent metrics (active agents, trust stage distribution, task throughput), economics (fee market, staking distribution, reward distribution), security (telemetry reconciliation drift).
 - Alerting rules: alerts for block stall (>10s without block), validator churn spike (>20% in epoch), telemetry reconciliation drift >1%.
-- Runbooks: genesis ceremony, validator onboarding, validator offboarding, incident response (per incident FSM state), state sync recovery, artifact repair, key rotation, governance emergency upgrade.
+- Runbooks: genesis ceremony, validator onboarding, validator offboarding, incident response (per incident-response-spec.md), state sync recovery, artifact repair, key rotation, governance emergency upgrade.
 - Launch checklist: genesis block ceremony, initial validator set bootstrapping, airdrop challenge distribution, monitoring verification, smoke test, public announcement.
 - Private testnet: 20+ node simulated mainnet with realistic geography (latency emulation), 7-day pre-launch soak.
 - Incident drill: simulated vote, post-incident review.
@@ -22,7 +22,7 @@
 - [ ] All 8 runbooks written and tested on private testnet.
 - [ ] Launch checklist complete and peer-reviewed.
 - [ ] Private testnet runs for 7 consecutive days without operator intervention. All SLO targets met.
-- [ ] Incident drill completed: emergency mode activated, resolved, and recovered within 4 hours. Post-incident review documented.
+- [ ] Incident drill completed: congestion event handled within SLA via EIP-1559 base fee dynamics. Post-incident review documented.
 - [ ] Backup & disaster recovery plan tested: restore from SMT snapshot, artifact repair sweep completes, validator key rotation works.
 - [ ] `just deploy-testnet` command boots a full testnet from genesis with a single command.
 - [ ] Risks documented and acceptable.
@@ -56,7 +56,7 @@
 1. Genesis ceremony runbook: key generation ceremony (distributed ML-DSA-65 key generation), genesis block creation (initial state, initial validator set, AGX allocation), network boot sequence, bootstrap node configuration.
 2. Validator onboarding runbook: key generation, stake bonding, node configuration, network join, sync verification, monitoring enrollment.
 3. Validator offboarding runbook: unbond request, 14-day unbonding watch, withdrawal transaction, node decommission.
-4. Incident response runbook (per FSM state): normal → elevated triggers and actions, elevated → emergency triggers and actions, emergency vote procedure, recovery ramp-up sequence, post-incident review template.
+4. Incident response runbook (per EIP-1559 congestion handling): normal congestion → base fee rises, congestion subsides → base fee decreases, post-incident review template.
 5. State sync recovery runbook: full-sync from genesis, snap-sync from trusted snapshot, crash recovery from WAL.
 6. Artifact repair runbook: manual repair trigger, repair coordinator status check, replication validation, blob integrity verification.
 7. Key rotation runbook: agent key compromise response, validator key rotation, governance key rotation, certificate chain update.
@@ -116,7 +116,7 @@
 
 | Spec | Relevance |
 |------|-----------|
-| incident-response-spec.md | Incident FSM, emergency mode, recovery — runbooks and drill |
+| incident-response-spec.md | EIP-1559 base fee adjustment, congestion handling — runbooks and drill |
 | telemetry-spec.md | Metrics instrumentation, reconciliation — monitoring and alerting |
 | staking-spec.md | Validator onboarding/offboarding runbooks |
 | consensus-spec.md | Genesis ceremony, state sync — operational procedures |

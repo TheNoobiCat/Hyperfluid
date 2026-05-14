@@ -15,7 +15,7 @@
 - All 14 spec conformance test hooks pass. All FR-0190 adversarial scenarios executed.
 
 ## Exit Criteria
-- [ ] Conformance matrix: 190/190 FR/NFR have passing conformance tests. Zero failing tests.
+- [ ] Conformance matrix: 202/202 FR/NFR have passing conformance tests. Zero failing tests.
 - [ ] Adversarial scenarios: all scenarios from FR-0190 executed; system survives or correctly fails safe (no silent corruption, no state divergence, no unrecoverable stall).
 - [ ] Load test: committee of 100 validators sustains 100 tx/s for 1 hour without queue growth or latency degradation.
 - [ ] Partition test: 3-node partition (2+1 split) → minority halts, majority continues. Heal → minority catches up via state sync within 5 minutes.
@@ -70,7 +70,7 @@
 9. Exit checkpoint: all exit criteria met; calibration report written; security audit clean.
 
 ## Risk Areas
-- **Adversarial testing reveals protocol flaw:** If a byzantine scenario exposes an unfixable spec-level issue, the spec must be amended via governance in Stage 02 before Stage 03 can complete. This could add 2–4 weeks. Mitigation: Stage 02 governance engine can process spec amendment proposals.
+- **Adversarial testing reveals protocol flaw:** If a byzantine scenario exposes an unfixable spec-level issue, the spec must be amended via the governance engine (built in Stage 02) before Stage 03 can complete. This could add 2–4 weeks. Mitigation: Stage 02 governance engine can process spec amendment proposals.
 - **Load test infrastructure limits:** Running 100 validators on a single machine may be resource-limited. Mitigation: Docker Compose with 1-core, 512MB RAM per validator. Use cloud VMs for full-scale tests if needed.
 - **Fuzz harness coverage gaps:** Custom fuzz targets may miss edge cases. Mitigation: use `cargo-fuzz` with structure-aware fuzzing (Arbitrary derives). Fuzz coverage measured via `cargo-tarpaulin` or equivalent.
 - **Cross-platform determinism failures:** Rust standard library differences (e.g., `Instant::now()` on different OS) could leak non-determinism. Mitigation: PDP uses only deterministic primitives (hash, crypto, BTreeMap, sorted Vec). CI enforces cross-platform.

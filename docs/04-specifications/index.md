@@ -42,7 +42,7 @@ Located in `docs/04-specifications/runtime/`
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
 | [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
-| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 10-step deterministic rule chain, action plans, quota matrix, key rotation, audit log |
+| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 6-step deterministic rule chain, action plans, quota matrix, key rotation, audit log |
 | [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161, FR-0164-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
 | [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, inbox routing, trust ladder, airdrop economics |
 
@@ -53,7 +53,7 @@ Located in `docs/04-specifications/security/`
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
 | [`telemetry-spec.md`](security/telemetry-spec.md) | C1, C2 (Telemetry) | FR-0060, FR-0139-0141, NFR-0020-0021 | Signed envelopes, aggregation, reconciliation, outlier detection |
-| [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0142-0145 | Incident state machine, emergency mode, recovery ramp-up, congestion control |
+| [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0142-0145 | EIP-1559 base fee adjustment, congestion control |
 
 ---
 
@@ -112,6 +112,10 @@ Located in `docs/04-specifications/security/`
 | ADR-0010 (Two-Stage Trust Ladder) | collaboration-spec.md Section 3 |
 | ADR-0011 (Review Sandbox Isolation) | governance-spec.md Section 2, fastpath-spec.md |
 | ADR-0012 (Congestion Response via EIP-1559) | fee-market-spec.md |
+| ADR-0013 (Agent Tools + Seed Index) | agent-runtime-spec.md, collaboration-spec.md |
+| ADR-0014 (Task Submission & Sponsorship) | collaboration-spec.md, policy-engine-spec.md, consensus-spec.md |
+| ADR-0015 (Stake Delegation) | staking-spec.md, consensus-spec.md |
+| ADR-0016 (clatter+ml-dsa Secure Channel) | p2p-wire-spec.md, consensus-spec.md |
 
 ---
 

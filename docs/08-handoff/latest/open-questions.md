@@ -1,6 +1,12 @@
-# Session 2026-05-06 — Open Questions
+# Session 2026-05-14 — Open Questions
 
-## Q1: Bootstrap committee size / three-tier stall at genesis
+## Q1: Ockam replacement — clatter+ml-dsa secure channel stack (2026-05-14)
+
+**Status:** **RESOLVED** — ADR-0016 accepted. Ockam superseded by clatter v2.2.0 (Noise hybrid XX, X25519 + ML-KEM-768) + ml-dsa v0.1.0-rc.11 (ML-DSA-65, FIPS 204). Specs amended. See `docs/03-architecture/decisions/ADR-0016-clatter-ml-dsa-secure-channel.md` and `docs/01-research/stack-evaluations/clatter-vs-ockam-secure-channel.md`.
+
+---
+
+## Q2: Bootstrap committee size / three-tier stall at genesis
 
 **Spec section:** `consensus-spec.md` Section 1.2 (three-tier liveness) + Section 1.4 (committee sampling)
 
@@ -27,7 +33,7 @@
 
 ---
 
-## Q2: git:head upgrade — process lifecycle for node and agent
+## Q3: git:head upgrade — process lifecycle for node and agent
 
 **Spec sections:** `governance-spec.md` Section 1 (On-Chain git:head Governance), `agent-runtime-spec.md` Section 4 (Process Isolation), `trust-boundaries.md` Section 3 (Zone Definitions), `interfaces.md` Section 7 (Transport Guarantees)
 

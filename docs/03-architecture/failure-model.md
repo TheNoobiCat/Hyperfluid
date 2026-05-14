@@ -193,7 +193,7 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 - Whitewash guard prevents penalized agents from gaining trust via new identities (FR-0098)
 - Sybil detection correlation engine: five-signal pairwise scoring, automated adjudication (FR-0191)
 
-**Recovery:** Circuit-breaker mode freezes low-trust claims and tightens quotas. Fee market adjusts. Airdrop sunset conditions trigger if abuse pattern persists (FR-0158).
+**Recovery:** Base fee rise pricing out spam under sustained evasion.
 
 ---
 

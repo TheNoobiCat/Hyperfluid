@@ -272,3 +272,307 @@ fn conforms_to_artifact_spec_1_7_chunks_for_test_produces_correct_data() {
     let combined: Vec<u8> = chunks.iter().flat_map(|c| c.iter()).copied().collect();
     assert_eq!(combined, data.to_vec());
 }
+
+// ── Hook 4: Parallel retrieval from multiple providers ──
+
+/// Hook 4: Verify parallel retrieval from min_replica_count + 2 providers succeeds.
+///
+/// Models the scenario where artifacts are distributed across multiple providers.
+/// Retrieving from N+2 providers ensures redundancy — even if one provider returns
+/// corrupt data, the remaining providers' correct chunks can be assembled.
+#[test]
+fn conforms_to_artifact_spec_1_7_parallel_retrieval_from_multiple_providers() {
+    let data = b"artifact_payload_for_parallel_retrieval_test";
+    let n_chunks: usize = 6;
+    let chunks = chunk_bytes_for_test(data, n_chunks);
+    assert_eq!(chunks.len(), n_chunks);
+
+    let chunk_refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
+    let expected_root = compute_chunk_merkle_root(&chunk_refs);
+
+    // Simulate 4 providers (min_replica_count=2, +2 = 4 providers)
+    let provider_count: usize = 4;
+    let mut providers: Vec<Vec<Vec<u8>>> = Vec::with_capacity(provider_count);
+    for _ in 0..provider_count {
+        providers.push(chunks.clone());
+    }
+
+    // Provider 2 returns corrupt data for chunk index 3
+    if providers.len() >= 3 {
+        providers[2][3] = b"corrupted_chunk_data_xxx".to_vec();
+    }
+
+    // Retrieve chunk 3 from all providers, verify at least one is correct
+    let mut correct_retrievals = 0u32;
+    for (p_idx, provider_chunks) in providers.iter().enumerate() {
+        let proof = merkle_proof_for_test(provider_chunks, 3);
+        let leaf = leaf_hash_for_test(&provider_chunks[3]);
+        let valid = verify_merkle_proof_for_test(&leaf, 3, &proof, &expected_root);
+        if valid {
+            correct_retrievals += 1;
+        } else {
+            // Provider p_idx returned corrupt data — expected for provider 2
+            if p_idx != 2 {
+                panic!("provider {} should have valid data", p_idx);
+            }
+        }
+    }
+
+    assert!(correct_retrievals >= 3, "at least 3 of 4 providers must return valid chunks");
+}
+
+/// Hook 4: Negative — single corrupt provider does not break retrieval.
+#[test]
+fn conforms_to_artifact_spec_1_7_parallel_retrieval_corrupt_isolation() {
+    let data = b"critical_governance_payload";
+    let n_chunks: usize = 3;
+    let chunks = chunk_bytes_for_test(data, n_chunks);
+    let chunk_refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
+    let root = compute_chunk_merkle_root(&chunk_refs);
+
+    // Only 1 of 3 providers has corrupt data for chunk 0
+    let good_providers: Vec<Vec<Vec<u8>>> = vec![chunks.clone(), chunks.clone()];
+    let mut corrupt_chunks = chunks.clone();
+    corrupt_chunks[0] = b"totally_wrong_data_blob".to_vec();
+    let corrupt_provider = corrupt_chunks;
+
+    // Verify the good providers pass
+    for provider in &good_providers {
+        let proof = merkle_proof_for_test(provider, 0);
+        let leaf = leaf_hash_for_test(&provider[0]);
+        assert!(verify_merkle_proof_for_test(&leaf, 0, &proof, &root), "good provider must verify");
+    }
+
+    // Verify the corrupt provider fails
+    let bad_proof = merkle_proof_for_test(&corrupt_provider, 0);
+    let bad_leaf = leaf_hash_for_test(&corrupt_provider[0]);
+    assert!(
+        !verify_merkle_proof_for_test(&bad_leaf, 0, &bad_proof, &root),
+        "corrupt provider must fail verification"
+    );
+}
+
+/// Hook 4: Edge case — all providers are correct.
+#[test]
+fn conforms_to_artifact_spec_1_7_parallel_retrieval_all_correct() {
+    let data = b"simple_payload";
+    let chunks = chunk_bytes_for_test(data, 2);
+    let chunk_refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
+    let root = compute_chunk_merkle_root(&chunk_refs);
+
+    // 4 providers all with correct data
+    for _ in 0..4 {
+        let proof = merkle_proof_for_test(&chunks, 0);
+        let leaf = leaf_hash_for_test(&chunks[0]);
+        assert!(verify_merkle_proof_for_test(&leaf, 0, &proof, &root));
+    }
+}
+
+// ── Hook 7: AtRisk detection triggers repair ──
+
+/// Hook 7: Verify AtRisk detection triggers repair coordinator.
+///
+/// When a lease goes from Active to AtRisk (e.g., proof-of-possession failure),
+/// a RepairEntry is added to the repair queue. The coordinator pops entries by
+/// priority (governance first, telemetry last). This test models the AtRisk → repair flow.
+#[test]
+fn conforms_to_artifact_spec_1_7_atrisk_triggers_repair() {
+    let mut queue = RepairQueue::new(10);
+
+    // Simulate AtRisk detection: 3 leases detected as AtRisk
+    // Lease 1: Governance bundle — should be highest priority
+    queue.push(RepairEntry {
+        artifact_root_hash: [10u8; 32],
+        artifact_class: ArtifactClass::GovernanceBundle,
+        current_replica_count: 1,
+        target_replica_count: 5,
+        priority: ArtifactClass::GovernanceBundle.repair_priority(),
+        entered_at_height: 500,
+    });
+
+    // Lease 2: Review evidence — medium priority
+    queue.push(RepairEntry {
+        artifact_root_hash: [20u8; 32],
+        artifact_class: ArtifactClass::ReviewEvidence,
+        current_replica_count: 1,
+        target_replica_count: 3,
+        priority: ArtifactClass::ReviewEvidence.repair_priority(),
+        entered_at_height: 510,
+    });
+
+    // Lease 3: Research output — lower priority, but entered earlier
+    queue.push(RepairEntry {
+        artifact_root_hash: [30u8; 32],
+        artifact_class: ArtifactClass::ResearchOutput,
+        current_replica_count: 0,
+        target_replica_count: 2,
+        priority: ArtifactClass::ResearchOutput.repair_priority(),
+        entered_at_height: 400,
+    });
+
+    // Lease 4: Telemetry archive — lowest priority
+    queue.push(RepairEntry {
+        artifact_root_hash: [40u8; 32],
+        artifact_class: ArtifactClass::TelemetryArchive,
+        current_replica_count: 1,
+        target_replica_count: 2,
+        priority: ArtifactClass::TelemetryArchive.repair_priority(),
+        entered_at_height: 520,
+    });
+
+    // Repair coordinator pops entries: governance (priority 0), review (1), research (2), telemetry (3)
+    let first = queue.pop_highest().expect("must have at least one entry");
+    assert_eq!(
+        first.artifact_class,
+        ArtifactClass::GovernanceBundle,
+        "governance must be repaired first"
+    );
+
+    let second = queue.pop_highest().expect("must have second entry");
+    assert_eq!(
+        second.artifact_class,
+        ArtifactClass::ReviewEvidence,
+        "review evidence must be repaired second"
+    );
+
+    let third = queue.pop_highest().expect("must have third entry");
+    assert_eq!(
+        third.artifact_class,
+        ArtifactClass::ResearchOutput,
+        "research output must be repaired third"
+    );
+
+    let fourth = queue.pop_highest().expect("must have fourth entry");
+    assert_eq!(
+        fourth.artifact_class,
+        ArtifactClass::TelemetryArchive,
+        "telemetry must be repaired last"
+    );
+
+    // Queue must be exhausted
+    assert!(queue.pop_highest().is_none());
+}
+
+/// Hook 7: Negative — AtRisk for TelemetryArchive is lowest priority.
+#[test]
+fn conforms_to_artifact_spec_1_7_atrisk_telemetry_lowest_priority() {
+    let mut queue = RepairQueue::new(10);
+
+    queue.push(RepairEntry {
+        artifact_root_hash: [50u8; 32],
+        artifact_class: ArtifactClass::TelemetryArchive,
+        current_replica_count: 1,
+        target_replica_count: 2,
+        priority: ArtifactClass::TelemetryArchive.repair_priority(),
+        entered_at_height: 100,
+    });
+    queue.push(RepairEntry {
+        artifact_root_hash: [51u8; 32],
+        artifact_class: ArtifactClass::ReviewEvidence,
+        current_replica_count: 1,
+        target_replica_count: 3,
+        priority: ArtifactClass::ReviewEvidence.repair_priority(),
+        entered_at_height: 200,
+    });
+
+    let first = queue.pop_highest().unwrap();
+    assert_eq!(first.artifact_class, ArtifactClass::ReviewEvidence);
+}
+
+/// Hook 7: Edge case — zero-replica (lost artifact) still enters repair queue with
+/// target_replica_count unchanged.
+#[test]
+fn conforms_to_artifact_spec_1_7_atrisk_zero_replicas_enters_queue() {
+    let mut queue = RepairQueue::new(10);
+
+    // Artifact with 0 replicas (critically lost) still added to queue
+    queue.push(RepairEntry {
+        artifact_root_hash: [60u8; 32],
+        artifact_class: ArtifactClass::GovernanceBundle,
+        current_replica_count: 0,
+        target_replica_count: 5,
+        priority: 0,
+        entered_at_height: 100,
+    });
+
+    let entry = queue.pop_highest().unwrap();
+    assert_eq!(entry.current_replica_count, 0);
+    assert_eq!(entry.target_replica_count, 5);
+}
+
+// ── Helpers for parallel retrieval tests ──
+
+/// Compute SHA3-256 hash of a chunk for parallel retrieval testing.
+fn leaf_hash_for_test(chunk: &[u8]) -> [u8; 32] {
+    use sha3::{Digest, Sha3_256};
+    let mut hasher = Sha3_256::new();
+    hasher.update(chunk);
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&hasher.finalize());
+    out
+}
+
+/// Generate a Merkle proof for a chunk at the given index.
+fn merkle_proof_for_test(chunks: &[Vec<u8>], chunk_index: u32) -> Vec<[u8; 32]> {
+    use sha3::{Digest, Sha3_256};
+    let idx = chunk_index as usize;
+    if chunks.is_empty() || idx >= chunks.len() {
+        return vec![];
+    }
+    let mut level: Vec<[u8; 32]> = chunks.iter().map(|c| leaf_hash_for_test(c)).collect();
+    let mut proof = Vec::new();
+    let mut current_idx = idx;
+    while level.len() > 1 {
+        let sibling = if current_idx % 2 == 0 {
+            if current_idx + 1 < level.len() {
+                level[current_idx + 1]
+            } else {
+                level[current_idx]
+            }
+        } else {
+            level[current_idx - 1]
+        };
+        proof.push(sibling);
+        let mut next_level = Vec::with_capacity(level.len().div_ceil(2));
+        for pair in level.chunks(2) {
+            let left = pair[0];
+            let right = if pair.len() == 2 { pair[1] } else { pair[0] };
+            let mut hasher = Sha3_256::new();
+            hasher.update(left);
+            hasher.update(right);
+            let mut node = [0u8; 32];
+            node.copy_from_slice(&hasher.finalize());
+            next_level.push(node);
+        }
+        level = next_level;
+        current_idx /= 2;
+    }
+    proof
+}
+
+/// Verify a Merkle proof for parallel retrieval testing.
+fn verify_merkle_proof_for_test(
+    leaf_hash: &[u8; 32],
+    chunk_index: u32,
+    proof: &[[u8; 32]],
+    expected_root: &[u8; 32],
+) -> bool {
+    use sha3::{Digest, Sha3_256};
+    let mut current_hash = *leaf_hash;
+    let mut current_idx = chunk_index as usize;
+    for sibling in proof {
+        let mut hasher = Sha3_256::new();
+        if current_idx % 2 == 0 {
+            hasher.update(current_hash);
+            hasher.update(sibling);
+        } else {
+            hasher.update(sibling);
+            hasher.update(current_hash);
+        }
+        let mut node = [0u8; 32];
+        node.copy_from_slice(&hasher.finalize());
+        current_hash = node;
+        current_idx /= 2;
+    }
+    current_hash == *expected_root
+}

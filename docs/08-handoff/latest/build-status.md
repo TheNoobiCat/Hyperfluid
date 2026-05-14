@@ -1,10 +1,12 @@
-# Build Status — Stage 01 (Protocol Core) IN PROGRESS
+# Build Status — Stage 01 (Protocol Core) COMPLETE | Stage 02 (Agent Runtime) PENDING
 
-**Last updated:** 2026-05-08
-**Stage:** 01 — Protocol Core — **IN PROGRESS**
+**Last updated:** 2026-05-14
+**Stage:** 01 — Protocol Core — **COMPLETE**
+**Stage:** 02 — Agent Runtime — **NOT STARTED** (blocked on clatter+ml-dsa)
 **Week 1-2 (Consensus + State Machine):** COMPLETE
 **Week 3-4 (Staking: Pending Code Changes + C3 Base + C5 Fee Market):** COMPLETE
 **Week 5-6 (P2P Networking + Artifact Storage + State Sync):** COMPLETE
+**Week 7-8 (Integration, Soak, Polish):** COMPLETE
 
 ## PENDING CODE CHANGES — ALL APPLIED (2026-05-06)
 
@@ -88,8 +90,37 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | Conformance tests: 16 P2P hooks (12 PASS, 2 deferred) | Complete |
 | Conformance tests: 17 artifact hooks (15 PASS, 2 deferred) | Complete |
 | Conformance tests: 10 state sync hooks (10 PASS) | Complete |
-| 181/181 workspace tests pass | Complete |
-| clippy zero warnings, fmt clean, determinism sweep clean | Complete |
+| 181/217 workspace tests pass | Complete |
+| clippy zero warnings, fmt clean, doc builds, determinism sweep clean | Complete |
+
+## Stage 01: Week 7-8 — Integration, Soak, Polish — COMPLETE
+
+| Task | Status |
+|------|--------|
+| Secure channel: SecureChannel trait + mock (p2p-spec hooks 7-8 resolved) | Complete |
+| Artifact deferred hooks resolved: parallel retrieval (hook 4) + AtRisk repair (hook 7) | Complete |
+| E2E integration test: 17 tests covering full lifecycle | Complete |
+| Parameter audit: 41 parameters documented, all match spec defaults | Complete |
+| Conformance self-check: all 6 specs' hooks verified PASS | Complete |
+| Determinism sweep + CI mimick: fmt, clippy, test, doc, deny, bench-check all PASS | Complete |
+| ADR-0016: clatter+ml-dsa replaces Ockam (accepted, spec amended) | Complete |
+| clatter+ml-dsa secure channel implementation (pending next build run) | Pending |
+| Deferred: Multi-node soak test (needs multi-node harness) | Deferred to Stage 03 |
+
+## Verification (after Week 7-8)
+
+| Check | Result |
+|-------|--------|
+| `cargo build --workspace` | PASS (13 crates) |
+| `cargo test --workspace` | PASS (217/217) |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
+| `cargo doc --workspace --no-deps --document-private-items` | PASS |
+| `cargo deny check` | PASS |
+| `cargo bench --workspace --no-run` | PASS |
+| Determinism sweep (floating-point) | PASS (zero hits in protocol code) |
+| Determinism sweep (wall-clock/random) | PASS (zero hits in protocol code) |
+| `if let Some.get_mut` guard | PASS (4 instances all with rejecting else arms) |
 
 ## Verification (after Week 5-6)
 
@@ -302,3 +333,22 @@ See `docs/01-research/_audit-bugs-2026-05-08.md` for full report.
 | Next stage inputs prepared | PASS |
 
 **Stage 00: COMPLETE. Ready for Stage 01 (Protocol Core).**
+
+---
+
+## NEXT ACTION (first task on next build run)
+
+**clatter+ml-dsa Secure Channel Implementation** — the ONE pending item from Stage 01:
+
+1. Add `clatter` v2.2.0 and `ml-dsa` v0.1.0-rc.11 to workspace `Cargo.toml` and `hyperfluid-p2p/Cargo.toml`.
+2. Create `crates/hyperfluid-p2p/src/secure_channel.rs` wrapping clatter `HybridHandshake` → `TransportState` behind the existing `SecureChannel` trait (`establish()` → `seal()`/`open()`).
+3. Create `crates/hyperfluid-p2p/src/identity.rs` with ML-DSA-65 keypair management (generate, sign, verify).
+4. Feature-gate: `mock-secure-channel` (current SHA3-256 mock) vs `clatter-secure-channel` (production).
+5. Write conformance tests verifying real E2E encryption roundtrip, wrong-key rejection, tampered-ciphertext rejection.
+6. Remove stale SPEC_DEVIATION comments from `transport.rs` referencing Ockam.
+
+**Spec:** `docs/05-planning/stages/stage-02-agent-runtime.md` "Pre-Flight: clatter+ml-dsa Secure Channel Implementation"
+**ADR:** `docs/03-architecture/decisions/ADR-0016-clatter-ml-dsa-secure-channel.md`
+**Research:** `docs/01-research/stack-evaluations/clatter-vs-ockam-secure-channel.md`
+
+**After clatter+ml-dsa is green, proceed to Stage 02 Week 1–2 (Governance + Fast-Path + PDP).**

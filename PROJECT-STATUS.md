@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 Week 1-6 complete. Week 7-8 next: Integration, Soak, Polish) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 Week 1-8 complete. Stage 02 next: Agent Runtime) |
 
 ---
 
@@ -132,8 +132,9 @@ Systemic patterns identified: SMT root completeness gap (new entity added but ro
 9. ~~Stage 01 Week 3-4 (C3 + C5): Staking base & Fee Market implemented. See `checkpoint-2026-05-06-code.md`.~~
 10. ~~Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.~~ COMPLETE (2026-05-08)
 11. ~~Bug audit (2026-05-08) completed.~~
-12. Stage 01 Week 7-8: Integration, soak test, polish.
-13. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+12. ~~Stage 01 Week 7-8: Integration, soak test, polish.~~ COMPLETE (2026-05-14)
+13. **NEXT: clatter+ml-dsa Secure Channel Implementation** — wire clatter `HybridHandshake` + ml-dsa identity keys into `hyperfluid-p2p` SecureChannel trait. See ADR-0016.
+14. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
 14. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
 15. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
 16. Freeze all 15 specs before Stage 01 implementation continues. Post-freeze spec changes require governance proposals.
@@ -183,12 +184,19 @@ Systemic patterns identified: SMT root completeness gap (new entity added but ro
 | Committee stall tiered fallback | Three tiers: Normal (67-100), Degraded (50-66, critical txs only), Emergency (0-49, halt + auto-recovery after 500 blocks). | `consensus-spec.md`, `FR-0001`, `failure-model.md`, `components.md` |
 | Stake delegation added | New ADR-0015. Validators gain `self_bond`/`total_delegated`/`commission_rate`. 4 new tx types (DelegateTx, UndelegateTx, WithdrawDelegationTx, SetCommissionTx). Delegation unbonding: 7 days. Commission cap: 20%. Slash propagates proportionally. | `ADR-0015` (new), `staking-spec.md`, `consensus-spec.md`, `FR-0020a`, `state-model.md`, `failure-model.md`, `components.md`, `agx-committee-bft-and-governance.md`, `stage-01-protocol-core.md`, `traceability-matrix.md`, `requirements/index.md` |
 
-## New Documents (2026-05-06)
+## New Documents (2026-05-14)
 
 | Document | Type | Description |
 |----------|------|-------------|
-| `docs/04-specifications/protocol/stake-graph-analysis-spec.md` | Spec | N-hop ancestor trace for correlated validator detection. Deterministic, on-chain clustering algorithm. |
-| `docs/03-architecture/decisions/ADR-0015-stake-delegation.md` | ADR | Delegation model: self-bond + delegated stake for committee weight, commission, proportional slash propagation. |
+| `docs/01-research/stack-evaluations/clatter-vs-ockam-secure-channel.md` | Research | Secure channel stack evaluation: clatter (PQ-Noise) vs ockam vs snow. Recommends clatter+ml-dsa. |
+| `docs/03-architecture/decisions/ADR-0016-clatter-ml-dsa-secure-channel.md` | ADR | Replace Ockam with clatter+ml-dsa. Hybrid PQ (X25519+ML-KEM-768) key exchange, ML-DSA-65 identity signatures. |
+| `docs/08-handoff/latest/parameter-audit.md` | Handoff | 41 [TUNE] parameters audited, all match spec defaults. |
+
+## Recent Design Changes (2026-05-14)
+
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| Ockam→clatter+ml-dsa | Ockam crate unresolvable (yanked dep). Replaced with clatter (Noise hybrid XX, PQ key exchange) + ml-dsa (ML-DSA-65 identity). ~10 deps vs 400+. ADR-0016. | `p2p-wire-spec.md`, `consensus-spec.md`, `components.md`, `stage-01-protocol-core.md`, `build-status.md`, `open-questions.md`, `planning/index.md`, `index.md` |
 
 ## New Requirements (2026-05-06)
 
@@ -223,4 +231,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-06 (Documentation audit: ~47 stale/simplified items fixed across L2-L5 docs, 5 open questions flagged.)*
+*Last updated: 2026-05-14 (ADR-0016: Ockam→clatter+ml-dsa; Stage 01 Week 7-8 complete; all deferred hooks resolved)*

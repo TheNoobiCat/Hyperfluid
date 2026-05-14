@@ -24,7 +24,7 @@
 - [ ] Collaboration: task board visible across nodes, soft leases prevent double-claim, bounty escrow locks funds on task creation and releases on completion after challenge window, all tasks reference valid seed_ref, `hyperfluid task submit` CLI creates tasks through PDP → state machine → gossip pipeline, `TaskCreated` events propagate via gossip/DHT to subscribed agents, inbox routes messages correctly.
 - [ ] Review: 2-phase review pipeline (review → challenge) with 3 reviewers per task, fixed payout on majority approval, operator-cluster independence constraint. Sybil detection correlation engine flags suspicious identity pairs; automated adjudication confirms/rejects clusters.
 - [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
-- [ ] Incident Response: basic incident logging for governance audit. Congestion handled by EIP-1559 base fee — no circuit-breaker exists.
+- [ ] EIP-1559 base fee: verified to adjust correctly under load, no protocol-level circuit-breaker.
 - [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and trust-stage update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
 - [ ] All 8 specs pass their conformance test hooks (Section X.7).
 - [ ] Risks documented and acceptable.
@@ -40,11 +40,19 @@
 
 ## Week-by-Week Breakdown
 
+### Pre-Flight: clatter+ml-dsa Secure Channel Implementation
+1. Add `clatter` v2.2.0 (Noise hybrid XX) and `ml-dsa` v0.1.0-rc.11 (FIPS 204) as workspace dependencies.
+2. Replace the mock `SecureChannel` in `crates/hyperfluid-p2p/src/transport.rs` with a real clatter-backed implementation. See ADR-0016 and `docs/01-research/stack-evaluations/clatter-vs-ockam-secure-channel.md`.
+3. Integration shim: wrap clatter `HybridHandshake` → `TransportState` behind the existing `SecureChannel` trait (`establish()`, `seal()`, `open()`).
+4. ML-DSA identity provider: keypair generation, signing, verification. Map pubkey → PeerId via SHA3-256.
+5. Conformance tests: replace mock SHA3-256 XOR tests with real cryptographic roundtrip, wrong-key rejection, tampered-ciphertext rejection, and nonce advancement tests.
+6. Feature-gate the mock behind `mock-secure-channel` (for fast unit tests); production code uses `clatter-secure-channel`.
+7. Exit checkpoint: `cargo test -p hyperfluid-p2p` passes with real crypto; conformance hooks p2p-spec 1.7 hooks 7-8 verified with clatter.
+
 ### Week 1–2: Governance + Fast-Path + PDP (C4, C6, C9)
 1. Governance engine: git:head state representation, proposal submission (target hash, proposed branch, sandbox period), vote window (5,040 blocks = ~7 days at 2s blocks), no-vote timeout, anti-flood deposit.
 2. Fast-Path topic protocol: topic scope definition, merge proposal with quorum certificate (67/100), challenge window (1,440 blocks = ~48 min), rollback on successful challenge, promotion bridge to governance for permanent codification.
 3. PDP rule chain: implement 5 steps in order (schema → signature → replay → quota → fee). Ensure determinism — no `HashMap` iteration, no floating-point in root authorization path, no time-based decisions. Structured deny reason codes.
-4. (no circuit-breaker — EIP-1559 base fee is sole congestion mechanism)
 5. Audit log: append-only, content-addressed (each entry hashes to previous entry). Queryable by plan_id and agent_id.
 6. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes.
 
@@ -69,11 +77,10 @@
 1. Task board: global task queue, soft leases (claim window = 600 blocks, ~20 min), lease renewal, lease expiry → task returns to queue.
 2. Bounty escrow: task creation deducts `bounty_agx` from creator's balance into task escrow. Payout on completion after review and challenge window. Refund on unclaimed expiry. Creator pays cancellation fee on refusal.
 3. Airdrop agent: HashCash proof-of-agent puzzle with dynamic difficulty. Progressive bond release (4 tranches of 5 AGX). Seed task creation from Idea Seed Index with bounty funding from genesis seed pool allocation.
-4. Task creation trust-stage quotas (FR-0195): 0/3/10/30 active created tasks per trust stage. Enforced by PDP at `task_create` validation. `Q-TASK-CREATE-STAGE` added to quota matrix.
-5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via Ockam P2P overlay (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
+4. Task creation trust-stage quotas (FR-0195): untrusted: 0 active created tasks, trusted: 10 (per FR-0195). Enforced by PDP at `task_create` validation. `Q-TASK-CREATE-STAGE` added to quota matrix.
+5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via clatter+ml-dsa secure channels over the P2P gossip layer (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
 6. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage). Task creation events generate inbox signals for subscribed agents.
 6. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
-7. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
 8. Review engine: initial review (3 reviewers, binary verdict), challenge window, settlement (fixed payout on majority approval).
 9. Reviewer independence: stake-graph analysis ensures no reviewer shares an operator cluster with the worker or another reviewer.
 10. Anti-collusion: Sybil detection correlation engine — five-signal pairwise scoring (vote alignment, co-claiming, temporal overlap, stake distance, cross-review failure). Cluster aggregation. Automated adjudication with independent review panels. Confirmed Sybil = bond burn + trust regression + cluster annotation for whitewash detection.
@@ -109,13 +116,11 @@
 | governance-spec.md | 1 (Proposals), 2 (Sandbox Review) | FR-0021–0030 |
 | fastpath-spec.md | 1 (Topics) | FR-0031–0040 |
 | agent-runtime-spec.md | 1 (Loop), 2 (Tools), 3 (Handoff), 4 (Isolation) | FR-0061–0075 |
-| policy-engine-spec.md | 1 (PDP), 2 (Circuit Breaker) | FR-0106–0120 |
+| policy-engine-spec.md | 1 (PDP), 2 (Cross-Layer Quota Matrix) | FR-0106–0120 |
 | review-engine-spec.md | 1 (Quality Pipeline) | FR-0161–0175 |
 | collaboration-spec.md | 1 (Task Board), 2 (Inbox), 3 (Trust Ladder) | FR-0076–0105 |
 | telemetry-spec.md | 1 (Envelopes), 2 (Aggregation) | FR-0060, FR-0139–0141, NFR-0020–0021 |
 | incident-response-spec.md | 1 (FSM), 2 (Recovery) | FR-0142–0145 |
-| sybil-detection-correlation-engine.md | 5 (Core Mechanisms: correlation scoring, cluster aggregation, adjudication) | FR-New (Sybil detection) |
-| agent-telemetry-interface.md | 5 (Core Mechanisms: TUI wizard, Telegram bot) | FR-New (Agent operator interface) |
 
 ## Upstream Dependencies for Next Stage
 - Full system must be functional end-to-end: agent → action_plan → PDP → chain → review → settlement → trust promotion.

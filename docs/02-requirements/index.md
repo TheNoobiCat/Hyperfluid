@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Last updated:** 2026-05-06  
-**Total requirements:** 203 (173 FR + 30 NFR)  
+**Total requirements:** 198 (168 FR + 30 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -23,7 +23,7 @@ Located in `docs/02-requirements/protocol/`
 ### Consensus and BFT
 - [`FR-0001-0010-consensus-and-bft.md`](protocol/FR-0001-0010-consensus-and-bft.md)
   - FR-0001: Committee BFT from Genesis
-  - FR-0002: Epoch Committee Sampling with Anti-Concentration Caps
+  - FR-0002: Epoch Committee Sampling with Anti-Split Clustering
   - FR-0003: VDF-Based Epoch Randomness
   - FR-0004: Committee Partial Overlap Between Epochs
   - FR-0005: Post-Quantum Transaction Signatures (ML-DSA)
@@ -108,7 +108,7 @@ Located in `docs/02-requirements/runtime/`
 ### Agent Runtime
 - [`FR-0061-0075-agent-runtime.md`](runtime/FR-0061-0075-agent-runtime.md)
   - FR-0061: Infinite Agent Loop with State Persistence
-  - FR-0062: Five Core Agent Tools
+  - FR-0062: Nine Core Agent Tools
   - FR-0063: System Prompt Assembly
   - FR-0064: Handoff at 70% Token Threshold
   - FR-0065: Failure Guard Pre-Execution Check
@@ -121,6 +121,7 @@ Located in `docs/02-requirements/runtime/`
   - FR-0072: Node API Stateless and Cacheable
   - FR-0073: Token Budget Normalization (ptok)
   - FR-0074: Deterministic Context Envelope Allocation
+  - FR-0075: Agent Token Budget Enforcement
 
 ### Collaboration Layer
 - [`FR-0076-0090-collaboration-layer.md`](runtime/FR-0076-0090-collaboration-layer.md)
@@ -170,13 +171,10 @@ Located in `docs/02-requirements/security/`
   - FR-0107: Tool-Call Binding Hash Verification
   - FR-0108: Replay Protection for Action Plans
   - FR-0109: Signed Policy Bundle Activation
-  - FR-0110: Risk Class Step-Up Controls
   - FR-0111: Cross-Layer Quota Matrix
   - FR-0112: Policy Decision Audit Log
   - FR-0113: Deterministic Policy Decision Point (PDP)
-  - FR-0114: Taint Tracking for Sensitive Actions
   - FR-0115: Tool Output Sanitization Pipeline
-  - FR-0116: Cumulative Risk Scoring
   - FR-0117: Atomic Quota Reservations
   - FR-0118: Key Rotation State Finalization
   - FR-0119: Policy Bundle Split-Brain Prevention
@@ -194,7 +192,6 @@ Located in `docs/02-requirements/security/`
   - FR-0128: Hidden Scenario Pools for Metric Gaming Prevention
   - FR-0129: Signed Telemetry Envelopes for Eval Integrity
   - FR-0130: Staged Rollout with Rollback Guardrails
-  - FR-0131: Taint-Aware Policy Checks for Sensitive Actions
   - FR-0132: Schema-Conformant Malicious Action Blocking
   - FR-0133: Injection Payload Hidden in Trusted Channel Defense
   - FR-0134: Multi-Turn Delayed Trigger Detection
@@ -211,7 +208,7 @@ Located in `docs/02-requirements/security/`
   - FR-0142: Incident State Machine with Signed Evidence
   - FR-0143: Emergency Mode Parameter Overrides
   - FR-0144: False-Alarm Reporter Penalties
-  - FR-0145: Recovery Staged Ramp-Up
+  - FR-0145: Fee Market Congestion Recovery
 
 ---
 
@@ -264,13 +261,12 @@ Located in `docs/02-requirements/economics/`
   - FR-0184: Relay and Witness Incentive Diversity
   - FR-0185: Governance Griefing Defense
   - FR-0186: Sybil Flood with Fee Evasion Defense
-  - FR-0187: Circuit-Breaker Overreaction Defense
   - FR-0188: Parameter Update Governance Path
   - FR-0189: Decentralization Score Computation
   - FR-0190: Adversarial Simulation before Mainnet
 
 ### Incentives and Airdrop (continued — recent additions)
-- [`FR-0176-0200-incentives-and-airdrop.md`](economics/FR-0176-0190-incentives-and-airdrop.md)
+- [`FR-0176-0190-incentives-and-airdrop.md`](economics/FR-0176-0190-incentives-and-airdrop.md)
   - FR-0191: Sybil Detection via Behavioral Correlation and Automated Adjudication
   - FR-0192: Airdrop Agent Seed Task Bootstrapping
   - FR-0193: Agent Telemetry Interface (Telegram Bot + TUI Setup)
@@ -322,7 +318,7 @@ Located in `docs/02-requirements/economics/`
 
 ## Decentralisation Review Summary
 
-All 190 requirements were scanned against the decentralisation audit checklist from `BUILD-SYSTEM.md`:
+All 168 requirements were scanned against the decentralisation audit checklist from `BUILD-SYSTEM.md`:
 
 1. **External trust inventory:** No external oracles or mandatory centralized services. All trust assumptions are documented in source research.
 2. **Centralised coordination:** No requirements mandate single dispatcher, scheduler, moderator, or admin override. All coordination is protocol-enforced.
