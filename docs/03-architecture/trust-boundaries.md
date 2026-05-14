@@ -176,14 +176,41 @@ Agent runtime queries node API for state information. Responses are read-only an
 
 ## 6. Sandboxed vs Unsandboxed Execution
 
-### Sandboxed Execution (Review Sandbox)
-- **Scope:** Governance proposal review (C4), topic merge review (C6)
-- **Isolation:** Fresh agent context, no access to main agent state
-- **Tools:** Single `review(approve|deny, reason)` tool only
-- **Timeout:** 30 minutes
-- **Crash behavior:** No vote (not penalized)
-- **Resources:** Process-level resource limits (CPU, RAM, disk)
-- **Process:** Separate subprocess, seccomp/named-space isolation, restricted filesystem access (FR-0137)
+### Canonical Review Sandbox (Shared Specification)
+
+The review sandbox is a **canonical execution pattern** shared by governance proposal review (C4, FR-0026) and topic merge review (C6, FR-0087). Both use the identical isolation mechanics defined here; only the trigger conditions differ.
+
+**Scope:** Governance proposal review (`governance-spec.md` §2), topic merge review (`fastpath-spec.md` §1.4)
+
+**Isolation:**
+- Fresh agent context — no access to main agent state (todos, knowledge, messages, handoffs)
+- No access to local SQLite or filesystem outside the sandbox working directory
+- Separated subprocess with seccomp/namespace isolation, restricted filesystem access (FR-0137)
+
+**Tool access:**
+- Exactly one tool: `review(decision: approve|deny, reason: string)`
+- No bash, read, edit, write, or any other tool
+- Calling `review` immediately emits the corresponding on-chain transaction and terminates the sandbox
+
+**Timeout:**
+- Fixed 30-minute wall-clock timeout
+- Timeout → no vote emitted (not a denial, not an abstention)
+- No-votes are excluded from quorum calculation and carry no penalty
+- Sandbox terminates cleanly; main agent resumes
+
+**Main agent behavior:**
+- Main agent branch pauses during sandbox execution
+- On sandbox completion (vote or timeout), main agent resumes its normal loop from the next iteration
+- Crash behavior: if sandbox crashes, same as timeout — no vote, main agent resumes
+
+**Deterministic precheck gating:**
+- Before sandbox launch, the system runs a deterministic precheck (manifest hash verification, object reachability, merge determinism, or topic-scope validation depending on the trigger)
+- Precheck failure → immediate rejection with reason code; sandbox is never launched
+- Precheck results are logged to audit trail
+
+**Conformance invariants:**
+- Identical precheck inputs produce identical precheck outcomes on all nodes
+- Sandbox timeout is measured by wall clock, but the resulting no-vote is deterministic
 
 ### Unsandboxed Execution (Agent Runtime)
 - **Scope:** Normal agent operation (C10)

@@ -2,7 +2,7 @@
 
 **Component:** C9 Policy Decision Point
 **Source ADRs:** ADR-0003 (PDP Deterministic Rule Chain)
-**Covered FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0117, FR-0118, FR-0119, FR-0120
+**Covered FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0111, FR-0117, FR-0118, FR-0119, FR-0120
 **Dependencies:** C1 Consensus Engine, C2 State Machine, C4 Governance Engine
 
 ---

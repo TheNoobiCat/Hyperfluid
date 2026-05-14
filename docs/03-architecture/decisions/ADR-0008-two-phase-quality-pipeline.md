@@ -19,4 +19,4 @@ Removed: Phase 1 (objective checks), quality-weighted payout, clawback mechanism
 - **Three-phase (original):** Rejected. Objective checks are redundant with reviewer verification. Quality-weighted payout is overengineered — fixed bounty split is simpler and less gameable.
 - **Single-phase (review only, no challenge):** Rejected. Challenge window is essential for fraud correction — without it, a majority of colluding reviewers could steal bounties.
 
-**Related:** FR-0161, FR-0162, FR-0148, FR-0149.
+**Related:** FR-0161, FR-0148, FR-0149.

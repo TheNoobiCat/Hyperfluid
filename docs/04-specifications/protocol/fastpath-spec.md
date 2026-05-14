@@ -103,7 +103,7 @@ FastPathProposalTx ─► proposed
 **Review flow:**
 1. Proposer submits FastPathProposalTx with topic_id, base_topic_head, proposed_head, and bundle manifest.
 2. Deterministic precheck validates: object graph reaches proposed_head, merge is reproducible, scope is topic-local.
-3. Review sandbox launched for each reviewer (fresh context, single review tool).
+3. Review sandbox launched for each reviewer per the canonical review sandbox specification in `trust-boundaries.md` §6 (fresh context, single `review` tool, 30-min timeout, no vote on timeout, main agent pauses).
 4. Reviewers produce approvals or denials.
 5. On 2f+1 weighted approvals, certificate is issued. Topic head advances.
 6. Challenge window opens: 144 blocks. Any eligible participant can submit FastPathChallengeTx with bond.

@@ -22,4 +22,4 @@ Removed: policy bundle match, role/trust check, ACL check, taint check, risk ste
 - **10-step original chain:** Rejected. Protocol should not be in the business of LLM safety.
 - **Pure permissionless (no PDP):** Rejected. Basic admission (signature, replay, quota, fee) is always required.
 
-**Related:** FR-0106, FR-0107, FR-0108, FR-0110, `component-model/components.md` C9.
+**Related:** FR-0106, FR-0107, FR-0108, `component-model/components.md` C9.

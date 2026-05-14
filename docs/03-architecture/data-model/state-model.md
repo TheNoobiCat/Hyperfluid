@@ -112,7 +112,7 @@ erDiagram
         bytes32 metadata_hash "SHA3-256 of gix-stored task description artifact"
         bytes32 sponsor_id "agent_id of sponsoring agent (optional, zero if not sponsored)"
         bytes32 requester_pubkey "pubkey of human user making the request (optional, zero if not applicable)"
-        string escrow_status "locked | released | refunded | bounty_redistributed | held_escrow"
+        string escrow_status "locked | released | refunded | bounty_redistributed"
     }
     REVIEW_ASSIGNMENT {
         bytes32 assignment_id PK "hash of task+reviewer+epoch"

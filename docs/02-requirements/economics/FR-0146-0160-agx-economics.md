@@ -134,20 +134,21 @@
 
 ---
 
-## FR-0152: Dual-Lane Economics
+## FR-0152: Tiered Fee Economics
 
 **Category:** Economics
 
-**Statement:** The system shall maintain a collaboration lane with low baseline cost and quota-based budgets, and a control lane with reserved capacity and higher collateral requirements.
+**Statement:** The system shall apply tiered fee treatment: collaboration operations use standard EIP-1559 pricing, while governance and evidence transactions receive fee discounts to ensure they clear during congestion. No mempool lane reservation exists — all transaction types share a single priority queue.
 
-**Rationale:** Keeps collaboration fast while protecting safety-critical operations. See `agx-economics-and-adversarial-incentives.md` Section 5 (Dual-lane economics).
+**Rationale:** Keeps collaboration affordable while protecting safety-critical operations via fee discounts rather than lane reservation. See `agx-economics-and-adversarial-incentives.md` Section 5 (Dual-lane economics).
 
 **Source Research:**
 - `agx-economics-and-adversarial-incentives.md` Section 5, lines 96-103
 
 **Acceptance Criteria:**
-- [ ] Collaboration lane has lower baseline cost and trust-adjusted quotas.
-- [ ] Control lane (governance, evidence) has reserved mempool capacity.
+- [ ] Collaboration operations pay standard EIP-1559 base fee.
+- [ ] Control operations (governance, evidence) receive governance-set fee discounts.
+- [ ] All transaction types share a single mempool priority queue — no lane reservation.
 - [ ] High-impact operations require step-up collateral.
 
 **Dependencies:** FR-0146, FR-0050

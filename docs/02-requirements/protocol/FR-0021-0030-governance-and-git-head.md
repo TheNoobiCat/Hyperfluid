@@ -112,19 +112,19 @@
 
 **Category:** Governance
 
-**Statement:** The system shall execute governance proposal review in an isolated sandbox subagent with fresh context, fixed system prompt, single `review` tool, and a 30-minute timeout.
+**Statement:** The system shall execute governance proposal review in the canonical review sandbox defined in `trust-boundaries.md` §6, with governance-specific trigger conditions below.
 
 **Rationale:** Isolates review from main agent context to prevent prompt injection and ensure focused evaluation. See `agx-committee-bft-and-governance.md` Section 5, lines 185-197.
 
 **Source Research:**
 - `agx-committee-bft-and-governance.md` Section 5, lines 185-197
 - `index.md` (Review Timeout Semantics)
+- `trust-boundaries.md` §6 (Canonical Review Sandbox)
 
 **Acceptance Criteria:**
-- [ ] Main agent branch pauses during review sandbox execution.
-- [ ] Sandbox has exactly one tool: `review(decision: approve|deny, reason)`.
-- [ ] Sandbox timeout of 30 minutes results in no vote (not penalized).
-- [ ] On `review(...)` call, runtime emits `GovernanceVoteTx` and terminates sandbox.
+- [ ] Review follows the canonical review sandbox specification in `trust-boundaries.md` §6 (fresh context, single `review` tool, 30-min timeout, no-vote on timeout, main agent pauses).
+- [ ] Governance-specific: on `review(approve|deny, reason)`, runtime emits `GovernanceVoteTx` and terminates sandbox.
+- [ ] Governance-specific: precheck validates bundle manifest hash, object reachability, and merge determinism before sandbox launch.
 
 **Dependencies:** FR-0021
 **Tags:** should-have

@@ -35,4 +35,6 @@ Further design discussion resolved three additional model decisions:
 - Allow "entirely novel" tasks without seed_ref: rejected — leads to topic sprawl and undermines the seed index as the canonical work taxonomy.
 - Multi-agent team formation for complex tasks: rejected — unnecessary complexity at launch; single-agent with independent reviewers covers all cases. Large work is decomposed into multiple independent tasks under the same seed.
 
-**Related:** FR-0062, FR-0068, FR-0080, FR-0084, FR-0088, FR-0192, agent-tools-spec.md, agent-runtime-spec.md, collaboration-spec.md, user-task-submission-and-sponsorship.md
+**Amendment (2026-05-14):** Point 7 ("Eliminate team formation and subtask splitting") is partially superseded by FR-0201 (Task Splitting with Dependency DAG). Task splitting was reintroduced: a task may be split into child subtasks forming a dependency DAG, where each child is a single-agent task. This preserves the single-agent-per-task model while enabling parallel work decomposition. Multi-agent team formation remains rejected — splitting is not team formation.
+
+**Related:** FR-0062, FR-0068, FR-0080, FR-0084, FR-0192, FR-0201, agent-tools-spec.md, agent-runtime-spec.md, collaboration-spec.md, user-task-submission-and-sponsorship.md

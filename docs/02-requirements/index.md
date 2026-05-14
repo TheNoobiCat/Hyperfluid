@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Last updated:** 2026-05-06  
-**Total requirements:** 198 (168 FR + 30 NFR)  
+**Total requirements:** 202+ (172+ FR + 30 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -137,7 +137,6 @@ Located in `docs/02-requirements/runtime/`
   - FR-0085: Swarm Anti-Abuse Mode
   - FR-0086: Layered Version Control
   - FR-0087: Review Sandbox for Topic Merges
-  - FR-0088: Single-Agent Task Execution
   - FR-0089: Notification Summarizer
   - FR-0090: Collaboration Output Quality Incentives
   - FR-0201: Task Splitting with Dependency DAG
@@ -205,8 +204,8 @@ Located in `docs/02-requirements/security/`
   - FR-0139: Telemetry Aggregation Robustness
   - FR-0140: Temporal Binding of Telemetry
   - FR-0141: Independent Policy Gateway Reconciliation
-  - FR-0142: Incident State Machine with Signed Evidence
-  - FR-0143: Emergency Mode Parameter Overrides
+  - FR-0142: Incident State Machine with Signed Evidence (superseded)
+  - FR-0143: Emergency Mode Parameter Overrides (superseded)
   - FR-0144: False-Alarm Reporter Penalties
   - FR-0145: Fee Market Congestion Recovery
 

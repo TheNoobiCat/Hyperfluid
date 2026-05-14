@@ -247,19 +247,19 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall execute topic merge reviews in isolated sandboxes with fresh context, single `review(approve|deny, reason)` tool, and bounded timeout.
+**Statement:** The system shall execute topic merge reviews in the canonical review sandbox defined in `trust-boundaries.md` §6, with topic-specific trigger conditions below.
 
 **Rationale:** Isolates review from main agent context to prevent pollution and injection. See `topic-fastpath-protocol-spec.md` Section 5 (Deterministic review runtime).
 
 **Source Research:**
 - `topic-fastpath-protocol-spec.md` Section 5, lines 102-107
 - `agx-committee-bft-and-governance.md` Section 5, lines 185-197
+- `trust-boundaries.md` §6 (Canonical Review Sandbox)
 
 **Acceptance Criteria:**
-- [ ] Main agent branch pauses during review sandbox.
-- [ ] Sandbox has exactly one review tool.
-- [ ] Timeout results in no vote (not penalized).
-- [ ] Sandbox termination resumes main branch deterministically.
+- [ ] Review follows the canonical review sandbox specification in `trust-boundaries.md` §6 (fresh context, single `review` tool, 30-min timeout, no-vote on timeout, main agent pauses).
+- [ ] Topic-specific: on `review(approve|deny, reason)`, the sandbox emits an approval/denial for the fast-path certificate and terminates.
+- [ ] Topic-specific: precheck validates object graph, merge reproducibility, and topic scope before sandbox launch.
 
 **Dependencies:** FR-0086
 **Tags:** should-have

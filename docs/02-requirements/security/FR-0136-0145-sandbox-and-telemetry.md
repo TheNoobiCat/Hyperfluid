@@ -133,7 +133,9 @@
 
 ---
 
-## FR-0142: Incident State Machine with Signed Evidence
+## FR-0142: Incident State Machine with Signed Evidence (SUPERSEDED)
+
+> **Superseded by ADR-0012.** Emergency mode and circuit-breaker hierarchy were removed. The EIP-1559 base fee mechanism is the sole congestion mechanism. See `incident-response-spec.md` §1 and FR-0145 for the current approach.
 
 **Category:** Security
 
@@ -146,17 +148,16 @@
 - `decentralized-incident-response-and-recovery.md` Section 6, Tradeoff 1
 
 **Acceptance Criteria:**
-- [ ] Enter Emergency if finality_lag > 60 seconds for 3 consecutive blocks.
-- [ ] Exit Emergency if finality_lag < 30 seconds for 10 consecutive blocks.
-- [ ] Trigger requires metric breach + persistence + minimum independent reporter count + signed evidence validity.
-- [ ] No human authority required for mode transition.
+- (superseded — no implementation required)
 
 **Dependencies:** FR-0060
-**Tags:** must-have
+**Tags:** superseded
 
 ---
 
-## FR-0143: Emergency Mode Parameter Overrides
+## FR-0143: Emergency Mode Parameter Overrides (SUPERSEDED)
+
+> **Superseded by ADR-0012.** Emergency mode and circuit-breaker hierarchy were removed. The EIP-1559 base fee mechanism is the sole congestion mechanism. See `incident-response-spec.md` §1 and FR-0145 for the current approach.
 
 **Category:** Security
 
@@ -168,13 +169,10 @@
 - `decentralized-incident-response-and-recovery.md` Section 5, lines 96-103
 
 **Acceptance Criteria:**
-- [ ] Emergency mode parameter overrides are deterministic and predefined.
-- [ ] Evidence and control lanes maintain guaranteed capacity.
-- [ ] Low-trust fast-path actions are temporarily frozen.
-- [ ] Overrides apply network-wide without per-node configuration.
+- (superseded — no implementation required)
 
 **Dependencies:** FR-0142
-**Tags:** must-have
+**Tags:** superseded
 
 ---
 

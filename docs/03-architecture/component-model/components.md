@@ -140,7 +140,7 @@ flowchart TD
 
 **Responsibility:** Deterministic policy evaluation for all network-mutating actions. Schema validation, signature verification, replay protection, quota enforcement, fee check, audit logging.
 **Owned state:** Consumed plan IDs, quota counters, audit log.
-**Key FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0110, FR-0111, FR-0112, FR-0113, FR-0114, FR-0115, FR-0116, FR-0117, FR-0118, FR-0119, FR-0120
+**Key FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0111, FR-0112, FR-0113, FR-0115, FR-0117, FR-0118, FR-0119, FR-0120
 
 ### C10: Agent Runtime
 
@@ -152,7 +152,7 @@ flowchart TD
 
 **Responsibility:** Task board with soft leases, bounty escrow lifecycle (lock on creation, release/refund on resolution), topic lifecycle, inbox buckets, priority scoring, message quotas, notification summarizer, communication routing, trust ladder.
 **Owned state:** Task board, lease registry, bounty escrow balances, topic metadata, inbox state, trust stages, abuse records.
-**Key FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b
+**Key FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0089, FR-0090, FR-0091-0105, FR-0153b
 
 ### C12: Economics & Incentives
 

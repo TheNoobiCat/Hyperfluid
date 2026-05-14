@@ -1,7 +1,7 @@
 # Stage 00: Foundation
 
 ## Inputs
-- From previous stage: Layer 4 specifications (14 specs, frozen), Layer 3 architecture (12 components, 12 ADRs), Layer 2 requirements (202 FR/NFR).
+- From previous stage: Layer 4 specifications (14 specs, frozen), Layer 3 architecture (12 components, 16 ADRs), Layer 2 requirements (202+ FR/NFR).
 - External: Rust toolchain stable, `cargo`, `git`, `just` (command runner), CI platform (GitHub Actions or equivalent).
 
 ## Outputs

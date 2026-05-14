@@ -208,7 +208,7 @@
 
 **Acceptance Criteria:**
 - [ ] Promotion bundle includes topic merge certificate, artifact hash chain, and diff summary.
-- [ ] Bundle is content-addressed and signed by topic coordinators.
+- [ ] Bundle is content-addressed and signed by the promotion bridge validators.
 - [ ] Governance proposal can reference promotion bundle hash for canonical adoption.
 
 **Dependencies:** FR-0031, FR-0021

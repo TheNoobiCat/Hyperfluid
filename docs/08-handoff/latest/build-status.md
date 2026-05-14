@@ -232,8 +232,8 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | `seed_ref` made required; no orphan tasks; PDP-enforced | Design | `user-task-submission-and-sponsorship.md`, `collaboration-spec.md`, FR-0084, FR-0081 |
 | New seeds enter via `git:head` governance | Design | `/ideas/README.md`, `user-task-submission-and-sponsorship.md`, FR-0084, `GLOSSARY.md` |
 | No "entirely novel" tasks — removed from user-task-submission doc | Fix | `user-task-submission-and-sponsorship.md` §5, §7, §10 |
-| Single-agent per task; no team formation; no subtask splitting | Design | `collaboration-layer-parallel-teams.md`, `collaboration-spec.md`, FR-0080, FR-0088, ADR-0013 |
-| Bounty goes entirely to single worker; reviewers paid via review market | Design | `collaboration-spec.md`, FR-0088 |
+| Single-agent per task (content merged into FR-0080) | Design | `collaboration-layer-parallel-teams.md`, `collaboration-spec.md`, FR-0080, ADR-0013 |
+| Bounty goes entirely to single worker; reviewers paid via review market | Design | `collaboration-spec.md`, FR-0080 |
 | Airdrop agent creates many small tasks per seed | Clarification | `agx-economics-and-adversarial-incentives.md`, FR-0192, `GLOSSARY.md` |
 | System prompt instructs agents on seed requirement | Design | `agent-runtime-spec.md` §3.2 |
 | `parent_seed_ref` → `seed_ref` terminology unified | Fix | `phase-02-status.md` |

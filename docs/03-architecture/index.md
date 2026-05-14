@@ -82,7 +82,7 @@ Located in `docs/03-architecture/decisions/`
 | ADR | Title | Status |
 |-----|-------|--------|
 | ADR-0001 | 12-Component Architecture Decomposition | Accepted |
-| ADR-0002 | Three-Layer Trust Architecture | Accepted |
+| ADR-0002 | Three-Zone Security Architecture | Accepted |
 | ADR-0003 | Policy Decision Point as Deterministic Rule Chain | Accepted |
 | ADR-0004 | Agent Runtime Process Separation from Node | Accepted |
 | ADR-0005 | Content-Addressed State with SMT | Accepted |
@@ -91,7 +91,7 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0009 | EIP-1559 Fee Market | Accepted |
 | ADR-0010 | Two-Stage Trust Ladder | Accepted |
 | ADR-0011 | Review Sandbox Isolation | Accepted |
-| ADR-0012 | Congestion Response via EIP-1559 Base Fee | Superseded |
+| ADR-0012 | Congestion Response via EIP-1559 Base Fee | Accepted |
 | ADR-0013 | Expanded Agent Tool Set, CLI Seed Index Discovery, and Seed-Centric Task Model | Accepted |
 | ADR-0014 | User Task Submission and Agent Sponsorship | Accepted |
 | ADR-0015 | Stake Delegation | Accepted |
@@ -140,6 +140,6 @@ All 202 requirements map to at least one component. Zero orphans.
 | Component boundaries documented | PASS |
 | Trust boundaries documented | PASS |
 | Interfaces deterministic | PASS |
-| ADRs recorded for all significant decisions | PASS (14 ADRs) |
+| ADRs recorded for all significant decisions | PASS (16 ADRs) |
 
 **Gate result: READY FOR LAYER 4 (Specifications).**

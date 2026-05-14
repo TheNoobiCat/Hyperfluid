@@ -122,19 +122,15 @@ passed ──(epoch boundary, atomic execution)──► executed
 
 ### 2.1 Purpose
 
-Define the isolated sandbox subagent for governance proposal review.
+Define the isolated sandbox subagent for governance proposal review. Governance review uses the canonical review sandbox defined in `trust-boundaries.md` §6. Only governance-specific variations are listed here.
 
 ### 2.2 Normative Behavior
 
-- The system MUST execute governance proposal review in an isolated sandbox subagent.
-- The sandbox MUST have fresh context (no access to main agent state).
-- The sandbox MUST have exactly one tool: `review(decision: approve|deny, reason: string)`.
-- The sandbox MUST have a timeout of 30 minutes.
-- Timeout MUST result in no vote (not penalized, not counted toward quorum).
-- Main agent branch MUST pause during sandbox execution.
-- On review tool invocation, the runtime MUST emit GovernanceVoteTx and terminate the sandbox.
-- Deterministic prechecks (manifest hash verification, object reachability, merge determinism) MUST complete before sandbox launch.
-- Precheck failure MUST reject the proposal without sandbox execution.
+- The system MUST execute governance proposal review using the canonical review sandbox per `trust-boundaries.md` §6.
+- The sandbox MUST be isolated, single-tool, 30-minute timeout, no-vote semantics — all per the canonical specification.
+- Governance-specific: on `review(approve|deny, reason)`, the runtime MUST emit `GovernanceVoteTx` and terminate the sandbox.
+- Governance-specific: deterministic prechecks (manifest hash verification, object reachability, merge determinism per FR-0027) MUST complete before sandbox launch.
+- Governance-specific: precheck failure MUST reject the proposal without sandbox execution.
 
 ### 2.3 Data Structures
 

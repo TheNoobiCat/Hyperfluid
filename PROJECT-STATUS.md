@@ -242,4 +242,13 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-14 (ADR-0016: Ockam→clatter+ml-dsa; Stage 01 complete; bug audit complete — B-24 fixed)*
+## Open Design Questions
+
+| # | Question | Source | Status |
+|---|----------|--------|--------|
+| Q1 | **FR-0142/FR-0143 have no spec implementation.** `incident-response-spec.md` only covers FR-0145 (fee market congestion). FR-0142 (Incident State Machine) and FR-0143 (Emergency Mode Parameter Overrides) were designed for the circuit-breaker hierarchy which ADR-0012 removed. Should these FRs be marked superseded, or should a new spec be written for them? | `docs/04-specifications/security/incident-response-spec.md` | **RESOLVED** — Marked superseded in FR file and index. EIP-1559 base fee is sole congestion mechanism per `incident-response-spec.md` §1. |
+| Q2 | **FR-0026 / FR-0087 (Review Sandbox) near-identical specs.** Both define review sandboxes with identical mechanics (fresh context, single `review` tool, 30-min timeout). FR-0026 targets governance proposals, FR-0087 targets topic merges. Should they cross-reference a single definition to prevent drift? | `docs/02-requirements/protocol/FR-0021-0030-governance-and-git-head.md`, `docs/02-requirements/runtime/FR-0076-0090-collaboration-layer.md` | **RESOLVED** — Canonical definition in `trust-boundaries.md` §6; both FRs and both specs cross-reference it. |
+
+---
+
+*Last updated: 2026-05-14 (Document audit: stale FR references cleaned up, ADR count fixed, ClusterAncestorType removed)*

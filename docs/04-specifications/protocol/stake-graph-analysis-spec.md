@@ -46,12 +46,6 @@ struct FundingEdge {
     height: u64,                       // block of transaction
 }
 
-enum ClusterAncestorType {
-    AirdropAgent,                      // genesis airdrop distribution
-    DirectFunding,                     // direct TransferTx between accounts
-    IndirectFunding,                   // chain of 2+ transfers
-}
-
 struct ClusterDetectionResult {
     epoch: u64,
     clusters: Vec<ClusterRecord>,

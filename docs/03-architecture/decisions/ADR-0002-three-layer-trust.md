@@ -1,4 +1,4 @@
-## ADR-0002: Three-Layer Trust Architecture
+## ADR-0002: Three-Zone Security Architecture
 
 **Status:** accepted
 

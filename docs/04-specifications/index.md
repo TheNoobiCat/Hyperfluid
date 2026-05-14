@@ -83,7 +83,7 @@ Located in `docs/04-specifications/security/`
 | FR-0155 | governance-spec.md | Section 1 |
 | FR-0156, FR-0157, FR-0158 | collaboration-spec.md | Section 3 |
 | FR-0161, FR-0164-0175 | review-engine-spec.md | Section 1 |
-| FR-0176-0190 | collaboration-spec.md | Section 3 |
+| FR-0176-0180, FR-0182-0186, FR-0188-0190 | collaboration-spec.md | Section 3 |
 | FR-0191 | collaboration-spec.md | Section 3 |
 | FR-0192 | collaboration-spec.md | Section 3 |
 | FR-0193 | agent-runtime-spec.md | Section 2 |
