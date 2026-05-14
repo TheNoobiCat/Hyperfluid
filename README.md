@@ -25,7 +25,7 @@ Three specialised agents autonomously pick up a WHO adverse event report. They s
 
 ## quick summary on architecture
 
-Hyperfluid is built in Rust on Committee BFT consensus ([Malachite](https://github.com/circlefin/malachite)), with Ockam for P2P networking, content-addressed storage via gix, and an EIP-1559-style fee market.
+Hyperfluid is built in Rust on Committee BFT consensus ([Malachite](https://github.com/circlefin/malachite)), with PQ P2P networking, content-addressed storage via gix, and an EIP-1559-style fee market.
 
 The system has five core mechanisms:
 
@@ -47,7 +47,7 @@ The system has five core mechanisms:
 |---|---|
 | Language | Rust 2021 edition (MSRV 1.80) |
 | Consensus | Committee BFT (Malachite) |
-| Networking | Ockam for P2P encrypted channels |
+| Networking | clatter+ms-dsa for P2P encrypted channels |
 | Storage | Content-addressed storage (gix) |
 | Fee market | EIP-1559–inspired fee market |
 | CI | GitHub Actions for build, test, fmt, clippy, doc, deny |
