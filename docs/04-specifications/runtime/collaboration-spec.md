@@ -43,18 +43,15 @@ struct Task {
     primary_owner: Option<[u8; 32]>,
     status: TaskStatus,
     bounty_agx: u128,              // escrowed at creation in atto-AGX, released on completion
-    coordinator_id: Option<[u8; 32]>,   // agent who performed the split (if split from parent)
-    held_coordinator_fee: Option<u128>, // fee held until all children Done (if split from parent)
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
-    escrow_status: EscrowStatus,   // locked | bounty_redistributed | held_escrow | released | refunded
+    escrow_status: EscrowStatus,   // locked | bounty_redistributed | released | refunded
 }
 
 enum EscrowStatus {
     Locked,
-    BountyRedistributed,  // parent split into children
-    HeldEscrow,            // coordinator fee held until children done
+    BountyRedistributed,  // parent split into children; children in flight
     Released,
     Refunded,
 }
@@ -126,11 +123,11 @@ Created by agent [bounty escrowed from funder balance] ─► Open
   │     ├── lease expires (no heartbeat) ─► Open [shadow claim promoted if exists]
   │     └── release_task (owner) ─► Open
   │
-  └── SplitTaskTx [by owner or any trusted agent if Open] ─► Decomposed
-        │     [parent bounty redistributed to children + coordinator fee held]
+  └── SplitTaskTx [by funder or primary_owner] ─► Decomposed
+        │     [parent bounty redistributed to children in full]
         │
-        ├── last child Done ─► Done [coordinator fee released to coordinator_id]
-        └── all children expired/abandoned ─► Open [parent reopens, split voided, coordinator fee forfeited]
+        ├── last child Done ─► Done [terminal]
+        └── all children expired/abandoned ─► Done [parent is terminal, no escrow left]
 ```
 
 **Dependency-aware claiming:**
@@ -143,16 +140,18 @@ Child task with depends_on: [D]
 
 **Split execution (SplitTaskTx — no separate review pipeline):**
 
-- Only the `primary_owner` can split if the task is **Claimed** or **InProgress**.
-- Any `trusted` agent can split if the task is **Open**.
-- The transaction specifies: children (title_hash, bounty_share_pct, depends_on, required_skills_hash) and coordinator_fee_pct (0-5%).
+- Only the **funder** or **primary_owner** can split.
+- If the task is **Claimed** or **InProgress**, the `primary_owner` may split.
+- If the task is **Open**, the `funder` may split.
+- The transaction specifies: children (title_hash, bounty_share_pct, depends_on, required_skills_hash).
 - The state machine atomically:
-  1. Validates: sum of shares + fee == 100%, dependency graph is acyclic, caller is authorized.
+  1. Validates: sum of shares == 100%, dependency graph is acyclic, caller is authorized.
   2. Sets parent status → Decomposed.
   3. Creates child tasks with status Open and their allocated escrow.
-  4. Holds the coordinator fee on `parent.held_coordinator_fee`.
+  4. The parent `bounty_agx` is redistributed in full to children.
+- Gas cost MUST scale linearly with child count and dependency edge count to prevent dense-DAG bloat attacks: `gas_cost = base_cost + per_child * N + per_edge * E`.
 
-No review approval is needed. The market enforces split quality: if the bounties are unfair or the descriptions are vague, children will sit unclaimed, the coordinator fee is never released, and the coordinator wasted their transaction fee and locked AGX.
+No review approval is needed. The market enforces split quality: if the bounties are unfair or the descriptions are vague, children will sit unclaimed. The splitter wasted their transaction fee for nothing.
 
 **Bounty escrow lifecycle (with split redistribution):**
 
@@ -166,9 +165,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
   │     └── BountyRedistributed
   │         ├── Child task A: EscrowLocked [bounty_share_A AGX]
   │         ├── Child task B: EscrowLocked [bounty_share_B AGX]
-  │         ├── ... [each child gets its share]
-  │         └── Coordinator fee: HeldEscrow [held_coordinator_fee AGX]
-  │             └── [last child Done] → EscrowReleased to coordinator_id
+  │         ├── ... [each child gets its share; parent bounty_agx set to 0]
   │
   ├── [task expires unclaimed, no active lease for N epochs]
   │     └── EscrowRefunded [bounty returned to funder minus cancellation fee]
@@ -181,7 +178,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 ```
 
 - A task MUST NOT transition to Open until `bounty_agx` is successfully deducted from the funder's balance.
-- Split approval atomically redistributes the parent's escrow: each child receives its allocated share, and the coordinator fee is held. The parent's `bounty_agx` is set to 0 after redistribution.
+- Split approval atomically redistributes the parent's escrow in full: each child receives its allocated share. The parent's `bounty_agx` is set to 0 after redistribution.
 - Bounty escrow status MUST be visible in task queries.
 - Refund transactions for expired or failed tasks MUST be processed within 1 block of the triggering event.
 
@@ -195,22 +192,23 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 
 **Single-agent execution model:**
 - Each leaf task (status != Decomposed) is executed by exactly one agent.
-- A task MAY be split into child subtasks via a `SplitTaskTx`. The task owner splits if claimed; any trusted agent splits if Open. No separate approval required — market forces enforce quality.
-- The proposer (coordinator) receives a fee of up to 5% of the parent bounty, held in escrow until all children are Done. This compensates the decomposition work without creating a permanent hierarchy.
+- A task MAY be split into child subtasks via a `SplitTaskTx`. Only the **funder** (if Open) or **primary_owner** (if Claimed/InProgress) may split. No separate approval required — market forces enforce quality.
+- No coordinator fee exists. The entire parent bounty is subdivided among children. This eliminates any skimming incentive.
 - Child tasks follow the same lifecycle as top-level tasks: claim, work, review, payout. Each child has its own bounty allocation subdivided from the parent.
 - Reviewers are assigned independently via the review market (FR-0161, review-engine-spec.md). They are paid from the review market mechanism, not from the task bounty.
 - The worker of a leaf task receives the child's escrowed bounty on successful completion and review pass.
-- The coordinator fee is released when all children reach Done. If the split is voided (all children expired/abandoned), the coordinator fee is forfeited and the parent reopens.
+- When all children reach Done, the parent transitions to Done (terminal). If all children expire or are abandoned, the parent also transitions to Done — no escrow remains to reopen.
 
 ### 1.5 Failure Behavior
 
 - **Lease hoarding:** Per-agent lease caps prevent monopolization. Repeated timeouts escalate penalties.
 - **Silent abandonment:** Proof-carrying heartbeats ensure progress evidence. Empty heartbeat → lease extension rejected → task returns to pool.
-- **Invalid split:** The sum of child bounty shares + coordinator fee MUST equal 100% of parent bounty. If not, `SplitTaskTx` is rejected.
+- **Invalid split:** The sum of child bounty shares MUST equal 100% of parent bounty. If not, `SplitTaskTx` is rejected.
 - **Cycle in dependency graph:** `SplitTaskTx` with cyclic `depends_on` is rejected at transaction validation. The state machine checks for cycles.
-- **Coordinator abandons split:** Coordinator has no ongoing responsibility after the split. Children are independent. The coordinator fee is released when the last child finishes. If the coordinator disappears, children complete independently — the fee is released when they do.
-- **Voided split:** If all children expire or are abandoned (no lease taken for N epochs), the parent task returns to Open. The coordinator fee is forfeited (returned to funder balance). Any child that did complete keeps its payout.
-- **Split quality enforced by market:** If a coordinator splits badly (unfair bounties, vague descriptions, excessive fee), children sit unclaimed. The coordinator fee is never released. The coordinator wastes their transaction fee and locks AGX for nothing. This natural punishment replaces any need for a separate approval pipeline.
+- **Splitter abandons split:** The splitter has no ongoing responsibility after the split. Children are independent and complete on their own. Children that complete keep their escrowed payout. No coordinator fee exists to hold or release.
+- **Voided split:** If all children expire or are abandoned (no lease taken for N epochs), the parent transitions to Done (terminal — no escrow remains to reopen). Any child that did complete keeps its payout.
+- **Split quality enforced by market:** If a splitter creates unfair bounties or vague descriptions, children sit unclaimed. The splitter wastes their transaction fee for nothing. This natural punishment replaces any need for a separate approval pipeline.
+- **Dense-DAG bloat attack:** Gas cost for `SplitTaskTx` scales linearly with child count and dependency edge count, preventing economic abuse of the state machine via oversized dependency graphs.
 - **Task stall:** No shadow claimant → task returns to open pool. Lease TTL and collateral penalties increase on repeated timeouts (see LeasePenalty schedule).
 - **Lease collateral loss:** 1 timeout = warning; 2 timeouts = 50% lease budget reduction; 3 timeouts = 90% reduction + trust regression penalty.
 

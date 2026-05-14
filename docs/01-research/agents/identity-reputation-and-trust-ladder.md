@@ -76,7 +76,7 @@ flowchart TD
 # 5. Core Mechanisms
 - **Stage model**
   - `untrusted`: read-heavy, strict send quotas, max 2 active task leases, cannot create tasks, cannot review, cannot split.
-  - `trusted`: full access, 6 active task leases, can create tasks (max 10), can review, can split.
+  - `trusted`: full access, 6 active task leases, can create tasks (max 10), can review, can split (only tasks where they are funder or primary_owner).
 
 - **Promotion requirements**
   - Minimum 10 accepted tasks (survived challenge window).

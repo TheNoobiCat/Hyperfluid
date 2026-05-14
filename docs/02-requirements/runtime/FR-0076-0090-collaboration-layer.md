@@ -314,23 +314,23 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall allow task splitting via a `SplitTaskTx` transaction. The task owner may split if the task is claimed; any `trusted` agent may split if the task is Open. The split atomically redistributes the parent's escrowed bounty to child subtasks and holds a coordinator fee (max 5%). No separate review pipeline is needed — the market enforces split quality.
+**Statement:** The system shall allow task splitting via a `SplitTaskTx` transaction. Only the funder (if Open) or primary_owner (if Claimed/InProgress) may split. The split atomically redistributes the parent's escrowed bounty in full to child subtasks. No coordinator fee exists — the entire bounty is subdivided among children. No separate review pipeline is needed — the market enforces split quality.
 
-**Rationale:** Enables unbounded parallel work without multi-agent teams. Agents autonomously decompose large tasks into independently claimable subtasks. The coordinator fee compensates the decomposition work without creating permanent hierarchy. Split quality is enforced by natural market incentives: bad splits sit unclaimed, coordinator fee is never released.
+**Rationale:** Enables unbounded parallel work without multi-agent teams. Agents autonomously decompose large tasks into independently claimable subtasks. No coordinator fee exists to prevent skimming: the splitter has no financial incentive to split badly, and any fee would come from the funder's escrow, creating a moral hazard. Split quality is enforced by natural market incentives: bad splits sit unclaimed.
 
 **Source Research:**
 - `collaboration-spec.md` Section 1 (Decentralized Task Board)
 - `collaboration-layer-parallel-teams.md` Section 5 (Single-agent execution model)
 
 **Acceptance Criteria:**
-- [ ] `SplitTaskTx` includes: parent_task_id, children (title_hash, bounty_share_pct, depends_on, required_skills_hash), coordinator_fee_pct (0-5%).
-- [ ] Sum of child bounty shares + coordinator_fee_pct MUST equal 100%.
+- [ ] `SplitTaskTx` includes: parent_task_id, children (title_hash, bounty_share_pct, depends_on, required_skills_hash).
+- [ ] Sum of child bounty shares MUST equal 100%. No coordinator fee.
 - [ ] Dependency graph MUST be acyclic (cycles rejected at transaction validation).
-- [ ] Authorization: if parent is Claimed/InProgress, only primary_owner may split. If Open, any trusted agent may split.
+- [ ] Authorization: if parent is Claimed/InProgress, only primary_owner may split. If Open, only funder may split.
 - [ ] On execution: parent → Decomposed, children created with status Open, escrow redistributed atomically.
 - [ ] A child with non-empty `depends_on` is NOT claimable until all dependencies are Done.
-- [ ] Coordinator fee is released when the last child reaches Done.
-- [ ] If all children expire/are abandoned, split is voided, coordinator fee forfeited, parent reopens.
+- [ ] Gas cost MUST scale linearly with child count and dependency edge count.
+- [ ] If all children expire/are abandoned, parent transitions to Done (terminal, no escrow remains). Any child that did complete keeps its payout.
 - [ ] No separate proposal lifecycle or review approval exists for splits.
 
 **Dependencies:** FR-0076, FR-0087
