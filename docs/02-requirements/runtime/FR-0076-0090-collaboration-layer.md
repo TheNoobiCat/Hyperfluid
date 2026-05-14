@@ -47,7 +47,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall cap active primary leases by trust stage: untrusted 0, trusted 6.
+**Statement:** The system shall cap active primary leases by trust stage: untrusted 2, trusted 6.
 
 **Rationale:** Bounds blast radius of lease hoarding attacks. See `collaboration-layer-parallel-teams.md` Section 5 (Lease and task defaults).
 
@@ -58,7 +58,7 @@
 **Acceptance Criteria:**
 - [ ] Lease claim request is rejected if agent already holds maximum allowed primary leases.
 - [ ] Caps are enforced at the policy gate, not by agent self-reporting.
-- [ ] Repeated lease expiry without deliverables causes reputation/bond penalties.
+- [ ] Repeated lease expiry without deliverables causes trust regression/bond penalties.
 
 **Dependencies:** FR-0076, FR-0096
 **Tags:** must-have

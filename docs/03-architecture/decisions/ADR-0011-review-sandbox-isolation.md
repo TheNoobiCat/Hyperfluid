@@ -19,6 +19,6 @@
 
 **Alternatives considered:**
 - **Review in main agent context:** Rejected because prompt injection in proposal content could manipulate the reviewer. Taint tracking (FR-0114) helps but does not fully isolate.
-- **Fully automated review (no agent):** Rejected because some review dimensions (design quality, architecture coherence) require agent-level reasoning. Automated objective checks (Phase 1 of FR-0163) cover deterministic validation.
+- **Fully automated review (no agent):** Rejected because some review dimensions (design quality, architecture coherence) require agent-level reasoning.
 
 **Related:** FR-0026, FR-0087, NFR-0007, `trust-boundaries.md` Section 6.

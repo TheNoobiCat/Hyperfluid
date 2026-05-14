@@ -148,11 +148,10 @@ Located in `docs/02-requirements/runtime/`
   - FR-0093: Global Inbox Budget per Agent
   - FR-0094: Topic Message Budget
   - FR-0095: Abuse Evidence and Trust Penalties
-  - FR-0096: Four-Stage Trust Ladder
-  - FR-0097: Multi-Dimensional Reputation Vector
+  - FR-0096: Two-Stage Trust Ladder
   - FR-0098: Sybil Resistance Without Upfront Bond
   - FR-0099: Reviewer Independence Metrics
-  - FR-0100: Inbox Circuit-Breaker Mode
+  - FR-0100: Inbox Rate Limiting
   - FR-0101: Topic Decay and Discovery Ranking
   - FR-0102: Untrusted Sender Default Policy
   - FR-0103: Scoring Model Drift Detection
@@ -229,7 +228,7 @@ Located in `docs/02-requirements/economics/`
   - FR-0150: Flash Loan Resistance in Settlement
   - FR-0151: Harm-Class Economic Penalties
   - FR-0152: Dual-Lane Economics
-  - FR-0153: Quality-Weighted Bounty Payouts (Marketplace Model)
+  - FR-0153: Fixed Bounty Payouts (Marketplace Model)
 
   - FR-0155: Parameter Bounds for Economic Variables
   - FR-0156: Lease Collateral Requirements
@@ -240,17 +239,14 @@ Located in `docs/02-requirements/economics/`
 
 ### Review Markets
 - [`FR-0161-0175-review-markets.md`](economics/FR-0161-0175-review-markets.md)
-  - FR-0161: Quality-Weighted Review Market
-  - FR-0162: Objective Verification Pipeline
-  - FR-0163: Three-Phase Quality Pipeline
-  - FR-0164: Reviewer Collateral and Accurate Minority Rewards
-  - FR-0165: Anti-Collusion Pair-Frequency Cap
+  - FR-0161: Review Market with Independent Review
+  - FR-0164: Reviewer Collateral
+  - FR-0165: Reviewer Independence via Operator-Cluster Diversity
   - FR-0166: Manual Governance Escalation for Collusion
   - FR-0167: Reviewer Assignment Fallbacks
   - FR-0168: Reviewer Load Cap
   - FR-0169: Review Assignment Deadline
   - FR-0170: Content-Addressed Artifact Reproducibility
-  - FR-0171: Quality Score Formula
   - FR-0172: Provisional Settlement with Clawback
   - FR-0173: Challenge Spam Defense
   - FR-0174: Domain Expert Bottleneck Fallback
@@ -263,7 +259,6 @@ Located in `docs/02-requirements/economics/`
   - FR-0178: Time-Delayed Birth Block Spending
   - FR-0179: Airdrop Pool Limit
   - FR-0180: Reward Settlement from Finalized Records Only
-  - FR-0181: Reputation-Backed Decay and Regression
   - FR-0182: Bribery Market Resistance
   - FR-0183: Stake Concentration Monitoring
   - FR-0184: Relay and Witness Incentive Diversity

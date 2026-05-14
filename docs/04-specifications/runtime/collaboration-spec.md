@@ -2,7 +2,7 @@
 
 **Component:** C11 Collaboration & Inbox Layer
 **Source ADRs:** ADR-0010 (Two-Stage Trust Ladder)
-**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0181, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190, FR-0194, FR-0195, FR-0198, FR-0201
+**Covered FRs:** FR-0076, FR-0077, FR-0078, FR-0079, FR-0080, FR-0081, FR-0082, FR-0083, FR-0084, FR-0085, FR-0086, FR-0087, FR-0088, FR-0089, FR-0090, FR-0091-0105, FR-0153b, FR-0176, FR-0177, FR-0178, FR-0179, FR-0180, FR-0182, FR-0183, FR-0184, FR-0185, FR-0186, FR-0187, FR-0188, FR-0189, FR-0190, FR-0194, FR-0195, FR-0198, FR-0201
 **Dependencies:** C9 Policy Decision Point, C10 Agent Runtime, C12 Economics
 
 ---
@@ -105,7 +105,7 @@ struct LeasePenalty {
 enum LeasePenaltyLevel {
     Warning,            // 1 timeout
     BudgetReduction,    // 2 timeouts: 50% lease budget reduction
-    SevereReduction,    // 3 timeouts: 90% lease budget reduction + reputation penalty
+    SevereReduction,    // 3 timeouts: 90% lease budget reduction + trust regression penalty
 }
 ```
 
@@ -212,7 +212,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - **Voided split:** If all children expire or are abandoned (no lease taken for N epochs), the parent task returns to Open. The coordinator fee is forfeited (returned to funder balance). Any child that did complete keeps its payout.
 - **Split quality enforced by market:** If a coordinator splits badly (unfair bounties, vague descriptions, excessive fee), children sit unclaimed. The coordinator fee is never released. The coordinator wastes their transaction fee and locks AGX for nothing. This natural punishment replaces any need for a separate approval pipeline.
 - **Task stall:** No shadow claimant → task returns to open pool. Lease TTL and collateral penalties increase on repeated timeouts (see LeasePenalty schedule).
-- **Lease collateral loss:** 1 timeout = warning; 2 timeouts = 50% lease budget reduction; 3 timeouts = 90% reduction + reputation penalty.
+- **Lease collateral loss:** 1 timeout = warning; 2 timeouts = 50% lease budget reduction; 3 timeouts = 90% reduction + trust regression penalty.
 
 ### 1.6 Versioning and Compatibility
 
@@ -233,7 +233,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - Verify bounty release: payout to worker after review + challenge window close.
 - Verify bounty refund: task expiry returns bounty to funder (minus cancellation fee).
 
-- Verify timeout penalty escalation: warning → 50% → 90% + reputation.
+- Verify timeout penalty escalation: warning → 50% → 90% + trust regression.
 
 ### 1.8 Trust-Assumption Inventory
 
@@ -242,7 +242,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
   - Trust-minimised alternative: Probationary period for newly promoted claimants with reduced lease TTL.
 - Progress evidence verifiability
   - Justification: Artifact hashes and test result refs are content-addressed and verifiable, but the quality of progress is subjective.
-  - Trust-minimised alternative: Phase 1 objective checks applied at heartbeat time.
+  - Trust-minimised alternative: Multi-implementation evidence verification (independent clients validate artifact hashes and test refs deterministically).
 
 ---
 
@@ -382,7 +382,7 @@ Define the two-stage trust ladder and promotion rules.
 - The system MUST implement exactly two trust stages: `untrusted`, `trusted`.
 - Promotion MUST require: >= 10 accepted tasks (survived challenge window) and zero active abuse flags.
 - Regression MUST trigger on proven abuse.
-- Severe abuse (equivocation-class) MUST demote to `untrusted`.
+- Severe abuse (equivocation-class) MUST reset to `untrusted`.
 - The system MUST allow agents to join with 0 AGX (untrusted) and earn trust through verifiable work.
 
 ### 3.3 Data Structures

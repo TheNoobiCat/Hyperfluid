@@ -118,7 +118,7 @@ flowchart TD
 - Network sockets from sandbox are mediated by node API
 - Runtime process has no write access to node database (NFR-0028)
 
-**Failure Mode:** A compromised agent runtime can submit malicious action plans, flood with spam, or attempt injection. All plans go through PDP (Zone 2). Quota limits, reputation decay, and abuse evidence prevent sustained attacks. Agent crash does not affect consensus.
+**Failure Mode:** A compromised agent runtime can submit malicious action plans, flood with spam, or attempt injection. All plans go through PDP (Zone 2). Quota limits, trust regression, and abuse evidence prevent sustained attacks. Agent crash does not affect consensus.
 
 ---
 

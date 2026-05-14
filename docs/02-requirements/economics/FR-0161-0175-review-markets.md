@@ -1,4 +1,4 @@
-## FR-0161: Quality-Weighted Review Market
+## FR-0161: Review Market with Independent Review
 
 **Category:** Economics
 
@@ -12,7 +12,7 @@
 
 **Acceptance Criteria:**
 - [ ] Reviewers are assigned by protocol, not self-selected.
-- [ ] Assignment considers reliability, diversity, and anti-pair-repetition.
+- [ ] Assignment enforces operator-cluster independence.
 - [ ] Reviewer collateral is bonded per review batch.
 - [ ] Accurate minority calls that later prove correct earn higher rewards.
 
@@ -169,28 +169,6 @@
 - [ ] `ReviewRecord` includes submission_id, score, verdict, reason_hash, reviewer_sig.
 
 **Dependencies:** FR-0053
-**Tags:** must-have
-
----
-
-## FR-0171: Quality Score Formula
-
-**Category:** Economics
-
-**Statement:** The system shall compute final quality score as weighted combination: `Q = w1*objective + w2*review + w3*durability`, with weights set by governance.
-
-**Rationale:** Multiple quality dimensions reduce gaming of any single metric. See `proof-of-work-quality-and-review-markets.md` Section 5 (Scoring model).
-
-**Source Research:**
-- `proof-of-work-quality-and-review-markets.md` Section 5, lines 98-104
-
-**Acceptance Criteria:**
-- [ ] Weights are governance-adjustable within defined bounds.
-- [ ] Each component is independently computable and verifiable.
-- [ ] Score is clamped to [0, 1].
-- [ ] Score formula is deterministic across all nodes.
-
-**Dependencies:** FR-0163
 **Tags:** must-have
 
 ---

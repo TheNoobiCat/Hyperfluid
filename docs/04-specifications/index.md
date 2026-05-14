@@ -43,8 +43,8 @@ Located in `docs/04-specifications/runtime/`
 |------|-----------|-----|-------|
 | [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
 | [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 10-step deterministic rule chain, action plans, quota matrix, key rotation, audit log |
-| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
-| [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, team formation, inbox routing, trust ladder, reputation, airdrop economics |
+| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161, FR-0164-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
+| [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, inbox routing, trust ladder, airdrop economics |
 
 ## Security Specs
 
@@ -82,7 +82,7 @@ Located in `docs/04-specifications/security/`
 | FR-0152 | p2p-wire-spec.md | Section 2 |
 | FR-0155 | governance-spec.md | Section 1 |
 | FR-0156, FR-0157, FR-0158 | collaboration-spec.md | Section 3 |
-| FR-0161-0175 | review-engine-spec.md | Section 1 |
+| FR-0161, FR-0164-0175 | review-engine-spec.md | Section 1 |
 | FR-0176-0190 | collaboration-spec.md | Section 3 |
 | FR-0191 | collaboration-spec.md | Section 3 |
 | FR-0192 | collaboration-spec.md | Section 3 |

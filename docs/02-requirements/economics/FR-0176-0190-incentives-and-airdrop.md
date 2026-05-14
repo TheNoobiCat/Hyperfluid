@@ -108,34 +108,11 @@
 
 ---
 
-## FR-0181: Reputation-Backed Decay and Regression
-
-**Category:** Economics
-
-**Statement:** The system shall apply automatic inactivity decay and quality regression to reputation, triggering stage demotion when thresholds are breached.
-
-**Rationale:** Keeps authority aligned with current reliability. See `identity-reputation-and-trust-ladder.md` Section 5 (Regression and decay).
-
-**Source Research:**
-- `identity-reputation-and-trust-ladder.md` Section 5, lines 91-95
-- `identity-reputation-and-trust-ladder.md` Section 6, Tradeoff 4
-
-**Acceptance Criteria:**
-- [ ] Inactivity lowers delivery and liveness dimensions.
-    - [ ] Challenge losses trigger immediate regression.
-- [ ] Severe abuse triggers cooldown before re-promotion.
-- [ ] Decay is deterministic and applies each epoch.
-
-**Dependencies:** FR-0097
-**Tags:** must-have
-
----
-
 ## FR-0182: Bribery Market Resistance
 
 **Category:** Economics
 
-**Statement:** The system shall resist off-chain bribery for fast-path approvals through independent-reviewer requirements, challenge windows, rollback collateral slashing, and reviewer reputation decay on reversals.
+**Statement:** The system shall resist off-chain bribery for fast-path approvals through independent-reviewer requirements, challenge windows, rollback collateral slashing, and reviewer trust regression on reversals.
 
 **Rationale:** Off-chain payments can exceed honest rewards. See `agx-economics-and-adversarial-incentives.md` Section 7 (Bribery market for fast-path approvals).
 
@@ -146,7 +123,7 @@
 **Acceptance Criteria:**
 - [ ] Independent reviewer requirement makes collusion harder.
 - [ ] Challenge window allows post-hoc fraud detection.
-- [ ] Reviewers face slashing and reputation decay for approving bad merges.
+- [ ] Reviewers face slashing and trust regression for approving bad merges.
 - [ ] Economic cost of bribery exceeds expected honest reward differential.
 
 **Dependencies:** FR-0165, FR-0033
@@ -446,7 +423,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall support agent-sponsored task submission: any Hyperfluid agent may submit a `task_create` action plan on behalf of an external user, using the agent's own identity, balance for bounty escrow, and EIP-1559 tx fee payment. The `action_plan` includes `sponsor_id = agent_id` and optionally `requester_pubkey = user_pubkey`. The agent assumes full protocol-level responsibility — if the task is spam or abusive, the agent's reputation, quotas, and stake are affected, not the user's. The user never needs an on-chain identity or AGX balance.
+**Statement:** The system shall support agent-sponsored task submission: any Hyperfluid agent may submit a `task_create` action plan on behalf of an external user, using the agent's own identity, balance for bounty escrow, and EIP-1559 tx fee payment. The `action_plan` includes `sponsor_id = agent_id` and optionally `requester_pubkey = user_pubkey`. The agent assumes full protocol-level responsibility — if the task is spam or abusive, the agent's trust stage, quotas, and stake are affected, not the user's. The user never needs an on-chain identity or AGX balance.
 
 **Rationale:** Agent-as-proxy is the simplest possible sponsorship model. No new protocol primitives, no delegation certificates, no escrow delegation, no multi-sig. The protocol sees only the agent. The user-agent relationship (payment, trust) is off-protocol. See `user-task-submission-and-sponsorship.md` Section 5 (Agent sponsorship model) and Tradeoff 3.
 

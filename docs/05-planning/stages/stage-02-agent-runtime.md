@@ -25,7 +25,7 @@
 - [ ] Review: 2-phase review pipeline (review → challenge) with 3 reviewers per task, fixed payout on majority approval, operator-cluster independence constraint. Sybil detection correlation engine flags suspicious identity pairs; automated adjudication confirms/rejects clusters.
 - [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
 - [ ] Incident Response: basic incident logging for governance audit. Congestion handled by EIP-1559 base fee — no circuit-breaker exists.
-- [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and reputation update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
+- [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and trust-stage update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
 - [ ] All 8 specs pass their conformance test hooks (Section X.7).
 - [ ] Risks documented and acceptable.
 - [ ] Next stage inputs prepared.
@@ -73,11 +73,11 @@
 5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via Ockam P2P overlay (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
 6. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage). Task creation events generate inbox signals for subscribed agents.
 6. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
-7. Reputation score: composite of quality ratings, task completion rate, review accuracy, collaboration endorsements. Decays over inactivity windows.
-8. Review engine: initial review (3 reviewers, individual scores), attestation phase (2-step-up attestations for medium+ risk), settlement (aggregate score, bounty payout distribution).
-9. Reviewer independence: stake-graph analysis ensures no 2 reviewers share >25% stake correlation. Reviewer rotation per epoch.
-10. Anti-collusion: Sybil detection correlation engine — five-signal pairwise scoring (vote alignment, co-claiming, temporal overlap, stake distance, cross-review failure). Cluster aggregation. Automated adjudication with independent review panels. Confirmed Sybil = bond burn + 2-stage trust demotion + cluster annotation for whitewash detection.
-11. Clawback: settlement reversed if collusion detected within 21-epoch window. Funds clawed back to escrow pool.
+7. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
+8. Review engine: initial review (3 reviewers, binary verdict), challenge window, settlement (fixed payout on majority approval).
+9. Reviewer independence: stake-graph analysis ensures no reviewer shares an operator cluster with the worker or another reviewer.
+10. Anti-collusion: Sybil detection correlation engine — five-signal pairwise scoring (vote alignment, co-claiming, temporal overlap, stake distance, cross-review failure). Cluster aggregation. Automated adjudication with independent review panels. Confirmed Sybil = bond burn + trust regression + cluster annotation for whitewash detection.
+11. Clawback: settlement reversed if collusion detected within governance-defined window. Funds clawed back to escrow pool.
 12. Exit checkpoint: 3-agent collaborative task completes with review pipeline; bounty escrow/payout lifecycle works end-to-end; Sybil detection engine flags correlated pairs; trust ladder promotes agent.
 
 ### Week 7–8: Telemetry + Incident Response + Integration
@@ -95,7 +95,7 @@
 - **Reviewer collusion:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: operator-cluster independence constraint (stake-graph analysis prevents same-cluster reviewers), Sybil detection correlation engine with automated adjudication. Test with 20% adversarial agent set in Stage 03.
 - **Trust ladder promotion gamed:** Agents could complete trivial tasks to inflate metrics. Mitigation: review scores weight by risk class (high-risk tasks contribute more to trust progression than low-risk). Task quality decay requires sustained quality, not just volume.
 - **Governance vote apathy:** If <33% of stake votes, proposals stall indefinitely. Mitigation: governance-spec no-vote timeout (non-vote = no quorum contribution, proposal expires). Emergency proposals have shorter windows (1 hour, 67% threshold).
-- **Fast-Path challenge DOS:** Attackers could challenge every merge to stall topic progress. Mitigation: challenge requires deposit (slashed if challenge fails). Persistent frivolous challengers flagged by reputation and temporarily barred.
+- **Fast-Path challenge DOS:** Attackers could challenge every merge to stall topic progress. Mitigation: challenge requires deposit (slashed if challenge fails). Persistent frivolous challengers flagged by trust regression and temporarily barred.
 - **Telegram bot token leakage:** Bot token stored in local config.toml (Zone 3). Mitigation: no logging of token contents, file permissions restricted to agent process user, agent never includes token in on-chain data or artifact outputs.
 - **Sybil detection false positives:** Correlation engine may flag legitimate collaborators as Sybil. Mitigation: independent adjudication panel of uncorrelated `trusted`+ agents reviews evidence before any penalty. Panel composition verified for independence. False-positive rate tracked and used to recalibrate thresholds.
 - **Bounty escrow race conditions:** Concurrent task claims on the same bounty-funded task. Mitigation: escrow is locked at task creation; lease claim is atomic. Only the primary lease holder can trigger payout. Canceled tasks refund via atomic escrow release.

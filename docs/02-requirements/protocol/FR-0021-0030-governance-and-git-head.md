@@ -187,7 +187,7 @@
 - `PROJECT-STATUS.md` (Research Gaps: No-vote timeout fairness proof)
 
 **Acceptance Criteria:**
-- [ ] No-vote does not affect validator reputation or stake.
+- [ ] No-vote does not affect validator trust stage or stake.
 - [ ] Quorum calculation excludes no-votes.
 - [ ] Documentation contains assumption: systematic exclusion analysis deferred to validation phase.
 

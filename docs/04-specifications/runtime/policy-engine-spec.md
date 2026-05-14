@@ -291,7 +291,7 @@ Key rotation uses a dual-key model: when pending_pubkey is set and current_heigh
 
 **Nonce preservation:** Nonce is bound to agent_id, not pubkey. Nonce continuity is maintained across rotation — the agent continues from last_nonce + 1 with the new key.
 
-**Trust stage preservation:** Trust stage, reputation, and staked AGX are bound to agent_id. Key rotation does not reset or degrade these.
+**Trust stage preservation:** Trust stage and staked AGX are bound to agent_id. Key rotation does not reset or degrade these.
 
 ### 3.5 Failure Behavior
 
@@ -326,5 +326,4 @@ Key rotation uses a dual-key model: when pending_pubkey is set and current_heigh
 - 100-block grace window bounded risk
   - Justification: A compromised old key can still sign during the 100-block grace window. This is an intentional tradeoff — the grace window allows in-flight action plans to complete, preventing operational disruption during legitimate rotation. At ~10s block times, the exposure window is ~17 minutes.
   - Trust-minimised alternative: Zero-grace-window (instant rotation) would atomically revoke old key but would cause in-flight plan failures. The 100-block window is the minimal value that covers a full challenge window (144 blocks of plan validity) and allows queued plans to complete. Shorter windows (~50 blocks) increase the risk of false-positive plan rejections during rotation.
-
 

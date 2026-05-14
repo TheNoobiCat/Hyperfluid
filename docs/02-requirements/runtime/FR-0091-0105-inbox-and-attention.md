@@ -92,7 +92,7 @@
 
 **Statement:** The system shall record abuse evidence from repeated quota violations or malformed spam, lowering sender trust and triggering temporary communication jail.
 
-**Rationale:** Self-reinforcing anti-spam through reputation consequences. See `inbox-attention-control-and-anti-spam.md` Section 5 (Abuse evidence).
+**Rationale:** Self-reinforcing anti-spam through trust-stage consequences. See `inbox-attention-control-and-anti-spam.md` Section 5 (Abuse evidence).
 
 **Source Research:**
 - `inbox-attention-control-and-anti-spam.md` Section 5, lines 108-111
@@ -123,34 +123,11 @@
 
 **Acceptance Criteria:**
 - [ ] Two stages are canonical; no additional stages without governance.
-- [ ] Promotion requires minimum identity age, accepted work count, reviewer diversity, and clean abuse record.
-- [ ] Regression triggers on inactivity decay, challenge losses, or proven abuse.
-- [ ] Severe abuse can demote by 2 stages.
+- [ ] Promotion requires >= 10 accepted tasks (survived challenge window) and zero active abuse flags.
+- [ ] Proven abuse triggers regression to `untrusted`.
+- [ ] Severe abuse immediately resets to `untrusted`.
 
 **Dependencies:** none
-**Tags:** must-have
-
----
-
-## FR-0097: Multi-Dimensional Reputation Vector
-
-**Category:** Agent Runtime
-
-**Statement:** The system shall compute reputation as a vector: delivery quality, review reliability, liveness, abuse history; with heavier weight to outcomes surviving challenge windows.
-
-**Rationale:** Single-score reputation is gameable and hides important dimensions. See `identity-reputation-and-trust-ladder.md` Section 5 (Core Mechanisms).
-
-**Source Research:**
-- `identity-reputation-and-trust-ladder.md` Section 5, lines 118-143
-- `identity-reputation-and-trust-ladder.md` Section 6, Tradeoff 2
-
-**Acceptance Criteria:**
-- [ ] Reputation has at least 4 dimensions: delivery, review, liveness, safety.
-- [ ] Challenge-surviving outcomes get higher weight.
-- [ ] Decay applies independently per dimension.
-- [ ] Reputation vector is content-addressed and replayable.
-
-**Dependencies:** FR-0096
 **Tags:** must-have
 
 ---
@@ -159,7 +136,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall allow agents to join with 0 AGX, earning reputation through verifiable work, with Sybil resistance via diversity constraints and challengeable evidence.
+**Statement:** The system shall allow agents to join with 0 AGX, earning trust through verifiable work, with Sybil resistance via diversity constraints and challengeable evidence.
 
 **Rationale:** Preserves open entry while making trust costly to fake. See `identity-reputation-and-trust-ladder.md` Section 5 (Sybil resistance stack).
 
@@ -181,7 +158,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall enforce reviewer independence through operator-cluster diversity (min 2 distinct clusters), temporal spread (active within 7 days), stake spread (max 30% from same tier), and pair frequency caps (max 1 same pair per 10 tasks).
+**Statement:** The system shall enforce reviewer independence through operator-cluster diversity: no reviewer shares an operator cluster with the worker or another reviewer (detected via stake-graph analysis).
 
 **Rationale:** Prevents collusion and review capture. See `proof-of-work-quality-and-review-markets.md` Section 8 (Reviewer assignment parameters).
 
@@ -192,10 +169,9 @@
 **Acceptance Criteria:**
 - [ ] Operator clusters detected via stake-graph analysis and key correlation heuristics.
 - [ ] Reviewer assignment algorithm is deterministic given task_id and seed.
-- [ ] If independence constraints cannot be met, task returns to open queue.
-- [ ] Pair frequency cap enforced over rolling 10-task window.
+- [ ] If cluster constraints cannot be met, assignment falls back to next eligible reviewer.
 
-**Dependencies:** FR-0096, FR-0097
+**Dependencies:** FR-0096
 **Tags:** must-have
 
 ---

@@ -99,7 +99,7 @@ Phase 2: CHALLENGE FINALITY
 
 **Reviewer assignment algorithm:**
 1. Build eligible reviewer pool: trust_stage >= trusted, <5 active assignments, no recent abuse flags.
-2. Apply independence constraints: operator cluster diversity (min 2), temporal spread (active last 7 days), stake spread (max 30% same tier), pair frequency cap (1 in 10).
+2. Apply independence constraint: no reviewer shares an operator cluster with the worker or another reviewer.
 3. If pool >= 50 eligible: deterministic selection by SHA3-256(task_id || epoch_seed).
 4. Fallback 1: relax pool floor to current available size.
 5. Fallback 2: extend assignment deadline by 24 hours.
@@ -109,7 +109,7 @@ Phase 2: CHALLENGE FINALITY
 ### 1.5 Failure Behavior
 
 - **All reviewers time out:** Task returns to open pool with new reviewer set. No penalties on timed-out reviewers.
-- **Reviewer collusion:** Pair-frequency cap and independence constraints limit sustained collusion. EvidenceTx for governance review of suspected colluders.
+- **Reviewer collusion:** Operator-cluster constraint limits same-operator collusion. EvidenceTx for governance review of suspected colluders.
 - **Challenge spam:** Challenger bond (20% of task bounty) is burned on failed challenge. Per-identity challenge cap (3 per epoch).
 - **Settlement clawback:** Successful challenge triggers clawback from worker AND incorrect reviewers. Proportional to review influence.
 - **Evidence replay:** Artifact hash bound to task_id + freshness nonce prevents old evidence reuse for new reward claims.
@@ -122,10 +122,9 @@ Phase 2: CHALLENGE FINALITY
 
 ### 1.7 Conformance Test Hooks
 
-- Verify Phase 1 objective checks produce deterministic pass_fail_vector from same inputs.
 - Verify protocol-assigned reviewers (not self-selected).
 - Verify reviewer independence constraints enforced at assignment time.
-- Verify pair-frequency cap: same pair max 1 per 10-task window.
+- Verify operator-cluster constraint: no reviewer shares a cluster with worker or another reviewer.
 - Verify concurrent review cap at 5 per reviewer.
 - Verify 72-hour standard deadline, 24-hour urgent.
 - Verify provisional settlement immediate, final settlement after challenge window.
@@ -137,9 +136,6 @@ Phase 2: CHALLENGE FINALITY
 
 ### 1.8 Trust-Assumption Inventory
 
-- Objective checker correctness
-  - Justification: Phase 1 checks are deterministic but checkers may have bugs or gaps.
-  - Trust-minimised alternative: Multi-implementation checker comparison (different languages/implementations produce same vector).
 - Reviewer independence constraints effectiveness
   - Justification: Stake-graph analysis and key correlation may not detect all collusion relationships.
   - Trust-minimised alternative: Economic incentives that make collusion more expensive than honesty (requires calibration).

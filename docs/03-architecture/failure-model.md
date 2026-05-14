@@ -144,7 +144,7 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 - Max commission rate cap (20%) prevents excessive extraction
 - Default delegation strategy (stake-weighted random) spreads delegation risk
 
-**Recovery:** Delegators undelegate from risky validator. Funds return after 7-day unbonding window. Validator reputation damage is self-correcting via market forces.
+**Recovery:** Delegators undelegate from risky validator. Funds return after 7-day unbonding window. Validator trust loss is self-correcting via market forces.
 
 ---
 

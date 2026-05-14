@@ -21,4 +21,4 @@ Removed: identity age, reviewer diversity, inactivity decay, reputation vector, 
 - **Four-stage (original):** Rejected. Overengineered. Reviewer diversity and identity age add complexity without meaningful security benefit.
 - **Single stage (no trust):** Rejected. New agents need some restrictions to prevent spam before they've proven themselves.
 
-**Related:** FR-0087, FR-0092, FR-0097, `state-model.md`.
+**Related:** FR-0087, FR-0092, FR-0096, `state-model.md`.

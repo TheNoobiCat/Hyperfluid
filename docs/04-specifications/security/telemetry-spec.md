@@ -96,7 +96,7 @@ enum ReconciliationStatus {
 ### 1.5 Failure Behavior
 
 - **Reporter suppression:** Validator stops reporting during incident → suppression detection flag (producer reporting 0 envelopes during active epoch).
-- **Metric spoofing:** Producer submits fabricated metric → reconciliation against block headers flags discrepancy. Repeated spoofing triggers anomaly report and potential reputation penalty.
+- **Metric spoofing:** Producer submits fabricated metric → reconciliation against block headers flags discrepancy. Repeated spoofing triggers anomaly report and potential trust regression penalty.
 - **Outlier gaming:** Producer submits extreme value to bias trimmed mean → trimmed mean discards top/bottom 10%; outlier flagging for z > 3.0.
 - **Low reporter count:** Summary marked low-confidence. Circuit-breaker excludes that metric from automated triggers. Governance alert generated.
 - **Reconciliation failure:** Aggregated metric differs from independent observable by >10% → DiscrepancyDetected. Metric excluded from trust calculations for that epoch.

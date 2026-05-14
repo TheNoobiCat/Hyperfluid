@@ -155,7 +155,7 @@
 
 ---
 
-## FR-0153: Quality-Weighted Bounty Payouts (Marketplace Model)
+## FR-0153: Fixed Bounty Payouts (Marketplace Model)
 
 **Category:** Economics
 
@@ -260,7 +260,7 @@
 - [ ] Lease bond scales with task bounty but has 10 AGX minimum.
 - [ ] 1 timeout: warning.
 - [ ] 2 timeouts: 50% lease budget reduction.
-- [ ] 3 timeouts: 90% lease budget reduction + reputation penalty.
+- [ ] 3 timeouts: 90% lease budget reduction + trust regression penalty.
 - [ ] Bond is released on successful task completion.
 
 **Dependencies:** FR-0076

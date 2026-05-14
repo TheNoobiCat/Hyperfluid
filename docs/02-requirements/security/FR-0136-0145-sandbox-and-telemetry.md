@@ -192,7 +192,7 @@
 
 **Acceptance Criteria:**
 - [ ] False incident evidence is detected by post-incident review.
-    - [ ] Penalty includes reputation reduction and temporary reporting restriction.
+    - [ ] Penalty includes trust regression and temporary reporting restriction.
 - [ ] Penalty severity scales with intent and frequency.
 
 **Dependencies:** FR-0142

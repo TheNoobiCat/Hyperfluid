@@ -179,7 +179,7 @@
 
 **Acceptance Criteria:**
 - [ ] `hyperfluid tx` subcommand supports: transfer, stake, identity, task, review, governance, evidence.
-- [ ] `hyperfluid query` supports: balance, account, nonce, validator, committee, proposal, task, review, reputation, trust-stage, block, git-head, fee-estimate.
+- [ ] `hyperfluid query` supports: balance, account, nonce, validator, committee, proposal, task, review, trust-stage, block, git-head, fee-estimate.
 - [ ] `hyperfluid task` supports: list, get, claim, release, submit, heartbeat, lease.
 - [ ] `hyperfluid review` supports: list, submit, challenge, claim-rewards.
 - [ ] `hyperfluid governance` supports: list, get, vote, fetch-bundle, verify.
@@ -320,4 +320,3 @@
 
 **Dependencies:** FR-0073
 **Tags:** should-have
-
