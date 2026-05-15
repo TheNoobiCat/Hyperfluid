@@ -168,7 +168,7 @@
 - [ ] 10x malicious sender ratio test shows >= 80% baseline throughput.
 - [ ] Critical lanes (evidence, governance, control) maintain 100% throughput.
 
-**Dependencies:** FR-0142
+**Dependencies:** FR-0060
 **Tags:** must-have
 
 ---

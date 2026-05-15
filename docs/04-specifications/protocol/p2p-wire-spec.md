@@ -184,7 +184,6 @@ struct MempoolConfig {
 - Verify mempool ordered by fee: highest fee transaction selected first for block.
 - Verify evidence fee discount: evidence transaction with lower raw fee clears before higher-fee standard tx when discount applied.
 - Verify per-sender limit enforcement.
-- Verify no lane reservation exists: all transaction types share the same pool.
 
 ### 2.8 Trust-Assumption Inventory
 

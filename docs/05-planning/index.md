@@ -43,8 +43,8 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 | 00 | Foundation | 1–2 weeks | — | — | Repo, tooling, CI, local testnet scaffold |
 | 01 | Protocol Core | 6–8 weeks | C1, C2, C3, C5, C7, C8 | 7 (protocol + storage) | Single-node chain with staking, fees, P2P, artifact storage |
 | 02 | Agent Runtime | 6–8 weeks | C4, C6, C9, C10, C11, C12 | 8 (runtime + remaining protocol) | Agent-driven task board with PDP gating, review pipeline, governance |
-| 03 | Validation | 4–6 weeks | All | All 14 | Conformance matrix, adversarial test suite, load results, security audit |
-| 04 | Mainnet Prep | 4–6 weeks | All | All 14 | Runbooks, SLOs, monitoring, incident playbooks, launch checklist |
+| 03 | Validation | 4–6 weeks | All | All 15 | Conformance matrix, adversarial test suite, load results, security audit |
+| 04 | Mainnet Prep | 4–6 weeks | All | All 15 | Runbooks, SLOs, monitoring, incident playbooks, launch checklist |
 
 ---
 
@@ -66,8 +66,8 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 |-------|---------------|
 | 01 | consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md, stake-graph-analysis-spec.md |
 | 02 | governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, telemetry-spec.md, incident-response-spec.md |
-| 03 | All 14 specs (conformance) |
-| 04 | All 14 specs (operations) |
+| 03 | All 15 specs (conformance) |
+| 04 | All 15 specs (operations) |
 
 ---
 
@@ -94,11 +94,11 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 
 | Check | Status |
 |-------|--------|
-| Every spec has conformance test hooks (Section X.7) | PASS (14/14, verified in Phase 3) |
-| Trust-assumption inventory complete | PASS (14/14, verified in Phase 3) |
+| Every spec has conformance test hooks (Section X.7) | PASS (15/15, verified in Phase 3) |
+| Trust-assumption inventory complete | PASS (15/15, verified in Phase 3) |
 | All FRs mapped to spec sections | PASS (verified in Phase 3) |
 | Decentralisation audit complete (no issues) | PASS (verified in Phase 3) |
-| Stage definitions reference all 14 specs | PASS |
+| Stage definitions reference all 15 specs | PASS |
 | Stage definitions account for all 12 components | PASS |
 
 **Gate result: READY FOR LAYER 6 (Validation).**
@@ -132,7 +132,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 
 | Layer | Artifact | Link |
 |-------|----------|------|
-| L4 Specs | 14 specs across 4 domains | `docs/04-specifications/index.md` |
-| L3 Architecture | 12 components, 14 ADRs | `docs/03-architecture/index.md` |
-| L2 Requirements | 202 (172 FR + 30 NFR) | `docs/02-requirements/index.md` |
+| L4 Specs | 15 specs across 4 domains | `docs/04-specifications/index.md` |
+| L3 Architecture | 12 components, 17 ADRs | `docs/03-architecture/index.md` |
+| L2 Requirements | 201 (171 FR + 30 NFR) | `docs/02-requirements/index.md` |
 | L8 Handoff | Phase 03 handoff | `docs/08-handoff/latest/phase-03-status.md` |

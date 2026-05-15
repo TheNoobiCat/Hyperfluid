@@ -9,7 +9,7 @@
 - C1 Consensus Engine: committee BFT integration (Malachite), VDF-based committee rotation, block production, SMT root commitment.
 - C2 State Machine & SMT: sparse Merkle tree state, transaction execution, block finalisation, deterministic state transitions.
 - C3 Staking & Validator Manager: four-state validator lifecycle (active, paused, unbonding, withdrawn), bonding/unbonding, slashing conditions, downtime tracking.
-- C5 Fee Market: EIP-1559 base fee, validator rebates, front-running protection, fee-burning logic (off-chain only — see FR-0073 for runtime burn), fee adjustment formula.
+- C5 Fee Market: EIP-1559 base fee, validator rebates, front-running protection, fee adjustment formula.
 - C7 P2P Networking: peer discovery, connection state machine, gossip protocol, mempool transaction relay, fee-ordered priority queue.
 - C8 Artifact Availability & Storage: content-addressed storage via gix, proof-of-possession, retention tiers, repair coordinator.
 - Single-node chain fully functional; multi-node network booting with gossip consensus between 3+ validators.
@@ -43,7 +43,7 @@
 1. Integrate Malachite BFT: define validator identity, epoch structure, block proposal pipeline. (deferred: Malachite integration pending external dep)
 2. Implement SMT-backed state: key-value state store, transaction execution, block finalisation, SMT root hash computation. — **DONE**
 3. VDF-based committee rotation: deterministic committee from epoch seed (initially seeded from genesis; full VDF integration and tuning in Stage 03 (Validation)). — **DONE (deterministic SHA3-256 sampling; full VDF deferred)**
-4. Transaction types: `TransferTx`, `StakeBondTx`, `UnbondRequestTx`, `WithdrawUnbondedTx`, `TaskCreateTx`, `GovernanceProposeTx`, `GovernanceVoteTx`, `EvidenceTx`, etc. — **DONE (12 tx types in TxType enum)**
+4. Transaction types: `TransferTx`, `StakeBondTx`, `UnbondRequestTx`, `WithdrawUnbondedTx`, `TaskCreateTx`, `GovernanceProposeTx`, `GovernanceVoteTx`, `EvidenceTx`, etc. — **DONE (7 base types with action sub-enums)**
 5. Unit tests for state transitions; integration test for single-node block production. — **DONE (56 workspace tests)**
 6. Exit checkpoint: `cargo test` passes for C1 and C2 crates; single-node testnet produces blocks. — **DONE (see checkpoint-2026-05-05d.md)**
 
@@ -52,7 +52,7 @@
 2. Stake-weighted committee sampling using `self_bond + total_delegated` as effective weight; operator identity deduplication via stake-graph anti-split clustering (see `stake-graph-analysis-spec.md`).
 3. Delegation: `DelegateTx`, `UndelegateTx`, `WithdrawDelegationTx`, `SetCommissionTx`; DelegationRecord management; proportional slash propagation; commission rate constraints.
 4. Slashing evidence pipeline: equivocation proof, downtime proof (signed headers missing >20% in window).
-4. EIP-1559 fee market: base fee per block, priority tip, fee adjustment denominator (8), block weight targets.
+5. EIP-1559 fee market: base fee per block, priority tip, fee adjustment denominator (8), block weight targets.
 5. Validator rebate distribution: proportional to signed blocks in epoch.
 6. Integration test: 3-validator network with staking lifecycle and fee market.
 7. Exit checkpoint: validators bond/unbond correctly; fees adjust to load; slashing fires on detected byzantine behavior.

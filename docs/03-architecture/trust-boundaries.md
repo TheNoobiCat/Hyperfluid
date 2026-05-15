@@ -171,7 +171,6 @@ Agent runtime queries node API for state information. Responses are read-only an
 - Peer routing table and DHT — local to node (informed by gossip, not consensus)
 - Mempool contents — local to node (transactions not yet committed)
 - Policy bundle binaries — local to node (hash is on-chain)
-- Token burn telemetry — local diagnostics (not protocol economics)
 - Network topology (connections, latencies) — local to node
 
 ## 6. Sandboxed vs Unsandboxed Execution

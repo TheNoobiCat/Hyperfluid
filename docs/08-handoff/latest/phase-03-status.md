@@ -83,9 +83,9 @@ docs/04-specifications/security/incident-response-spec.md
 All 14 specs were reviewed against the decentralisation audit checklist from BUILD-SYSTEM.md:
 
 1. **External trust inventory:** PASS. Every spec Section X.8 inventories external dependencies with justifications and trust-minimised alternatives. Zero external oracles/services mandated.
-2. **Centralised coordination:** PASS. No spec mandates single dispatcher, scheduler, moderator, or admin override. All coordination is protocol-enforced (BFT, task board soft leases, governance voting, incident FSM).
+2. **Centralised coordination:** PASS. No spec mandates single dispatcher, scheduler, moderator, or admin override. All coordination is protocol-enforced (BFT, task board soft leases, governance voting, EIP-1559 fee market).
 3. **Verifiable economic signals:** PASS. All reward/penalty parameters reference cryptographically verifiable on-chain records. Self-reported local metrics excluded from economic calculations.
-4. **Single points of failure:** PASS. Committee overlap (max 33%), relay diversity, repair coordinator redundancy, circuit-breaker auto-recovery.
+4. **Single points of failure:** PASS. Committee overlap (max 33%), relay diversity, repair coordinator redundancy, EIP-1559 base fee dynamics for congestion handling.
 5. **Sybil resistance:** PASS. Challenge-response Proof-of-Agent, locked airdrop bonds, stake-graph diversity, whitewash guard, trust ladder.
 
 **No new issues found.** No `_overengineered.md` created.

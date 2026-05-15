@@ -11,12 +11,7 @@
 
 ### 1.1 Purpose
 
-Define the deterministic, on-chain algorithm for detecting correlated validator keys via stake-graph analysis. Clusters of correlated validators are treated as a single entity for committee weight computation. This replaces the previous per-operator seat cap (removed in 2026-05-06 architecture amendment) with a Sybil-evasion-only clustering mechanism — no hard cap is applied to legitimate stake concentration.
-
-**Non-goals:**
-- This spec does NOT define behavioral Sybil detection (see `sybil-detection-correlation-engine.md`).
-- This spec does NOT impose a per-operator seat cap on committee influence.
-- This spec does NOT track off-chain relationships or IP/geo correlation.
+Define the deterministic, on-chain algorithm for detecting correlated validator keys via stake-graph analysis. Clusters of correlated validators are treated as a single entity for committee weight computation.
 
 ### 1.2 Normative Behavior
 

@@ -77,7 +77,6 @@
 - [ ] Collusion evidence is content-addressed and signed.
 - [ ] Governance proposal type `COLLUSION_EVIDENCE` exists.
 - [ ] Slashing requires standard governance quorum and majority.
-- [ ] Removed: automated statistical correlation penalties (false positive risk).
 
 **Dependencies:** FR-0019, FR-0025
 **Tags:** must-have
@@ -173,22 +172,22 @@
 
 ---
 
-## FR-0172: Provisional Settlement with Clawback
+## FR-0172: Escrow Destination with Challenge Clawback
 
 **Category:** Economics
 
-**Statement:** The system shall support provisional payout upon review completion, with deterministic clawback path if challenge succeeds.
+**Statement:** The system shall determine escrow destination at review completion but keep funds locked until challenge window closes. If unchallenged, a single atomic transfer distributes 90% to the worker and 10% to timely reviewers. If a challenge succeeds, clawback from worker and incorrect reviewers funds the challenger reward.
 
-**Rationale:** Preserves speed while keeping fraud correction. See `proof-of-work-quality-and-review-markets.md` Section 6, Tradeoff 3.
+**Rationale:** Funds never leave escrow until final settlement — no locked-balance state or spend-hold flag needed. See `proof-of-work-quality-and-review-markets.md` Section 6, Tradeoff 3.
 
 **Source Research:**
 - `proof-of-work-quality-and-review-markets.md` Section 5 (Challenge and dispute logic)
 - `proof-of-work-quality-and-review-markets.md` Section 6, Tradeoff 3
 
 **Acceptance Criteria:**
-- [ ] Provisional reward is transferred at review finalization.
-- [ ] Successful challenge triggers clawback from worker.
-    - [ ] Incorrect reviewers are penalized; challenger is rewarded.
+- [ ] Escrow destination (90% worker / 10% reviewers) is determined at review finalization but funds remain locked.
+- [ ] Successful challenge triggers clawback from worker and incorrect reviewers.
+- [ ] Challenger is rewarded from clawed-back funds; remaining funds returned to funder.
 - [ ] Clawback amount is deterministic based on challenge outcome.
 
 **Dependencies:** FR-0148, FR-0149

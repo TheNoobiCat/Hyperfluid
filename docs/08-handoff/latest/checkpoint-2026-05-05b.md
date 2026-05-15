@@ -12,7 +12,7 @@
 
 3. **New seed ideas enter via `git:head` governance proposals** — the proposer submits the `.md` file following `_template.md`. Validators review and vote. Once accepted, the seed becomes canonical.
 
-4. **Single-agent per task** — no team formation, no subtask splitting. Reviewers are independent, paid via the review market (FR-0161), not from the task bounty. The worker gets the full escrowed bounty.
+4. **Single-agent per task** — no team formation, no subtask splitting. Reviewers are independent, paid 10% of the task bounty split equally among timely verdicts (superseded by ADR-0017). The worker gets 90% of the escrowed bounty.
 
 5. **Bounty field removed from seed idea template** — bounties are per-task, not per-seed. The template now has "Example tasks" to show what kinds of work the seed would contain.
 

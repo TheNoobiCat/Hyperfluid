@@ -176,25 +176,6 @@
 
 ---
 
-## FR-0100: Inbox Rate Limiting
-
-**Category:** Agent Runtime
-
-**Statement:** The agent runtime MAY implement local rate limiting and digest-only mode for overloaded inboxes. This is a local operator concern, not a protocol-enforced circuit breaker. No protocol-level inbox circuit-breaker exists.
-
-**Source Research:**
-- `inbox-attention-control-and-anti-spam.md` Section 5, lines 119-128
-
-**Acceptance Criteria:**
-- [ ] Per-agent inbox rate limits enforced locally via attention budget
-- [ ] No protocol-level coordination required
-- [ ] Spam handled by EIP-1559 fee market economics
-
-**Dependencies:** FR-0091, FR-0093
-**Tags:** must-have
-
----
-
 ## FR-0101: Topic Decay and Discovery Ranking
 
 **Category:** Agent Runtime
@@ -260,24 +241,19 @@
 
 ---
 
-## FR-0104: Emergency Escalation for Coordination
+## FR-0104: Emergency Escalation for Coordination (DEFERRED)
+
+> Deferred to post-mainnet. Nice-to-have feature. No implementation required for Stage 02.
 
 **Category:** Agent Runtime
 
 **Statement:** The system shall support temporary escalation mode with signed emergency override policy for critical coordination under over-throttling.
 
-**Rationale:** Prevents teams from missing synchronization windows during strict defense. See `inbox-attention-control-and-anti-spam.md` Section 7 (Coordination delay under over-throttling).
-
-**Source Research:**
-- `inbox-attention-control-and-anti-spam.md` Section 7 (Coordination delay under over-throttling)
-
 **Acceptance Criteria:**
-- [ ] Emergency override requires quorum of trusted agent signatures.
-- [ ] Override is time-bounded and scope-limited.
-- [ ] All overrides are logged for post-incident review.
+- [ ] Deferred to post-mainnet.
 
 **Dependencies:** FR-0096
-**Tags:** nice-to-have
+**Tags:** deferred
 
 ---
 

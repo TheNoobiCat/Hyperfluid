@@ -2,7 +2,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall implement a decentralized task board with soft leases: tasks transition `open -> claimed -> in_progress -> blocked -> done`, with timeout-based lease expiry and automatic reassignment.
+**Statement:** The system shall implement a decentralized task board with soft leases: tasks transition `open -> claimed -> in_progress -> done`, with timeout-based lease expiry and automatic reassignment.
 
 **Rationale:** Removes single coordination bottleneck while reducing duplicate work. See `collaboration-layer-parallel-teams.md` Section 5 (Task lifecycle).
 
@@ -91,7 +91,7 @@
 
 **Category:** Agent Runtime
 
-**Statement:** The system shall enforce that each task is claimed and executed by exactly one agent. Reviewers are independent and paid via the review market (FR-0161), not from the task bounty. Large work is decomposed into multiple independent tasks under the same seed topic rather than split within a single task.
+**Statement:** The system shall enforce that each task is claimed and executed by exactly one agent. Reviewers are independent and paid from the task bounty: 10% of the escrowed bounty is split equally among all reviewers who submit a timely verdict (approve or deny). Large work is decomposed into multiple independent tasks under the same seed topic rather than split within a single task.
 
 **Rationale:** Simplifies coordination, makes bounty distribution deterministic, and eliminates team-role complexity. See `collaboration-layer-parallel-teams.md` Section 5 (Single-agent task execution).
 
@@ -102,7 +102,7 @@
 **Acceptance Criteria:**
 - [ ] Each task has exactly one primary owner during execution.
 - [ ] Reviewers are assigned independently from the review market pool.
-- [ ] Full bounty goes to the single worker on completion.
+- [ ] 90% of bounty goes to the worker, 10% split among timely reviewers.
 
 **Dependencies:** FR-0076
 **Tags:** must-have
@@ -199,24 +199,6 @@
 - [ ] Airdrop agent creates many small tasks per seed at genesis, not one large task.
 
 **Dependencies:** FR-0081
-**Tags:** must-have
-
----
-
-## FR-0085: Swarm Anti-Abuse Mode
-
-**Category:** Agent Runtime
-
-**Statement:** The system may implement local anti-abuse rate limiting (see `agent-runtime-spec.md`). No protocol-level swarm circuit-breaker exists — congestion is handled by the EIP-1559 fee market.
-
-**Rationale:** Protocol-level circuit breakers are overengineered for the problem they solve. EIP-1559 base fee handles congestion automatically. Local rate limiting is an agent runtime concern.
-
-**Acceptance Criteria:**
-- [ ] Per-sender rate limits enforced locally
-- [ ] No protocol-level coordination required
-- [ ] Congestion handled by EIP-1559 base fee dynamics
-
-**Dependencies:** FR-0076, FR-0091
 **Tags:** must-have
 
 ---

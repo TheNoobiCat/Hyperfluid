@@ -2,7 +2,7 @@
 
 ## Inputs
 - From Stage 02: full system implementation — chain, agents, PDP, review, governance, telemetry, incident response.
-- From Layer 4 specs: all 14 specs, conformance test hooks (Section X.7 of each spec).
+- From Layer 4 specs: all 15 specs, conformance test hooks (Section X.7 of each spec).
 - External: adversarial testing tools (custom Rust harnesses), load generation tools, security audit tooling (cargo-audit, cargo-deny, fuzz harnesses, MIRI for unsafe code audit).
 
 ## Outputs
@@ -12,10 +12,10 @@
 - Security hardening: sandbox escape test suite, injection attack vectors (prompt injection, action plan forging, replay), key compromise response validation.
 - Performance benchmark report: block propagation time, SMT root computation, PDP evaluation cost, review pipeline latency, state sync time, artifact storage throughput.
 - [TUNE] parameter calibration report: each [TUNE] parameter from specs measured under load; recommended production values derived.
-- All 14 spec conformance test hooks pass. All FR-0190 adversarial scenarios executed.
+- All 15 spec conformance test hooks pass. All FR-0190 adversarial scenarios executed.
 
 ## Exit Criteria
-- [ ] Conformance matrix: 202/202 FR/NFR have passing conformance tests. Zero failing tests.
+- [ ] Conformance matrix: 201/201 FR/NFR have passing conformance tests. Zero failing tests.
 - [ ] Adversarial scenarios: all scenarios from FR-0190 executed; system survives or correctly fails safe (no silent corruption, no state divergence, no unrecoverable stall).
 - [ ] Load test: committee of 100 validators sustains 100 tx/s for 1 hour without queue growth or latency degradation.
 - [ ] Partition test: 3-node partition (2+1 split) → minority halts, majority continues. Heal → minority catches up via state sync within 5 minutes.
@@ -63,7 +63,7 @@
 2. Memory safety: MIRI on all `unsafe` blocks. Flag and fix any undefined behavior. Run `cargo-audit` and `cargo-deny` — update any vulnerable dependencies.
 3. Sandbox escape: custom harness attempting filesystem escape (path traversal, symlink attacks), network escape (raw socket via WASI, proxy bypass), and process escape (fork bomb, resource exhaustion). All must fail safe.
 4. Injection defense: prompt injection payloads targeting system prompt loader, action plan forgeries with tampered signatures, replay attacks with stale nonces. PDP must reject all.
-5. Key compromise: simulate agent key leak. Verify key rotation (policy-engine-spec.md Section 3, FR-0118) prevents replay with old key; incident FSM escalates.
+5. Key compromise: simulate agent key leak. Verify key rotation (policy-engine-spec.md Section 3, FR-0118) prevents replay with old key.
 6. Parameter calibration: run load tests at 50%, 100%, 150%, 200% target throughput. Measure fee adjustment response, review pipeline backlog. Derive recommended [TUNE] parameter values.
 7. VDF calibration: tune committee randomness parameters, validate entropy quality against theoretical bounds.
 8. Bug fixes from all validation findings. Re-run affected conformance tests.
@@ -77,7 +77,7 @@
 - **Sandbox escape via LLM provider channel:** Agent runtime must proxy all LLM API calls; raw internet access from sandbox = escape vector. Mitigation: network egress audit; all outbound connections from sandbox are blocked except whitelisted proxy endpoints.
 
 ## Spec References
-All 14 Layer 4 specs. Conformance tests reference each spec's Section X.7 (Conformance Test Hooks) and Section X.5 (Failure Behavior) for adversarial scenarios.
+All 15 Layer 4 specs. Conformance tests reference each spec's Section X.7 (Conformance Test Hooks) and Section X.5 (Failure Behavior) for adversarial scenarios.
 
 ## Upstream Dependencies for Next Stage
 - Conformance matrix must be complete and passing.

@@ -156,8 +156,8 @@ flowchart TD
 
 ### C12: Economics & Incentives
 
-**Responsibility:** Review market operation, quality scoring, challenge/settlement lifecycle, challenger bonds, Sybil detection correlation engine (5-signal pairwise scoring, cluster aggregation, automated adjudication panels), anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, parameter bounds enforcement, decentralization score computation.
-**Owned state:** Review assignments, quality scores, settlement records, airdrop pool, seed task bounty pool, Sybil correlation scores, adjudication records, parameter values, decentralization metrics.
+**Responsibility:** Review market operation, challenge/settlement lifecycle, challenger bonds, Sybil detection correlation engine (5-signal pairwise scoring, cluster aggregation, automated adjudication panels), anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, parameter bounds enforcement, decentralization score computation.
+**Owned state:** Review assignments, settlement records, airdrop pool, seed task bounty pool, Sybil correlation scores, adjudication records, parameter values, decentralization metrics.
 **Key FRs:** FR-0148-0160, FR-0161-0175, FR-0176-0193
 
 ## 5. Component Dependencies
@@ -229,7 +229,7 @@ flowchart TD
 
 - **What happens:** Committee size drops below safety threshold.
 - **Why it happens:** Mass validator churn or network partition.
-- **Handling:** Block production halts until committee recovers. After 500 idle blocks, an emergency epoch transition triggers auto-recovery (FR-0001). No governance override possible during stall.
+- **Handling:** Block production halts until committee recovers. Epoch boundary provides fallback recovery. No governance override possible during stall.
 
 ### Scenario: Review Sandbox Timeout Flood
 

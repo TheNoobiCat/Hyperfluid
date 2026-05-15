@@ -152,6 +152,12 @@ GovernanceVoteTx is canonically defined in staking-spec.md §2.3. The vote_weigh
 - Precheck failure: proposal rejected without sandbox launch; deposit burned for invalid proposals.
 - Bundle unavailable: if proposer endpoints are unreachable, validators cannot review. After 3 epochs of unavailability, proposal auto-rejected.
 
+### 2.6 Versioning and Compatibility
+
+- Review sandbox configuration (toolchain, environment) is pinned by hash in the active policy bundle.
+- Sandbox isolation profile versioned with governance protocol version.
+- Precheck rules are backward-compatible within major protocol versions.
+
 ### 2.7 Conformance Test Hooks
 
 - Verify sandbox has no access to main agent state (todos, knowledge, messages).

@@ -171,7 +171,7 @@ Define the Sparse Merkle Tree state commitment structure, key schema, and determ
 ### 2.2 Normative Behavior
 
 - The system MUST recompute and commit the SMT state root in every block header.
-- State keys MUST follow the canonical key prefix schema (0x01-0x0F per `state-model.md`).
+- State keys MUST follow the canonical key prefix schema (0x01-0x0E per `state-model.md`).
 - All entity values MUST be serialized in SCALE encoding for deterministic byte output.
 - State transitions MUST be applied in strict transaction inclusion order within each block.
 - The system MUST support inclusion/exclusion proofs for any state key at any committed height.
@@ -234,7 +234,7 @@ struct Account {
 **Account lifecycle:** Created on first inbound transfer or airdrop → Active (perpetual) → Prunable if balance = 0 and nonce = 0 for 100,000 blocks.
 
 **Task creation (TaskCreateTx):**
-1. PDP validates action_plan fields: schema, signature, policy bundle, nonce uniqueness, TTL, creator trust stage >= `trusted`, creator active task count < stage-based cap, creator balance >= `bounty_agx + estimated_tx_fee`, `seed_ref` references valid seed idea, `topic_id` matches seed.
+1. PDP validates action_plan fields: schema, signature, nonce uniqueness, TTL, creator balance >= `bounty_agx + estimated_tx_fee`, `seed_ref` references valid seed idea, `topic_id` matches seed.
 2. EIP-1559 fee deducted from creator balance (base fee burned, priority fee to block proposer).
 3. State machine: debit `bounty_agx` from creator balance, credit task escrow.
 4. Record `TaskRecord { task_id = SHA3-256(action_plan), topic_id, seed_ref, funder = creator_id, sponsor_id, bounty_agx, metadata_hash, required_skills_hash, status = Open, escrow_status = Locked, created_at_height, expires_at_height }`.

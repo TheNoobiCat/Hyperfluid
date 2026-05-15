@@ -48,7 +48,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall define a challenge window of 144 blocks (~24 hours) for quality disputes, with provisional settlement immediate and final settlement after challenge window closes.
+**Statement:** The system shall define a challenge window of 144 blocks (~24 hours) for quality disputes. Escrow destination is determined at review completion but funds remain locked until the challenge window closes — no funds move during the interim.
 
 **Rationale:** Balances speed with fraud correction. See `agx-economics-and-adversarial-incentives.md` Section 5 (Challenge and settlement timing).
 
@@ -58,7 +58,7 @@
 
 **Acceptance Criteria:**
 - [ ] Challenge window duration is 144 blocks.
-- [ ] Provisional settlement occurs upon review completion.
+- [ ] Escrow destination determined at review completion; funds remain locked.
 - [ ] Final settlement occurs only after challenge window closes.
 - [ ] Settlement ordering is FIFO by submission_id to prevent MEV extraction.
 
@@ -71,7 +71,7 @@
 
 **Category:** Economics
 
-**Statement:** The system shall require challenger bond of 20% of provisional reward, refunded if challenge succeeds, burned if challenge fails.
+**Statement:** The system shall require challenger bond of 20% of the task bounty, refunded if challenge succeeds, burned if challenge fails.
 
 **Rationale:** Prevents challenge spam while incentivizing honest challenges. See `agx-economics-and-adversarial-incentives.md` Section 5 (Challenge and settlement timing).
 
@@ -169,7 +169,7 @@
 - `agx-economics-and-adversarial-incentives.md` Section 6, Tradeoff 2
 
 **Acceptance Criteria:**
-- [ ] Payout is fixed: bounty split equally among approving reviewers on majority approval.
+- [ ] Payout is fixed: 90% of escrowed bounty goes to the worker, 10% split equally among all reviewers who submit a timely verdict (approve or deny).
 - [ ] Only task outputs surviving challenge window receive payout.
 - [ ] Message volume alone yields no reward. Only accepted task outputs earn bounties.
 - [ ] No protocol issuance — all rewards originate from escrowed bounties.
@@ -215,7 +215,7 @@
 **Acceptance Criteria:**
 - [ ] Task creation deducts `bounty_agx` from creator's balance.
 - [ ] Escrowed funds are locked until task resolution.
-- [ ] Completed task: payout released to worker(s) after review and challenge window.
+- [ ] Completed task: payout released after review and challenge window — 90% to worker, 10% split among timely reviewers.
 - [ ] Unclaimed expired task: bounty refunded to creator (minus cancellation fee).
 - [ ] Failed review: bounty returned to creator; worker forfeits lease collateral.
 

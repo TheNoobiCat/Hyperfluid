@@ -59,16 +59,15 @@ struct HandoffRecord {
 2. Send prompt + messages to LLM; await response.
 3. Parse tool calls from LLM response.
 4. For each tool call:
-   a. Validate against schema (exact JSON types).
-   b. Check failure guard: SHA3-256(tool_call_bytes) — block duplicates within 1 hour, block after 3 failures within 1 hour.
-   c. Execute tool (network-mutating tools route through PDP).
-   d. Collect tool output, sanitize, append to messages.
+    a. Validate against schema (exact JSON types).
+    b. Execute tool (network-mutating tools route through PDP).
+    c. Collect tool output, sanitize, append to messages.
 5. Check token count.
 6. If tokens > context_limit * 0.70 or message count > 50:
-   a. Inject reflection prompt.
-   b. Capture handoff summary.
-   c. Persist to SQLite.
-   d. Reset messages array.
+    a. Inject reflection prompt.
+    b. Capture handoff summary.
+    c. Persist to SQLite.
+    d. Reset messages array.
 7. Wait for loop_interval_ms. Repeat.
 
 **Crash recovery:**
@@ -438,6 +437,13 @@ struct ResourceLimits {
 - Sandbox escape attempt: Runtime termination, evidence logged to node.
 - File descriptor exhaustion: Tool calls fail with resource limit errors.
 
+### 4.6 Versioning and Compatibility
+
+- Sandbox profile (seccomp allowlist, cgroup limits, namespace configuration) is operator-configurable within protocol-defined minimum bounds.
+- Protocol-enforced minimum sandbox requirements are versioned in the policy bundle.
+- Resource limit defaults are advisory; operators may tighten but not relax below protocol minima.
+- API schema between runtime and node (I-01) is versioned; breaking changes require coordinated node+runtime upgrades.
+
 ### 4.7 Conformance Test Hooks
 
 - Verify agent crash does not affect block production or peer connectivity.
@@ -452,49 +458,24 @@ struct ResourceLimits {
   - Justification: Seccomp, namespace isolation, and cgroup limits are OS-level guarantees.
   - Trust-minimised alternative: Hardware-level isolation (VM per agent) — higher overhead but stronger isolation.
 
-### 4.6 Versioning and Compatibility
-
-- Sandbox profile (seccomp allowlist, cgroup limits, namespace configuration) is operator-configurable within protocol-defined minimum bounds.
-- Protocol-enforced minimum sandbox requirements are versioned in the policy bundle.
-- Resource limit defaults are advisory; operators may tighten but not relax below protocol minima.
-- API schema between runtime and node (I-01) is versioned; breaking changes require coordinated node+runtime upgrades.
-
 ---
 
-## Section 5: Operator Interfaces
+## Section 5: Operator Interfaces (Optional)
 
 ### 5.1 Purpose
 
-Define optional operator-facing interfaces for first-launch configuration and monitoring. These run in Zone 3 (agent runtime) and cannot modify protocol state.
+Define optional operator-facing interfaces for first-launch configuration and monitoring. These run in Zone 3 (agent runtime) and cannot modify protocol state. Implementation is deferred; these interfaces are not required for protocol correctness.
 
 ### 5.2 Normative Behavior
 
-- The system MAY provide a TUI setup wizard for first-launch configuration (LLM provider, agent identity, Telegram).
-- The system MAY provide a Telegram bot dashboard for monitoring (balance, trust stage, current tasks) and AGX transfers.
+- The system MAY provide a TUI setup wizard for first-launch configuration.
+- The system MAY provide a Telegram bot dashboard for monitoring.
 - Neither interface can modify agent behavior, task state, or policy decisions.
-- Telegram chat handling MUST be served by a dedicated telegram_chat_agent instance with read-only access to the main agent's status snapshot and chat log.
-- The telegram_chat_agent MUST respond to any inbound message with a read-only status response derived from the snapshot and read-only SQLite queries.
+- Telegram chat handling MUST be served by a dedicated instance with read-only access to the main agent's status snapshot.
 - The telegram_chat_agent tool allowlist MUST include only `hyperfluid task submit`.
-- Sponsored task submission (FR-0200): the telegram_chat_agent receives natural-language task requests, refines them, requests explicit confirmation (plain "yes"), and submits as sponsor via `hyperfluid task submit --sponsor` only after confirmation.
 
-### 5.3 Data Structures
-
-```rust
-struct TelegramConfig {
-    bot_token: String,
-    allowed_user_id: u64,
-    enabled: bool,
-}
-```
-
-### 5.4 Conformance Test Hooks
+### 5.3 Conformance Test Hooks
 
 - Verify Telegram bot validates token at startup.
 - Verify bot token is not present in agent output artifacts or on-chain state.
-- Verify telegram_chat_agent responds to any inbound message without tool calls.
 - Verify telegram_chat_agent submits tasks only after a plain "yes" confirmation.
-
-### 5.5 Trust-Assumption Inventory
-
-- Telegram Bot API availability: Bot depends on Telegram's infrastructure. Non-critical — agent continues without it.
-- Bot token secrecy: Token stored in local config.toml.

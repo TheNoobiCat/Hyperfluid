@@ -2,7 +2,7 @@
 
 ## Inputs
 - From Stage 03: validated full system, conformance matrix passing, calibrated [TUNE] parameters, security audit clean, load/adversarial test results.
-- From Layer 4 specs: all 14 specs, particularly incident-response-spec.md and telemetry-spec.md for operations integration.
+- From Layer 4 specs: all 15 specs, particularly incident-response-spec.md and telemetry-spec.md for operations integration.
 - External: monitoring stack (Prometheus + Grafana or equivalent), alerting platform (PagerDuty or equivalent), deployment orchestration (Docker Compose for genesis, Kubernetes for production), key management HSM integration.
 
 ## Outputs
@@ -123,7 +123,7 @@
 | governance-spec.md | Emergency upgrade path, governance parameter changes |
 | artifact-availability-spec.md | Artifact repair runbook, retention monitoring |
 | agent-runtime-spec.md | Agent key management, sandbox monitoring |
-| policy-engine-spec.md | Circuit-breaker monitoring, quota alerting |
+| policy-engine-spec.md | Quota alerting |
 
 ## Upstream Dependencies for Next Layer
 - Layer 6 (Validation — formal validation strategy): Stage 04 outputs (SLOs, runbooks, launch checklist) inform the formal validation strategy. The conformance matrix from Stage 03 feeds into the Layer 6 validation traceability chain.

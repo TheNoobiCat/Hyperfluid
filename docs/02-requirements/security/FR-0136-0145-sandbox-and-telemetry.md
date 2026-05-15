@@ -171,8 +171,8 @@
 **Acceptance Criteria:**
 - (superseded — no implementation required)
 
-**Dependencies:** FR-0142
-**Tags:** superseded
+**Dependencies:** FR-0060
+**Tags:** should-have
 
 ---
 
@@ -211,5 +211,5 @@
 - [ ] Base fee decreases when congestion subsides per EIP-1559 formula.
 - [ ] Deferred low-priority operations are replayed safely.
 
-**Dependencies:** FR-0143
+**Dependencies:** FR-0146
 **Tags:** should-have

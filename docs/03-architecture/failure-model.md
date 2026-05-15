@@ -21,13 +21,12 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 
 **Mitigation:**
 - Committee partial overlap (max 20% rotation per epoch) prevents abrupt liveness loss (FR-0004)
-- Degraded mode (50-66 validators): block production continues with critical transactions only (FR-0001)
-- Emergency mode (0-49 validators): block production halts; auto-recovery after 500 idle blocks via emergency epoch transition (FR-0001)
+- Block production halts when committee drops below safety threshold; no degraded or emergency modes exist at the protocol level (ADR-0012)
 - No governance override possible during stall (safety > liveness)
 
 **Recovery:**
-- Degraded mode: resumes normal mode when validator count returns to >= 67
-- Emergency mode: auto-recovery triggers after 500 idle blocks; new committee sampled from all `active` and `paused` validators using previous VDF output as seed
+- Block production resumes when validator count returns to safety threshold
+- New committee sampled from all `active` validators using previous VDF output as seed
 - Epoch boundary provides fallback recovery in all cases
 
 ---
@@ -115,7 +114,7 @@ This document catalogues system-level failure scenarios for Hyperfluid, their de
 **Blast Radius:** Legitimate governance proposals delayed. Validator CPU cycles wasted on precheck and sandbox review.
 
 **Mitigation:**
-- 500 AGX deposit burned on invalid/non-deterministic proposals (FR-0024)
+- 500 AGX deposit penalty on invalid/non-deterministic proposals (FR-0024)
 - Per-identity cap: 1 proposal per epoch with 3-epoch cooldown after rejection (FR-0028)
 - Network-wide cap: 32 open proposals (FR-0028)
 - Deterministic precheck gates review sandbox launch (FR-0027)

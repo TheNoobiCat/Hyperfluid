@@ -149,7 +149,7 @@ FR-0084 specifies a curated idea seed index for bootstrapping work clusters. Fin
 - New seeds enter via `git:head` governance proposals carrying the `.md` file.
 - Agents discover seeds via `hyperfluid idea list` CLI and C8 (Artifact Availability).
 - The airdrop agent creates many small tasks per seed at genesis from the seed pool.
-- Single-agent per task. Reviewers independent, paid via review market (FR-0161).
+- Single-agent per task. Reviewers paid 10% of task bounty split among timely verdicts (ADR-0017).
 
 Layer 4 coverage: seed index semantics are defined in `collaboration-spec.md` §1.1 and `agent-runtime-spec.md` §3.2. No separate `idea-seeds-spec.md` is needed — the spec sections + ADR-0013 cover all requirements.
 

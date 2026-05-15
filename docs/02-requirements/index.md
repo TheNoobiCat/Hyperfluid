@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Last updated:** 2026-05-06  
-**Total requirements:** 202+ (172+ FR + 30 NFR)  
+**Total requirements:** 201 (171 FR + 30 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -45,7 +45,6 @@ Located in `docs/02-requirements/protocol/`
   - FR-0018: No-Vote Timeout Semantics
   - FR-0019: Evidence Transaction Pipeline
   - FR-0020: Staking State Machine Determinism
-  - FR-0020a: Stake Delegation
 
 ### Governance and git:head
 - [`FR-0021-0030-governance-and-git-head.md`](protocol/FR-0021-0030-governance-and-git-head.md)
@@ -134,7 +133,6 @@ Located in `docs/02-requirements/runtime/`
   - FR-0082: Signal-Only Inbox Injection
   - FR-0083: Communication Types and Routing
   - FR-0084: Idea Seed Index for Work Bootstrapping
-  - FR-0085: Swarm Anti-Abuse Mode
   - FR-0086: Layered Version Control
   - FR-0087: Review Sandbox for Topic Merges
   - FR-0089: Notification Summarizer
@@ -151,7 +149,6 @@ Located in `docs/02-requirements/runtime/`
   - FR-0096: Two-Stage Trust Ladder
   - FR-0098: Sybil Resistance Without Upfront Bond
   - FR-0099: Reviewer Independence Metrics
-  - FR-0100: Inbox Rate Limiting
   - FR-0101: Topic Decay and Discovery Ranking
   - FR-0102: Untrusted Sender Default Policy
   - FR-0103: Scoring Model Drift Detection
@@ -223,9 +220,10 @@ Located in `docs/02-requirements/economics/`
   - FR-0149: Challenger Bond and Loser-Pays Policy
   - FR-0150: Flash Loan Resistance in Settlement
   - FR-0151: Harm-Class Economic Penalties
-  - FR-0152: Dual-Lane Economics
+  - FR-0152: Tiered Fee Economics
   - FR-0153: Fixed Bounty Payouts (Marketplace Model)
-
+  - FR-0153a: Bounty Escrow Lifecycle
+  - FR-0153b: Seed Pool Task Creation
   - FR-0155: Parameter Bounds for Economic Variables
   - FR-0156: Lease Collateral Requirements
   - FR-0157: Anti-Sybil Airdrop Mechanism

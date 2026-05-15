@@ -192,7 +192,6 @@
 **Acceptance Criteria:**
 - [ ] Proposal deposit is burned on invalid/non-deterministic proposals.
 - [ ] Per-identity proposal cap and cooldown limit repetition.
-- [ ] Governance lane reserves 10% mempool capacity.
 - [ ] Open proposals network-wide capped at 32.
 
 **Dependencies:** FR-0024, FR-0028

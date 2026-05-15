@@ -77,6 +77,7 @@ enum FaultType {
 }
 
 struct SystemParameters {
+    // Canonical parameter set. See `state-model.md` §3 (SMT Key Schema, 0x08) for the full on-chain representation.
     epoch_length: u64,                // 8192 blocks
     committee_size: u64,              // 100
     min_self_bond: u128,              // 1,000 AGX = 10^21 atto-AGX (validator's own stake)
@@ -89,6 +90,10 @@ struct SystemParameters {
     proposal_deposit: u128,           // 500 AGX
     liveness_window_blocks: u64,      // 8192
     liveness_miss_threshold_pct: u8,  // 20 (20%)
+    // Additional parameters stored in SYSTEM_PARAMETERS (see state-model.md):
+    //   challenge_window: u64,        // 144 blocks [TUNE]
+    //   airdrop_amount: u128,         // 100 AGX per agent
+    //   git_head: [u8; 32],           // current git commit hash
 }
 ```
 

@@ -72,7 +72,7 @@ Located in `docs/04-specifications/security/`
 | FR-0061-0075 | agent-runtime-spec.md | Sections 1-4 |
 | FR-0076-0105 | collaboration-spec.md | Sections 1-3 |
 | FR-0106-0120 | policy-engine-spec.md | Sections 1-3 |
-| FR-0121-0135 | docs/01-research/security/prompt-injection-defense-framework.md | — |
+| FR-0121-0135 | policy-engine-spec.md | Section 4 (forthcoming — see PROJECT-STATUS.md) |
 | FR-0136-0138 | agent-runtime-spec.md | Section 4 |
 | FR-0139-0141 | telemetry-spec.md | Sections 1-2 |
 | FR-0142-0145 | incident-response-spec.md | Sections 1-2 |

@@ -7,7 +7,7 @@
 Further design discussion resolved three additional model decisions:
 - **Seed ideas are abstract topic buckets**, not individual tasks. One seed hosts many tasks.
 - **All tasks MUST reference a seed idea via `seed_ref`**. No orphan tasks. New seeds enter via `git:head` governance proposals.
-- **Single-agent per task**: no team formation, no subtask splitting. Reviewers are independent and paid via the review market (FR-0161), not from the task bounty.
+- **Single-agent per task**: no team formation, no subtask splitting. Reviewers are independent and paid 10% of the task bounty, split equally among timely verdicts.
 
 **Decision:**
 1. Expand the core tool set from 5 to 9 tools by adding: `read`, `edit`, `write`, `apply_patch`.

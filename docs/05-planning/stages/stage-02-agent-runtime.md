@@ -26,7 +26,7 @@
 - [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
 - [ ] EIP-1559 base fee: verified to adjust correctly under load, no protocol-level circuit-breaker.
 - [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and trust-stage update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
-- [ ] All 8 specs pass their conformance test hooks (Section X.7).
+- [ ] All 15 specs pass their conformance test hooks (Section X.7).
 - [ ] Risks documented and acceptable.
 - [ ] Next stage inputs prepared.
 
@@ -53,8 +53,8 @@
 1. Governance engine: git:head state representation, proposal submission (target hash, proposed branch, sandbox period), vote window (5,040 blocks = ~7 days at 2s blocks), no-vote timeout, anti-flood deposit.
 2. Fast-Path topic protocol: topic scope definition, merge proposal with quorum certificate (67/100), challenge window (1,440 blocks = ~48 min), rollback on successful challenge, promotion bridge to governance for permanent codification.
 3. PDP rule chain: implement 5 steps in order (schema → signature → replay → quota → fee). Ensure determinism — no `HashMap` iteration, no floating-point in root authorization path, no time-based decisions. Structured deny reason codes.
-5. Audit log: append-only, content-addressed (each entry hashes to previous entry). Queryable by plan_id and agent_id.
-6. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes.
+4. Audit log: append-only, content-addressed (each entry hashes to previous entry). Queryable by plan_id and agent_id.
+5. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes.
 
 ### Week 3–4: Agent Runtime + Sandbox + Operator Interface (C10)
 1. Infinite agent loop: `load_system_prompt() → call_llm() → parse_action() → execute_tool() → check_token_count() → handoff_if_needed() → repeat`.
@@ -80,7 +80,7 @@
 4. Task creation trust-stage quotas (FR-0195): untrusted: 0 active created tasks, trusted: 10 (per FR-0195). Enforced by PDP at `task_create` validation. `Q-TASK-CREATE-STAGE` added to quota matrix.
 5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via clatter+ml-dsa secure channels over the P2P gossip layer (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
 6. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage). Task creation events generate inbox signals for subscribed agents.
-6. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
+7. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
 8. Review engine: initial review (3 reviewers, binary verdict), challenge window, settlement (fixed payout on majority approval).
 9. Reviewer independence: stake-graph analysis ensures no reviewer shares an operator cluster with the worker or another reviewer.
 10. Anti-collusion: Sybil detection correlation engine — five-signal pairwise scoring (vote alignment, co-claiming, temporal overlap, stake distance, cross-review failure). Cluster aggregation. Automated adjudication with independent review panels. Confirmed Sybil = bond burn + trust regression + cluster annotation for whitewash detection.
@@ -100,7 +100,7 @@
 - **LLM provider availability and cost:** Rate limits, API outages, or cost spikes could stall agent testing. Mitigation: support Ollama local models for low-risk testing; cache LLM responses for deterministic replay in tests.
 - **Sandbox escape:** Agent runtime process isolation must prevent filesystem and network escape. Mitigation: WASM sandbox with WASI preview2 (least privilege) or Firecracker microVM. No host network access except through a controlled proxy. Full sandbox escape threat model deferred to Stage 03.
 - **Reviewer collusion:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: operator-cluster independence constraint (stake-graph analysis prevents same-cluster reviewers), Sybil detection correlation engine with automated adjudication. Test with 20% adversarial agent set in Stage 03.
-- **Trust ladder promotion gamed:** Agents could complete trivial tasks to inflate metrics. Mitigation: review scores weight by risk class (high-risk tasks contribute more to trust progression than low-risk). Task quality decay requires sustained quality, not just volume.
+- **Trust ladder promotion gamed:** Agents could complete trivial tasks to inflate metrics. Mitigation: review scores weight by task complexity and reviewer consensus (tasks with higher disagreement contribute more to trust progression). Task quality decay requires sustained quality, not just volume.
 - **Governance vote apathy:** If <33% of stake votes, proposals stall indefinitely. Mitigation: governance-spec no-vote timeout (non-vote = no quorum contribution, proposal expires). Emergency proposals have shorter windows (1 hour, 67% threshold).
 - **Fast-Path challenge DOS:** Attackers could challenge every merge to stall topic progress. Mitigation: challenge requires deposit (slashed if challenge fails). Persistent frivolous challengers flagged by trust regression and temporarily barred.
 - **Telegram bot token leakage:** Bot token stored in local config.toml (Zone 3). Mitigation: no logging of token contents, file permissions restricted to agent process user, agent never includes token in on-chain data or artifact outputs.
@@ -120,10 +120,10 @@
 | review-engine-spec.md | 1 (Quality Pipeline) | FR-0161–0175 |
 | collaboration-spec.md | 1 (Task Board), 2 (Inbox), 3 (Trust Ladder) | FR-0076–0105 |
 | telemetry-spec.md | 1 (Envelopes), 2 (Aggregation) | FR-0060, FR-0139–0141, NFR-0020–0021 |
-| incident-response-spec.md | 1 (FSM), 2 (Recovery) | FR-0142–0145 |
+| incident-response-spec.md | 1 (Congestion) | FR-0144–0145 |
 
 ## Upstream Dependencies for Next Stage
 - Full system must be functional end-to-end: agent → action_plan → PDP → chain → review → settlement → trust promotion.
-- All 14 specs must have implementations passing their conformance test hooks. Any gaps are blockers for Stage 03.
+- All 15 specs must have implementations passing their conformance test hooks. Any gaps are blockers for Stage 03.
 - Integration test suite must be runnable as `cargo test --integration` (Stage 03 extends this).
 - [TUNE] parameter calibration log must be populated with initial values from integration testing.

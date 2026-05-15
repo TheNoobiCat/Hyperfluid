@@ -3,7 +3,7 @@
 **Status:** COMPLETE
 **Last updated:** 2026-05-14
 **Total components:** 12
-**ADRs:** 16
+**ADRs:** 17
 
 ---
 
@@ -96,6 +96,7 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0014 | User Task Submission and Agent Sponsorship | Accepted |
 | ADR-0015 | Stake Delegation | Accepted |
 | ADR-0016 | clatter + ml-dsa Secure Channel Stack (replaces Ockam) | Accepted |
+| ADR-0017 | 90/10 Review Payout Split (replaces quality-weighted scoring) | Accepted |
 
 ---
 
@@ -127,7 +128,7 @@ Every FR/NFR maps to at least one component. For the full traceability matrix, s
 
 ### Orphan Check
 
-All 202 requirements map to at least one component. Zero orphans.
+All 201 requirements map to at least one component. Zero orphans.
 
 ---
 
@@ -135,11 +136,11 @@ All 202 requirements map to at least one component. Zero orphans.
 
 | Check | Status |
 |-------|--------|
-| Every requirement maps to a component | PASS (202/202) |
+| Every requirement maps to a component | PASS (201/201) |
 | No orphan requirements | PASS |
 | Component boundaries documented | PASS |
 | Trust boundaries documented | PASS |
 | Interfaces deterministic | PASS |
-| ADRs recorded for all significant decisions | PASS (16 ADRs) |
+| ADRs recorded for all significant decisions | PASS (17 ADRs) |
 
 **Gate result: READY FOR LAYER 4 (Specifications).**

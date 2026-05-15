@@ -286,46 +286,32 @@
 
 ---
 
-## NFR-0029: Backup and Restore for Agent State
+## NFR-0029: Backup and Restore for Agent State (DEFERRED)
+
+> Deferred to post-mainnet. Nice-to-have feature. No implementation required for Stage 02.
 
 **Category:** Reliability
 
 **Statement:** The system shall support backup and restore of agent SQLite state with checksum verification, enabling migration and disaster recovery.
 
-**Rationale:** Operators need reliable recovery options. See `infinite-agent.md` Section 4.3 (Database Schema).
-
-**Source Research:**
-- `infinite-agent.md` Section 4.3 (Database Schema)
-
 **Acceptance Criteria:**
-- [ ] SQLite database can be copied while WAL is active.
-- [ ] Backup includes integrity checksum.
-- [ ] Restore validates checksum before use.
-- [ ] Restore resumes from last handoff without loss.
+- [ ] Deferred to post-mainnet.
 
 **Dependencies:** FR-0061
-**Tags:** nice-to-have
+**Tags:** deferred
 
 ---
 
-## NFR-0030: Formal Verification Targets
+## NFR-0030: Formal Verification Targets (DEFERRED)
+
+> Deferred to post-mainnet. Nice-to-have feature. No implementation required for Stage 02.
 
 **Category:** Security
 
 **Statement:** The system shall define formal verification targets for committee sampling, liveness transitions, policy invariants, and fast-path state machine safety.
 
-**Rationale:** Formal verification provides strongest safety guarantees. See `agx-committee-bft-and-governance.md` Section 11 (Future Improvements).
-
-**Source Research:**
-- `agx-committee-bft-and-governance.md` Section 11 (Future Improvements)
-- `topic-fastpath-protocol-spec.md` Section 11 (Future Improvements)
-- `network-policy-engine-spec.md` Section 11 (Future Improvements)
-
 **Acceptance Criteria:**
-- [ ] Formal specification exists for committee sampling logic.
-- [ ] Liveness transition safety properties are stated.
-- [ ] Policy invariant (no bypass) is formally specified.
-- [ ] Verification is deferred to Phase 5 but specifications are frozen now.
+- [ ] Deferred to post-mainnet.
 
 **Dependencies:** none
-**Tags:** nice-to-have
+**Tags:** deferred

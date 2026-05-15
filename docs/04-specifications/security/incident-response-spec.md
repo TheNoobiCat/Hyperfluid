@@ -1,7 +1,7 @@
 # Security Spec: Fee Market & Congestion Control
 
 **Components:** C4 Governance (Post-Incident Bridge)
-**Covered FRs:** FR-0142, FR-0143, FR-0144, FR-0145
+**Covered FRs:** FR-0144, FR-0145
 **Dependencies:** C1 Consensus Engine, C2 State Machine
 
 ---
@@ -19,12 +19,7 @@ Define the EIP-1559 base fee adjustment formula for congestion control. No emerg
 - Base fee MUST decrease by at most 12.5% per block when utilization < target.
 - No other automatic congestion mode is enforced at the protocol level.
 - The system MUST NOT freeze, filter, or restrict any transaction type based on congestion state.
-- No emergency mode, degraded mode, or circuit-breaker exists in the protocol.
 - Agent runtimes MAY implement local rate limiting, circuit breakers, or spam filters for their own UX — these are local operator concerns, not protocol-enforced.
-
-### 1.3 Data Structures
-
-No protocol-level incident data structures exist. Congestion is handled entirely through the EIP-1559 base fee mechanism (§1.4).
 
 ### 1.4 State Transitions
 

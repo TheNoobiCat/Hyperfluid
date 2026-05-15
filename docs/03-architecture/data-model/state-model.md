@@ -104,7 +104,7 @@ erDiagram
         bytes32 parent_task_id FK "references TASK (optional, None if top-level)"
         bytes32 primary_owner "agent_id with active lease"
         bytes32 funder "agent_id that created and funded the bounty"
-        string status "open | claimed | in_progress | blocked | done"
+        string status "open | claimed | in_progress | done"
         uint128 bounty_agx "escrowed reward for completion (atto-AGX)"
         uint64 created_at_height "task creation height"
         uint64 lease_expires_height "primary lease expiry"
@@ -247,7 +247,7 @@ Content-addressed metadata for stored artifacts. The `artifact_root_hash` is the
 
 ### TASK
 
-Collaboration unit on the task board. Has soft lease lifecycle: `open` → `claimed` → `in_progress` → `blocked` → `done`. Lease TTL is 20 minutes with 5-minute heartbeat interval. Shadow claims permitted after 8-minute grace window. Auto-takeover promotes best shadow claimant on primary lease expiry.
+Collaboration unit on the task board. Has soft lease lifecycle: `open` → `claimed` → `in_progress` → `done`. Lease TTL is 20 minutes with 5-minute heartbeat interval. Shadow claims permitted after 8-minute grace window. Auto-takeover promotes best shadow claimant on primary lease expiry.
 
 ### TRUST_STAGE
 

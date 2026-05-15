@@ -16,7 +16,7 @@ Define the decentralized task board, soft lease lifecycle, task splitting with d
 ### 1.2 Normative Behavior
 
 - Tasks are created via the `task_create` action plan type (FR-0194) and the `TaskCreateTx` consensus transaction. Task submission from external users or sponsoring agents flows through `hyperfluid task submit` → PDP validation → state machine → `TaskCreated` gossip event. See ADR-0014 (Task Submission and Sponsorship) for the full pipeline.
-- The system MUST implement a decentralized task board with soft lease lifecycle: `open → claimed → in_progress → blocked → done`.
+- The system MUST implement a decentralized task board with soft lease lifecycle: `open → claimed → in_progress → done`.
 - Tasks MAY be split into child subtasks forming a dependency DAG. Split tasks transition to `decomposed` while children execute.
 - Each child task MUST reference its parent via `parent_task_id`. Top-level tasks have `parent_task_id = None`.
 - A child task MAY declare dependencies via `depends_on: Vec<task_id>`. It MUST NOT be claimed until all dependencies are `Done`.
@@ -46,6 +46,9 @@ struct Task {
     created_at_height: u64,
     lease_expires_height: u64,
     required_skills_hash: [u8; 32],
+    metadata_hash: [u8; 32],       // SHA3-256 of gix-stored task description artifact
+    sponsor_id: [u8; 32],          // agent_id of sponsoring agent (zero if not sponsored)
+    requester_pubkey: [u8; 32],    // pubkey of human user (zero if not applicable)
     escrow_status: EscrowStatus,   // locked | bounty_redistributed | released | refunded
 }
 
@@ -60,7 +63,6 @@ enum TaskStatus {
     Open,
     Claimed,
     InProgress,
-    Blocked,
     Done,
     Decomposed,     // parent task split into children; children in flight
 }
@@ -117,9 +119,8 @@ Created by agent [bounty escrowed from funder balance] ─► Open
   │     │
   │     ├── valid heartbeats ─► InProgress [lease renews]
   │     │     │
-  │     │     ├── submit_completion ─► Done [bounty released to worker after review + challenge]
-  │     │     └── blocked ─► Blocked [awaiting dependency]
-  │     │
+    │     │     ├── submit_completion ─► Done [90% bounty to worker, 10% to timely reviewers after review + challenge window]
+    │     │
   │     ├── lease expires (no heartbeat) ─► Open [shadow claim promoted if exists]
   │     └── release_task (owner) ─► Open
   │
@@ -149,9 +150,7 @@ Child task with depends_on: [D]
   2. Sets parent status → Decomposed.
   3. Creates child tasks with status Open and their allocated escrow.
   4. The parent `bounty_agx` is redistributed in full to children.
-- Gas cost MUST scale linearly with child count and dependency edge count to prevent dense-DAG bloat attacks: `gas_cost = base_cost + per_child * N + per_edge * E`.
-
-No review approval is needed. The market enforces split quality: if the bounties are unfair or the descriptions are vague, children will sit unclaimed. The splitter wasted their transaction fee for nothing.
+- Gas cost MUST scale linearly with child count and dependency edge count to prevent dense-DAG bloat attacks: `gas_cost = base_cost + per_child * N + per_edge * E` where `base_cost = 1000`, `per_child = 100`, `per_edge = 50` (gas units, `[TUNE]`).
 
 **Bounty escrow lifecycle (with split redistribution):**
 
@@ -159,7 +158,7 @@ No review approval is needed. The market enforces split quality: if the bounties
 TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
   │
   ├── [worker completes + review passes + challenge window closes]
-  │     └── EscrowReleased [payout to worker(s)]
+  │     └── EscrowReleased [90% to worker, 10% split among timely reviewers]
   │
   ├── [split approved]
   │     └── BountyRedistributed
@@ -174,7 +173,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
   │     └── EscrowRefunded [bounty returned to funder; worker forfeits lease collateral]
   │
   └── [challenge succeeds post-settlement]
-        └── EscrowReleased [payout reversed; challenger rewarded]
+        └── EscrowReleased [challenger rewarded from clawed-back worker + incorrect reviewer shares; remaining funds returned to funder]
 ```
 
 - A task MUST NOT transition to Open until `bounty_agx` is successfully deducted from the funder's balance.
@@ -193,10 +192,9 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 **Single-agent execution model:**
 - Each leaf task (status != Decomposed) is executed by exactly one agent.
 - A task MAY be split into child subtasks via a `SplitTaskTx`. Only the **funder** (if Open) or **primary_owner** (if Claimed/InProgress) may split. No separate approval required — market forces enforce quality.
-- No coordinator fee exists. The entire parent bounty is subdivided among children. This eliminates any skimming incentive.
 - Child tasks follow the same lifecycle as top-level tasks: claim, work, review, payout. Each child has its own bounty allocation subdivided from the parent.
-- Reviewers are assigned independently via the review market (FR-0161, review-engine-spec.md). They are paid from the review market mechanism, not from the task bounty.
-- The worker of a leaf task receives the child's escrowed bounty on successful completion and review pass.
+- Reviewers are assigned independently via the review market (FR-0161, review-engine-spec.md). They are paid 10% of the task bounty, split equally among all reviewers who submit a timely verdict (approve or deny).
+- The worker of a leaf task receives 90% of the child's escrowed bounty on successful completion and review pass.
 - When all children reach Done, the parent transitions to Done (terminal). If all children expire or are abandoned, the parent also transitions to Done — no escrow remains to reopen.
 
 ### 1.5 Failure Behavior
@@ -227,7 +225,7 @@ TaskCreated [bounty_agx deducted from funder balance] ─► EscrowLocked
 - Verify shadow claim promotion at lease expiry.
 - Verify per-agent lease caps by trust stage.
 - Verify lease collateral requirement: max(10 AGX, 0.5% bounty).
-- Verify bounty escrow: task creation deducts bounty_agx from funder balance; full bounty goes to single worker.
+- Verify bounty escrow: task creation deducts bounty_agx from funder balance; 90% goes to worker, 10% to timely reviewers.
 - Verify bounty release: payout to worker after review + challenge window close.
 - Verify bounty refund: task expiry returns bounty to funder (minus cancellation fee).
 

@@ -1,7 +1,7 @@
 # Stage 00: Foundation
 
 ## Inputs
-- From previous stage: Layer 4 specifications (14 specs, frozen), Layer 3 architecture (12 components, 16 ADRs), Layer 2 requirements (202+ FR/NFR).
+- From previous stage: Layer 4 specifications (15 specs, frozen), Layer 3 architecture (12 components, 17 ADRs), Layer 2 requirements (201 FR/NFR).
 - External: Rust toolchain stable, `cargo`, `git`, `just` (command runner), CI platform (GitHub Actions or equivalent).
 
 ## Outputs
@@ -43,7 +43,7 @@
 - [x] Add `CODEOWNERS`, PR template (`.github/PULL_REQUEST_TEMPLATE.md`), `CONTRIBUTING.md`.
 - [x] Create `.github/workflows/ci.yml` pipeline (fmt, clippy, test, doc, audit, bench).
 - [x] Create `.devcontainer/devcontainer.json` for reproducible environment.
-- [x] PDP crate seeded with early `error.rs` and `types.rs` (TrustStage, RiskLevel, PolicyResult).
+- [x] PDP crate seeded with early `error.rs` and `types.rs` (TrustStage, PolicyResult).
 - [x] `.gitignore` updated with comprehensive Rust entries.
 
 ### Week 2 [x] COMPLETE (2026-05-04)
