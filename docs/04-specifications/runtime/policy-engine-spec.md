@@ -90,7 +90,7 @@ struct PolicyAuditEntry {
 
 ### 1.4 State Transitions
 
-**PDP rule chain evaluation (simplified to 6 steps):**
+**PDP rule chain evaluation (simplified to 5 steps):**
 
 ```
 Step 1: SCHEMA VALIDATION
@@ -120,7 +120,7 @@ Step 5: FEE CHECK
   - EIP-1559 base fee + priority fee must be covered.
   - Failure → DENIED (insufficient funds).
 
-Step 6: APPROVED
+Step 5: APPROVED
   - Plan state: pending → approved.
   - Quota consumed (atomically reserved).
   - Audit log entry written.
@@ -325,4 +325,3 @@ Key rotation uses a dual-key model: when pending_pubkey is set and current_heigh
 - 100-block grace window bounded risk
   - Justification: A compromised old key can still sign during the 100-block grace window. This is an intentional tradeoff — the grace window allows in-flight action plans to complete, preventing operational disruption during legitimate rotation. At ~10s block times, the exposure window is ~17 minutes.
   - Trust-minimised alternative: Zero-grace-window (instant rotation) would atomically revoke old key but would cause in-flight plan failures. The 100-block window is the minimal value that covers a full challenge window (144 blocks of plan validity) and allows queued plans to complete. Shorter windows (~50 blocks) increase the risk of false-positive plan rejections during rotation.
-

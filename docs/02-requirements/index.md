@@ -1,8 +1,8 @@
 # Layer 2: Requirements Master Index
 
 **Status:** COMPLETE  
-**Last updated:** 2026-05-06  
-**Total requirements:** 201 (171 FR + 30 NFR)  
+**Last updated:** 2026-05-15  
+**Total requirements:** 203 (173 FR + 30 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -201,8 +201,6 @@ Located in `docs/02-requirements/security/`
   - FR-0139: Telemetry Aggregation Robustness
   - FR-0140: Temporal Binding of Telemetry
   - FR-0141: Independent Policy Gateway Reconciliation
-  - FR-0142: Incident State Machine with Signed Evidence (superseded)
-  - FR-0143: Emergency Mode Parameter Overrides (superseded)
   - FR-0144: False-Alarm Reporter Penalties
   - FR-0145: Fee Market Congestion Recovery
 

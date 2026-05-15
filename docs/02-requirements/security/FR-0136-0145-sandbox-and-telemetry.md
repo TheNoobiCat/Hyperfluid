@@ -133,48 +133,6 @@
 
 ---
 
-## FR-0142: Incident State Machine with Signed Evidence (SUPERSEDED)
-
-> **Superseded by ADR-0012.** Emergency mode and circuit-breaker hierarchy were removed. The EIP-1559 base fee mechanism is the sole congestion mechanism. See `incident-response-spec.md` §1 and FR-0145 for the current approach.
-
-**Category:** Security
-
-**Statement:** The system shall implement a binary incident mode (Normal / Emergency) with deterministic triggers, signed evidence quorum, and explicit exit criteria.
-
-**Rationale:** Removes central bottleneck from incident declaration. See `decentralized-incident-response-and-recovery.md` Section 5 (Core Mechanisms).
-
-**Source Research:**
-- `decentralized-incident-response-and-recovery.md` Section 5 (Trigger logic)
-- `decentralized-incident-response-and-recovery.md` Section 6, Tradeoff 1
-
-**Acceptance Criteria:**
-- (superseded — no implementation required)
-
-**Dependencies:** FR-0060
-**Tags:** superseded
-
----
-
-## FR-0143: Emergency Mode Parameter Overrides (SUPERSEDED)
-
-> **Superseded by ADR-0012.** Emergency mode and circuit-breaker hierarchy were removed. The EIP-1559 base fee mechanism is the sole congestion mechanism. See `incident-response-spec.md` §1 and FR-0145 for the current approach.
-
-**Category:** Security
-
-**Statement:** The system shall apply deterministic parameter overrides in Emergency mode: 3x PoW difficulty, 50% unknown-sender budgets, reserved control lanes, frozen low-trust fast-path, emergency fee floor.
-
-**Rationale:** Automatic defense escalation preserves safety-critical operations. See `decentralized-incident-response-and-recovery.md` Section 5 (Emergency mode).
-
-**Source Research:**
-- `decentralized-incident-response-and-recovery.md` Section 5, lines 96-103
-
-**Acceptance Criteria:**
-- (superseded — no implementation required)
-
-**Dependencies:** FR-0060
-**Tags:** should-have
-
----
 
 ## FR-0144: False-Alarm Reporter Penalties
 
@@ -193,7 +151,7 @@
     - [ ] Penalty includes trust regression and temporary reporting restriction.
 - [ ] Penalty severity scales with intent and frequency.
 
-**Dependencies:** FR-0142
+**Dependencies:** FR-0145
 **Tags:** should-have
 
 ---

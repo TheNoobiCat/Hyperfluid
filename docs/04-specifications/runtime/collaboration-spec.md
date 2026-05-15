@@ -37,10 +37,10 @@ struct Task {
     task_id: [u8; 32],             // SHA3-256 of task spec
     topic_id: [u8; 32],            // derived from seed_ref: idea/<slug>
     seed_ref: [u8; 32],            // SHA3-256 of the canonical seed idea .md file; required
-    parent_task_id: Option<[u8; 32]>,  // set if created via split; None for top-level
+    parent_task_id: [u8; 32],      // set if created via split; zero if top-level
     depends_on: Vec<[u8; 32]>,     // task_ids that must be Done before this can be claimed; empty for no deps
     funder: [u8; 32],              // agent_id that created and escrowed the bounty
-    primary_owner: Option<[u8; 32]>,
+    primary_owner: [u8; 32],       // agent_id with active lease (zero if none)
     status: TaskStatus,
     bounty_agx: u128,              // escrowed at creation in atto-AGX, released on completion
     created_at_height: u64,

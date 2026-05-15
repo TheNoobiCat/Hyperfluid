@@ -53,7 +53,7 @@ Located in `docs/04-specifications/security/`
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
 | [`telemetry-spec.md`](security/telemetry-spec.md) | C1, C2 (Telemetry) | FR-0060, FR-0139-0141, NFR-0020-0021 | Signed envelopes, aggregation, reconciliation, outlier detection |
-| [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0142-0145 | EIP-1559 base fee adjustment, congestion control |
+| [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0144-0145 | EIP-1559 base fee adjustment, congestion control |
 
 ---
 
@@ -75,7 +75,7 @@ Located in `docs/04-specifications/security/`
 | FR-0121-0135 | policy-engine-spec.md | Section 4 (forthcoming — see PROJECT-STATUS.md) |
 | FR-0136-0138 | agent-runtime-spec.md | Section 4 |
 | FR-0139-0141 | telemetry-spec.md | Sections 1-2 |
-| FR-0142-0145 | incident-response-spec.md | Sections 1-2 |
+| FR-0144-0145 | incident-response-spec.md | Sections 1-2 |
 | FR-0146, FR-0147, FR-0159, FR-0160 | fee-market-spec.md | Sections 1-2 |
 | FR-0148, FR-0149, FR-0150, FR-0153 | review-engine-spec.md | Section 1 |
 | FR-0151 | staking-spec.md | Section 1 |
