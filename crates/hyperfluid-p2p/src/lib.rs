@@ -7,6 +7,7 @@
 
 pub mod discovery;
 pub mod mempool;
+pub mod tcp;
 pub mod transport;
 pub mod types;
 

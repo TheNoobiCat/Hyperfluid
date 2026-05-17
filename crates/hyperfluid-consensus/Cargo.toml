@@ -12,6 +12,15 @@ serde.workspace = true
 sha3.workspace = true
 hex.workspace = true
 parity-scale-codec.workspace = true
+hyperfluid-state = { path = "../hyperfluid-state" }
+hyperfluid-governance = { path = "../hyperfluid-governance" }
+hyperfluid-fastpath = { path = "../hyperfluid-fastpath" }
+hyperfluid-pdp = { path = "../hyperfluid-pdp" }
+hyperfluid-staking = { path = "../hyperfluid-staking" }
+hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
+tokio.workspace = true
+tracing.workspace = true
+arc-malachitebft-core-consensus = "0.7.0-pre"
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -12,10 +12,10 @@
 //
 // Source: docs/05-planning/stages/stage-01-protocol-core.md Week 7-8
 
-use hyperfluid_consensus::types::{Committee, CommitteeMode};
+use hyperfluid_consensus::types::{Committee, CommitteeMode, Hash32};
 use hyperfluid_fee_market::{compute_next_base_fee, compute_tx_fee, FeeConfig, FeeMarketState};
 use hyperfluid_state::state_machine::{ExecutionContext, ExecutionResult, StateMachine};
-use hyperfluid_state::{Account, Hash32};
+use hyperfluid_state::Account;
 
 fn new_account(id: u8, balance: u128, nonce: u64) -> Account {
     use hyperfluid_state::sha3_256;

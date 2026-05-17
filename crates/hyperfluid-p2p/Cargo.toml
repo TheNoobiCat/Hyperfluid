@@ -15,5 +15,6 @@ clatter-secure-channel = ["dep:clatter", "dep:ml-dsa"]
 [dependencies]
 sha3.workspace = true
 serde.workspace = true
+tokio = { workspace = true, features = ["net", "rt", "io-util", "time"] }
 clatter = { workspace = true, optional = true }
 ml-dsa = { workspace = true, optional = true }

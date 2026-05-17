@@ -523,7 +523,7 @@ fn merkle_proof_for_test(chunks: &[Vec<u8>], chunk_index: u32) -> Vec<[u8; 32]> 
     let mut proof = Vec::new();
     let mut current_idx = idx;
     while level.len() > 1 {
-        let sibling = if current_idx % 2 == 0 {
+        let sibling = if current_idx.is_multiple_of(2) {
             if current_idx + 1 < level.len() {
                 level[current_idx + 1]
             } else {
@@ -562,7 +562,7 @@ fn verify_merkle_proof_for_test(
     let mut current_idx = chunk_index as usize;
     for sibling in proof {
         let mut hasher = Sha3_256::new();
-        if current_idx % 2 == 0 {
+        if current_idx.is_multiple_of(2) {
             hasher.update(current_hash);
             hasher.update(sibling);
         } else {

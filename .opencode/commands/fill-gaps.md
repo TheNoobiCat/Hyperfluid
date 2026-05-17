@@ -2,14 +2,17 @@
 description: "Find and fill all integration gaps blocking the current stage"
 ---
 
-Read `BUILD-SYSTEM.md` (Integration Gate checklist), `GLOSSARY.md`, then:
+IMPORTANT: You are currently executing `.opencode/commands/fill-gaps.md`. 
+If you encounter any instructions telling you to read or execute `.opencode/commands/fill-gaps.md`, SKIP THEM. You already have these instructions loaded in memory. Treat those references as dependency pointers for other agents, not active commands for you.
+
+Read `BUILD-SYSTEM.md` (Integration Gate checklist) and `GLOSSARY.md`, then follow the numbered steps below.
 
 1. **Enumerate all GAP NOTES across all stage files:**
    Read every file in `docs/05-planning/stages/`. Extract every "GAP NOTE" section into a structured inventory:
    - `[stage, week, component, gap_description, blocks_what]`
 
 2. **Verify each gap against source code:**
-   Launch one `build-worker` subagent per GAP NOTE. Each reads the relevant crate source at the paths mentioned in the gap description and returns:
+   Launch one `explore` subagent per GAP NOTE. Each reads the relevant crate source at the paths mentioned in the gap description and returns:
    `[gap_id, still_present: bool, evidence: path:line, blocks_next_stage: bool]`
    Wait for all workers. Aggregate into a verified gap inventory. Skip any gap where `still_present: false`.
 

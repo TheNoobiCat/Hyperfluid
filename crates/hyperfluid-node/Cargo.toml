@@ -27,3 +27,4 @@ hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
 hyperfluid-artifact = { path = "../hyperfluid-artifact" }
 hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 sha3.workspace = true
+parity-scale-codec.workspace = true

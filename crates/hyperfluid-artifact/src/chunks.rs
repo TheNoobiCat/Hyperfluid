@@ -77,7 +77,7 @@ pub fn merkle_proof_for_chunk(chunks: &[Vec<u8>], chunk_index: u32) -> Vec<[u8; 
     let mut current_idx = idx;
 
     while level.len() > 1 {
-        let sibling = if current_idx % 2 == 0 {
+        let sibling = if current_idx.is_multiple_of(2) {
             if current_idx + 1 < level.len() {
                 level[current_idx + 1]
             } else {
@@ -118,7 +118,7 @@ pub fn verify_merkle_proof(
     let mut current_idx = chunk_index as usize;
 
     for sibling in proof {
-        if current_idx % 2 == 0 {
+        if current_idx.is_multiple_of(2) {
             current_hash = hash_pair(&current_hash, sibling);
         } else {
             current_hash = hash_pair(sibling, &current_hash);

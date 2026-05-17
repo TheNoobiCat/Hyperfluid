@@ -36,6 +36,8 @@ pub struct StateMachine {
     task_ids: HashSet<Hash32>,
     /// Delegation records: (delegator_id, validator_id) -> (amount, unbonding_height, active)
     delegations: HashMap<(Hash32, Hash32), DelegationState>,
+    /// Validator records: validator_id -> ValidatorTracker
+    validators: HashMap<Hash32, ValidatorTracker>,
 }
 
 /// In-memory delegation state tracked by the state machine.
@@ -45,6 +47,27 @@ struct DelegationState {
     amount: u128,
     unbonding_at_height: u64,
     active: bool,
+}
+
+/// In-memory validator state tracked by the state machine.
+/// Mirrors on-chain ValidatorRecord from staking-spec.md Section 1.3.
+/// Tracks bond/unbond/withdraw lifecycle and stake amounts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+pub struct ValidatorTracker {
+    pub self_bond: u128,
+    pub total_delegated: u128,
+    pub bonding_height: u64,
+    pub unbonding_height: u64,
+    pub state: ValidatorLifecycleState,
+}
+
+/// Four-state validator lifecycle. Source: staking-spec.md Section 1.3
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+pub enum ValidatorLifecycleState {
+    Active,
+    Paused,
+    Unbonding,
+    Withdrawn,
 }
 
 impl Default for StateMachine {
@@ -60,12 +83,27 @@ impl StateMachine {
             consumed_plans: HashSet::new(),
             task_ids: HashSet::new(),
             delegations: HashMap::new(),
+            validators: HashMap::new(),
         }
     }
 
     /// Bootstrap accounts from genesis configuration.
     pub fn init_account(&mut self, account: Account) {
         self.accounts.insert(account.account_id, account);
+    }
+
+    /// Bootstrap a validator from genesis configuration.
+    pub fn init_validator(&mut self, validator_id: Hash32, self_bond: u128, bonding_height: u64) {
+        self.validators.insert(
+            validator_id,
+            ValidatorTracker {
+                self_bond,
+                total_delegated: 0,
+                bonding_height,
+                unbonding_height: 0,
+                state: ValidatorLifecycleState::Active,
+            },
+        );
     }
 
     /// Get a reference to an account.
@@ -352,6 +390,176 @@ impl StateMachine {
         ExecutionResult::Success
     }
 
+    /// Bond AGX as validator stake. Creates a new validator record or tops up
+    /// an existing one. Funds are locked — they cannot be transferred while bonded.
+    /// After bonding, the validator must wait `bond_delay` blocks before becoming
+    /// eligible for committee selection.
+    pub fn execute_bond(
+        &mut self,
+        validator_id: Hash32,
+        amount: u128,
+        nonce: u64,
+        min_self_bond: u128,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        if amount < min_self_bond {
+            return ExecutionResult::Rejected;
+        }
+
+        let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != validator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        let validator_balance = self.accounts.get(&validator_id).map(|a| a.balance).unwrap_or(0);
+        if validator_balance < amount {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(validator) = self.accounts.get_mut(&validator_id) {
+            validator.balance -= amount;
+            validator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+
+        let vt = self.validators.entry(validator_id).or_insert(ValidatorTracker {
+            self_bond: 0,
+            total_delegated: 0,
+            bonding_height: current_height,
+            unbonding_height: 0,
+            state: ValidatorLifecycleState::Active,
+        });
+        vt.self_bond = vt.self_bond.saturating_add(amount);
+        vt.state = ValidatorLifecycleState::Active;
+        vt.bonding_height = current_height;
+
+        ExecutionResult::Success
+    }
+
+    /// Initiate validator unbonding. Starts the unbond delay timer.
+    /// Validator becomes ineligible for committee assignment but funds
+    /// remain slashable during the unbonding period.
+    pub fn execute_unbond(
+        &mut self,
+        validator_id: Hash32,
+        nonce: u64,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != validator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        match self.validators.get(&validator_id) {
+            Some(vt) => {
+                if vt.state != ValidatorLifecycleState::Active {
+                    return ExecutionResult::Rejected;
+                }
+            }
+            None => return ExecutionResult::Rejected,
+        }
+
+        if let Some(validator) = self.accounts.get_mut(&validator_id) {
+            validator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(vt) = self.validators.get_mut(&validator_id) {
+            vt.state = ValidatorLifecycleState::Unbonding;
+            vt.unbonding_height = current_height;
+            ExecutionResult::Success
+        } else {
+            ExecutionResult::Rejected
+        }
+    }
+
+    /// Withdraw bonded stake after unbond delay expires.
+    /// Credits the staker's account balance and removes the validator record.
+    pub fn execute_withdraw(
+        &mut self,
+        validator_id: Hash32,
+        nonce: u64,
+        current_height: u64,
+        unbond_delay: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != validator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        let amount = match self.validators.get(&validator_id) {
+            Some(vt) => {
+                if vt.state != ValidatorLifecycleState::Unbonding {
+                    return ExecutionResult::Rejected;
+                }
+                if current_height < vt.unbonding_height.saturating_add(unbond_delay) {
+                    return ExecutionResult::Rejected;
+                }
+                vt.self_bond
+            }
+            None => return ExecutionResult::Rejected,
+        };
+
+        if let Some(validator) = self.accounts.get_mut(&validator_id) {
+            validator.balance = validator.balance.saturating_add(amount);
+            validator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(vt) = self.validators.get_mut(&validator_id) {
+            vt.state = ValidatorLifecycleState::Withdrawn;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+        self.validators.remove(&validator_id);
+        ExecutionResult::Success
+    }
+
+    /// Renew validator bond. Resets the validator's commission tracking window.
+    /// Only applicable to validators in Active or Paused state.
+    pub fn execute_renew(
+        &mut self,
+        validator_id: Hash32,
+        nonce: u64,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != validator_nonce + 1 {
+            return ExecutionResult::Rejected;
+        }
+
+        match self.validators.get(&validator_id) {
+            Some(vt) => {
+                if vt.state != ValidatorLifecycleState::Active
+                    && vt.state != ValidatorLifecycleState::Paused
+                {
+                    return ExecutionResult::Rejected;
+                }
+            }
+            None => return ExecutionResult::Rejected,
+        }
+
+        if let Some(validator) = self.accounts.get_mut(&validator_id) {
+            validator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(vt) = self.validators.get_mut(&validator_id) {
+            vt.bonding_height = current_height;
+            ExecutionResult::Success
+        } else {
+            ExecutionResult::Rejected
+        }
+    }
+
     /// Compute the SMT root from the current state machine state.
     /// All accounts and delegation records are serialised with SCALE encoding
     /// and inserted into the SMT sorted by state key (spec 2.2).
@@ -377,6 +585,12 @@ impl StateMachine {
             tree.insert(delegation_key, value);
         }
 
+        for (validator_id, vt) in &self.validators {
+            let key = state_key(KeyPrefix::Validator, validator_id);
+            let value = vt.encode();
+            tree.insert(key, value);
+        }
+
         tree.root()
     }
 
@@ -388,6 +602,11 @@ impl StateMachine {
     /// Iterate over all accounts.
     pub fn accounts_iter(&self) -> impl Iterator<Item = (&Hash32, &Account)> {
         self.accounts.iter()
+    }
+
+    /// Get validator tracker by ID.
+    pub fn get_validator(&self, validator_id: &Hash32) -> Option<&ValidatorTracker> {
+        self.validators.get(validator_id)
     }
 }
 
@@ -608,5 +827,184 @@ mod tests {
 
         let root = sm.compute_state_root();
         assert_ne!(root, [0u8; 32]);
+    }
+
+    // === Validator lifecycle tests ===
+
+    fn ctx(h: u64) -> ExecutionContext {
+        ExecutionContext { height: h, timestamp: 0 }
+    }
+
+    const MIN_BOND: u128 = 100_000_000_000_000_000_000u128; // 100 AGX
+    const UNBOND_DELAY: u64 = 1000;
+
+    #[test]
+    fn bond_creates_validator_and_locks_funds() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+
+        let r = sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        assert_eq!(r, ExecutionResult::Success);
+        assert_eq!(sm.get_account(&v).unwrap().balance, 400_000_000_000_000_000_000);
+        let vt = sm.get_validator(&v).unwrap();
+        assert_eq!(vt.self_bond, MIN_BOND);
+        assert_eq!(vt.state, ValidatorLifecycleState::Active);
+    }
+
+    #[test]
+    fn bond_rejects_below_min_stake() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+
+        let r = sm.execute_bond(v, MIN_BOND - 1, 1, MIN_BOND, 10, ctx(10));
+        assert_eq!(r, ExecutionResult::Rejected);
+        assert!(sm.get_validator(&v).is_none());
+    }
+
+    #[test]
+    fn bond_rejects_insufficient_balance() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 50, 0));
+
+        let r = sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn bond_rejects_bad_nonce() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 5));
+
+        let r = sm.execute_bond(v, MIN_BOND, 7, MIN_BOND, 10, ctx(10));
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn bond_tops_up_existing_validator() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 1_000_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+
+        let r = sm.execute_bond(v, MIN_BOND, 2, MIN_BOND, 20, ctx(20));
+        assert_eq!(r, ExecutionResult::Success);
+        assert_eq!(sm.get_validator(&v).unwrap().self_bond, MIN_BOND * 2);
+        assert_eq!(sm.get_account(&v).unwrap().balance, 800_000_000_000_000_000_000);
+    }
+
+    #[test]
+    fn unbond_initiates_timer() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+
+        let r = sm.execute_unbond(v, 2, 50, ctx(50));
+        assert_eq!(r, ExecutionResult::Success);
+        let vt = sm.get_validator(&v).unwrap();
+        assert_eq!(vt.state, ValidatorLifecycleState::Unbonding);
+        assert_eq!(vt.unbonding_height, 50);
+    }
+
+    #[test]
+    fn unbond_rejects_non_existent_validator() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 100, 0));
+
+        let r = sm.execute_unbond(v, 1, 10, ctx(10));
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn unbond_rejects_if_already_unbonding() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        sm.execute_unbond(v, 2, 50, ctx(50));
+
+        let r = sm.execute_unbond(v, 3, 60, ctx(60));
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn withdraw_releases_funds_after_delay() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        sm.execute_unbond(v, 2, 50, ctx(50));
+
+        let r = sm.execute_withdraw(v, 3, 50 + UNBOND_DELAY + 1, UNBOND_DELAY, ctx(1051));
+        assert_eq!(r, ExecutionResult::Success);
+        assert!(sm.get_validator(&v).is_none());
+        assert_eq!(sm.get_account(&v).unwrap().balance, 400_000_000_000_000_000_000 + MIN_BOND);
+    }
+
+    #[test]
+    fn withdraw_rejects_before_delay_expires() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        sm.execute_unbond(v, 2, 50, ctx(50));
+
+        let r = sm.execute_withdraw(v, 3, 50, UNBOND_DELAY, ctx(50));
+        assert_eq!(r, ExecutionResult::Rejected);
+        assert!(sm.get_validator(&v).is_some());
+    }
+
+    #[test]
+    fn renew_resets_bonding_height() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+
+        let r = sm.execute_renew(v, 2, 200, ctx(200));
+        assert_eq!(r, ExecutionResult::Success);
+        assert_eq!(sm.get_validator(&v).unwrap().bonding_height, 200);
+    }
+
+    #[test]
+    fn renew_rejects_non_validator() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 100, 0));
+
+        let r = sm.execute_renew(v, 1, 10, ctx(10));
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn validator_affects_state_root() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        let root_before = sm.compute_state_root();
+
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        let root_after = sm.compute_state_root();
+        assert_ne!(root_before, root_after);
+    }
+
+    #[test]
+    fn validator_withdraw_removes_from_state_root() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND, 1, MIN_BOND, 10, ctx(10));
+        let root_bonded = sm.compute_state_root();
+
+        sm.execute_unbond(v, 2, 50, ctx(50));
+        sm.execute_withdraw(v, 3, 50 + UNBOND_DELAY + 1, UNBOND_DELAY, ctx(1051));
+        let root_withdrawn = sm.compute_state_root();
+
+        assert_ne!(root_bonded, root_withdrawn);
     }
 }

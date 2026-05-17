@@ -2,5 +2,6 @@
 //
 // Source: specs/protocol/consensus-spec.md Section 1
 
+pub mod driver;
 pub mod genesis;
 pub mod types;

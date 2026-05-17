@@ -300,14 +300,14 @@ impl BlockHeader {
 }
 
 /// A full block. Source: consensus-spec.md Section 1.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<TransactionEnvelope>,
 }
 
 /// Transaction envelope wrapping a typed payload. Source: consensus-spec.md Section 1.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct TransactionEnvelope {
     pub tx_type: TxType,
     pub tx_payload: Vec<u8>,
@@ -317,7 +317,7 @@ pub struct TransactionEnvelope {
 
 /// All transaction types on the protocol. Source: consensus-spec.md Section 1.3
 /// Collapsed to 7 base types with action sub-enums (2026-05-06 simplification).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum TxType {
     TransferTx,
     StakingTx(StakingAction),
@@ -329,7 +329,7 @@ pub enum TxType {
 }
 
 /// Staking sub-actions. Source: consensus-spec.md Section 1.3
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum StakingAction {
     Bond,
     Renew,
@@ -338,7 +338,7 @@ pub enum StakingAction {
 }
 
 /// Delegation sub-actions. Source: consensus-spec.md Section 1.3
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum DelegationAction {
     Delegate,
     Undelegate,
@@ -347,7 +347,7 @@ pub enum DelegationAction {
 }
 
 /// Governance sub-actions. Source: consensus-spec.md Section 1.3
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum GovernanceAction {
     Propose,
     Vote,
