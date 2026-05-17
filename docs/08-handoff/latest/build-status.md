@@ -1,6 +1,6 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) IN PROGRESS
 
-**Last updated:** 2026-05-17b (Stage 01 staking dispatch + fee market wire-up; Stage 02 Week 1-2 C4/C6/C9 libraries complete)
+**Last updated:** 2026-05-17c (Malachite SigningScheme + Context implemented; gap fill complete)
 **Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards deferred, BFT consensus deferred)
 **Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 libraries complete + wired, Week 3-4 ready)
 **Week 1-2 (Consensus + State Machine):** PARTIALLY COMPLETE (state machine real, BFT consensus stub)
@@ -138,10 +138,16 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 **OPEN GAPS (post-resolution):**
 | Gap | Severity | Status |
 |-----|----------|--------|
-| Malachite BFT protocol wiring | HIGH | OPEN — `arc-malachitebft-core-*` v0.7.0-pre crates loaded, ADR-0018 integration plan ready (~1,500 lines). Not a blocker for Stage 02 — ConsensusDriver produces blocks. |
+| Malachite BFT protocol wiring | HIGH | PARTIALLY RESOLVED 2026-05-17c — SigningScheme + Context implemented (410 lines, 13 tests). Remaining: effect handler (~300 lines), clatter network bridge (~500 lines), Host actor (~400 lines). ConsensusDriver produces blocks — not a blocker for Stage 02. |
 | Slashing execution + reward distribution | MEDIUM | DEFERRED to Stage 03 |
 | Full soak test (24h) | MEDIUM | DEFERRED to Stage 03 |
 | Clatter network bridge for consensus gossip | MEDIUM | DEFERRED — TCP layer built; needs BFT protocol to generate gossip messages |
+
+**RESOLVED GAPS (2026-05-17c):**
+| Gap | Resolution |
+|-----|-----------|
+| Malachite BFT type-level integration | RESOLVED — Implemented `SigningScheme` for ML-DSA-65 (`MlDsa65Scheme`, `MlDsa65Signature`, `MlDsa65PublicKey`, `MlDsa65PrivateKey`) and `Context` for Hyperfluid (`Address32`, `BlockHeight`, `BlockValue`, `HyperfluidValidator`, `HyperfluidValidatorSet`, `HyperfluidVote`, `HyperfluidProposal`, `HyperfluidProposalPart`, `HyperfluidExtension`, `HyperfluidContext`) in `hyperfluid-consensus/src/malachite.rs`. 13 new tests (signing, height, value, validators, context methods). Remaining ~1,200 lines (effect handler, network bridge, host actor) deferred. |
+| P2P conformance test cache collision | RESOLVED — `e2e_encryption_across_relay` and `tampered_ciphertext_rejected` tests used same peer IDs as `e2e_empty_message`, causing global cache collision. Fixed with unique peer IDs per test. All 23 conformance tests pass. |
 
 **RESOLVED GAPS (2026-05-17b):**
 | Gap | Resolution |
@@ -374,6 +380,20 @@ See `docs/01-research/_audit-bugs-2026-05-08.md` for full report.
 | `execute_undelegate` missing else arm on `get_mut` (B-24) | Minor | Added `else { return ExecutionResult::Rejected; }` — delegation HashMap `get_mut` lacked the rejecting arm that all other `get_mut` calls have |
 
 See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
+
+## Resolved Issues (Bug Audit 2026-05-17c — Round 4)
+
+| Bug | Severity | Fix |
+|-----|----------|------|
+| `ValidatorRecord.bonded_stake` dead field — never computed from `self_bond + total_delegated`. Committee weights read this field (always 0 in production). (F-01) | Critical | Removed `bonded_stake` from `ValidatorRecord`. Graph analysis uses `self_bond + total_delegated`. |
+| `execute_set_commission` validated and burned nonce but never stored commission rate. (F-02) | Major | Added `commission_rate` to `ValidatorTracker`. Handler now persists the rate. |
+| `compute_state_root()` excluded consumed plan IDs (0x0A) and task IDs (0x06) — determinism gap. (F-03) | Major | Added consumed plans and task IDs to SMT root computation. |
+| `OutlierFlag.z_score: f64` in telemetry-spec.md — non-deterministic type in protocol data structure. (F-05) | Medium | Changed to `z_score_basis_points: u16`. |
+| `ReconciliationReport.discrepancy_pct: f64` in telemetry-spec.md — same. (F-06) | Medium | Changed to `discrepancy_basis_points: u16`. |
+| `ClatterSecureChannel::establish()` shim TOCTOU race in global cache. (F-04) | Minor | Documented as pre-existing SPEC_DEVIATION. |
+| `incident-response-spec.md` title mismatched filename. (F-07) | Minor | Title updated to "Incident Response & Congestion Control". |
+
+See `docs/01-research/_audit-bugs-2026-05-17-c.md` for full report.
 
 ## Exit Criteria Status
 

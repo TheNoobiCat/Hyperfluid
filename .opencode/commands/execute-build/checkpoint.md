@@ -12,5 +12,9 @@
   - In state-machine transaction handlers, grep for `if let Some.*get_mut` — every such expression must have an `else` arm that rejects, not silently skip
   - In state-machine transaction handlers, verify the **validate-then-mutate** ordering: every mutation must be preceded by all validations. Scan for state mutated before a subsequent `?`/`return` path can exit without completing related mutations
   - After adding a new in-memory entity collection (HashMap/Set) to the state machine, verify that `compute_state_root()` includes it — grep for the new field in the `compute_state_root` implementation
-  - After any code field rename that changes a type's semantic meaning (e.g., `pct`→`per_mil`, single-value→pair), grep all spec `.md` files for the old field name to catch documentation drift
+   - After any code field rename that changes a type's semantic meaning (e.g., `pct`→`per_mil`, single-value→pair), grep all spec `.md` files for the old field name to catch documentation drift
+   - After adding or modifying any protocol struct, verify every field is populated in at least one non-test production path — grep the field name across `crates/*/src/` to ensure it's set somewhere (not dead weight)
+   - For every state-machine transaction handler (functions named `execute_*`), trace the handler body to ensure the handler's intended effect actually mutates state — not just validates inputs and returns Success without persisting
+   - Extend the floating-point determinism grep to spec files: `grep -rn "f64\|f32" docs/04-specifications/` — flag any floating-point types in spec data structure definitions that must be deterministic
+   - For any spec document that claims to define a protocol subsystem (has a §1 heading), verify it has §1.3 Data Structures and §1.4 State Transitions (or equivalent structural sections per TEMPLATES.md) — missing sections are a structural gap flag
 - File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.

@@ -141,20 +141,24 @@ fn conforms_to_staking_spec_1_7_withdraw_delegation_nonexistent_rejected() {
 #[test]
 fn conforms_to_staking_spec_1_7_set_commission_within_range() {
     let mut sm = StateMachine::new();
-    sm.init_account(test_account(1, 0, 0));
+    let v = [1u8; 32];
+    sm.init_account(test_account(1, 100_000_000_000_000_000_000, 0));
+    sm.init_validator(v, 100_000_000_000_000_000_000, 1);
 
     let max_commission = 20u8;
-    let result = sm.execute_set_commission([1u8; 32], 10, 1, max_commission, ctx(10));
+    let result = sm.execute_set_commission(v, 10, 1, max_commission, ctx(10));
     assert_eq!(result, ExecutionResult::Success);
 }
 
 #[test]
 fn conforms_to_staking_spec_1_7_set_commission_exceeds_max() {
     let mut sm = StateMachine::new();
-    sm.init_account(test_account(1, 0, 0));
+    let v = [1u8; 32];
+    sm.init_account(test_account(1, 100_000_000_000_000_000_000, 0));
+    sm.init_validator(v, 100_000_000_000_000_000_000, 1);
 
     let max_commission = 20u8;
-    let result = sm.execute_set_commission([1u8; 32], 50, 1, max_commission, ctx(10));
+    let result = sm.execute_set_commission(v, 50, 2, max_commission, ctx(10));
     assert_eq!(result, ExecutionResult::Rejected);
 }
 

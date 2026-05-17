@@ -167,7 +167,7 @@ pub fn detect_clusters(
             let total_bonded_stake: u128 = validators
                 .iter()
                 .filter(|v| sorted_members.contains(&v.validator_id))
-                .map(|v| v.bonded_stake)
+                .map(|v| v.self_bond.saturating_add(v.total_delegated))
                 .sum();
 
             let diversity = usize::min(5, component.len()) as u8;
@@ -209,7 +209,7 @@ pub fn compute_committee_weights(
     }
 
     for v in validators {
-        weights.entry(v.validator_id).or_insert(v.bonded_stake);
+        weights.entry(v.validator_id).or_insert(v.self_bond.saturating_add(v.total_delegated));
     }
 
     weights
@@ -229,7 +229,6 @@ mod tests {
         ValidatorRecord {
             validator_id: [id; 32],
             state: ValidatorState::Active,
-            bonded_stake: stake,
             self_bond: stake,
             total_delegated: 0,
             commission_rate: 0,

@@ -296,13 +296,15 @@ fn e2e_12_undelegate_withdraw_cycle() {
 #[test]
 fn e2e_13_commission_rate_constraints() {
     let mut sm = StateMachine::new();
+    let v = [3u8; 32];
     sm.init_account(new_account(3, 100_000_000_000, 0));
+    sm.init_validator(v, 100_000_000_000_000_000_000u128, 1);
 
     let max: u8 = 20;
-    let r = sm.execute_set_commission([3u8; 32], 10, 1, max, ctx(1));
+    let r = sm.execute_set_commission(v, 10, 1, max, ctx(1));
     assert_eq!(r, ExecutionResult::Success);
 
-    let r = sm.execute_set_commission([3u8; 32], 25, 2, max, ctx(2));
+    let r = sm.execute_set_commission(v, 25, 2, max, ctx(2));
     assert_eq!(r, ExecutionResult::Rejected);
 }
 

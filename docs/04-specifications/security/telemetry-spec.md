@@ -56,7 +56,7 @@ struct EpochTelemetrySummary {
 
 struct OutlierFlag {
     producer_id: [u8; 32],
-    z_score: f64,                  // deviation from aggregate
+    z_score_basis_points: u16,     // deviation from aggregate in basis points (0-10000 = 0.00-100.00)
     envelope_ref: [u8; 32],       // reference to anomalous envelope
 }
 
@@ -157,7 +157,7 @@ struct ReconciliationReport {
     metric_class: MetricClass,
     aggregated_telemetry_value: u64,
     independent_observable_value: u64,
-    discrepancy_pct: f64,           // |agg - obs| / max(agg, obs) * 100
+    discrepancy_basis_points: u16, // |agg - obs| / max(agg, obs) * 10000 (0-10000 = 0.00%-100.00%)
     status: ReconciliationStatus,
     verified_by: Vec<[u8; 32]>,    // validators that verified the reconciliation
 }

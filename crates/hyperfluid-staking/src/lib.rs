@@ -42,10 +42,6 @@ pub struct ValidatorRecord {
     pub state: ValidatorState,
     pub self_bond: u128,
     pub total_delegated: u128,
-    pub bonded_stake: u128,
-    // SPEC_DEVIATION: delegated_stake_balance computed as self_bond + total_delegated for
-    // backward compatibility during transition. After full delegation migration,
-    // bonded_stake should equal self_bond + total_delegated.
     pub commission_rate: u8,
     pub bonding_height: u64,
     pub unbonding_height: u64,
@@ -165,7 +161,6 @@ mod tests {
             state: ValidatorState::Active,
             self_bond: 1_000_000_000_000_000_000_000u128,
             total_delegated: 0,
-            bonded_stake: 1_000_000_000_000_000_000_000u128,
             commission_rate: 10,
             bonding_height: 0,
             unbonding_height: 0,

@@ -57,9 +57,9 @@ Key fixes:
 
 ## Blockers
 
-**All previous CRITICAL/HIGH blockers resolved 2026-05-17.** Malachite `arc-malachitebft-core-*` v0.7.0-pre crates are workspace dependencies (verified compiling on MSRV 1.88). Remaining open work:
+**All previous CRITICAL/HIGH blockers resolved 2026-05-17.** Malachite type-level integration (SigningScheme + Context) implemented 2026-05-17c (410 lines, 13 tests). Remaining work:
 
-1. **Malachite BFT protocol wiring** — crates loaded, ADR-0018 plan ready (~1,500 lines). Not blocking Stage 02 — ConsensusDriver produces blocks via the state machine.
+1. **Malachite BFT protocol wiring** — SigningScheme + Context implemented (malachite.rs). Effect handler, network bridge, host actor deferred (~1,100 lines remaining). Not blocking Stage 02 — ConsensusDriver produces blocks.
 2. **Slashing execution + reward distribution** — deferred to Stage 03 (Validation).
 3. **24-hour soak test** — deferred to Stage 03 (Validation).
 4. **Clatter network bridge for consensus gossip** — TCP sockets functional, but gossip needs BFT protocol messages to route.
@@ -124,6 +124,16 @@ Key findings:
 
 Systemic patterns identified: SMT root completeness gap (new entity added but root not updated), validate-then-mutate ordering violation in state handlers, spec-code field name drift recurrence.
 
+## Recent Design Changes (2026-05-17c) — Malachite BFT Type-Level Integration
+
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| Malachite SigningScheme | Implemented `MlDsa65Scheme` (SigningScheme trait) with byte-based `MlDsa65Signature`, `MlDsa65PublicKey`, `MlDsa65PrivateKey`. ML-DSA-65 FIPS 204 signatures for BFT consensus. | `hyperfluid-consensus/src/malachite.rs` |
+| Malachite Context | Implemented `HyperfluidContext` with full type wiring: `Address32`, `BlockHeight`, `BlockValue`, `HyperfluidValidator`, `HyperfluidValidatorSet`, `HyperfluidVote`, `HyperfluidProposal`, `HyperfluidProposalPart`, `HyperfluidExtension`. Deterministic proposer selection via SHA3-256. | `hyperfluid-consensus/src/malachite.rs` |
+| Malachite tests | 13 unit tests covering signing roundtrip, invalid decode, block height, value ID/hash, validator set ordering, context proposer selection, proposal/vote/cycle. | `hyperfluid-consensus/src/malachite.rs` |
+| P2P conformance fix | Fixed cache collision in `e2e_encryption_across_relay` + `tampered_ciphertext_rejected` tests — shared global handshake cache with `e2e_empty_message`. Unique peer IDs per test. All 23 P2P conformance tests pass. | `hyperfluid-p2p/tests/conformance_p2p_spec.rs` |
+| CI mimic all-green | fmt, clippy (zero warnings), test (386/386), doc, deny, bench-check — all PASS | |
+
 ## Recent Design Changes (2026-05-17) — Stage 01 Integration Gaps Filled
 
 | Change | Summary | Docs Affected |
@@ -156,6 +166,21 @@ Key findings:
 Systemic pattern identified: `get_mut` guard scope drift — when the delegation HashMap was added to the state machine, the existing `if let Some.*get_mut` guard was not re-run against it. All 3 `self.accounts.get_mut()` calls had else arms, but the new `self.delegations.get_mut()` did not. After adding any new entity collection, all existing grep guards must be re-scanned against the full file.
 
 CI mimic: all 6 checks pass (fmt, clippy, test, doc, deny, bench-check).
+
+## Bug Audit (2026-05-17c) — Comprehensive Code Cross-Reference Round 4
+
+**Result:** 7 bugs found and fixed across 3 crates and 3 spec documents. See `docs/01-research/_audit-bugs-2026-05-17-c.md` for full report.
+
+Key findings:
+1. **CRITICAL:** `ValidatorRecord.bonded_stake` was a dead field never populated from `self_bond + total_delegated`. Committee weight computation in `graph.rs` read this field (always 0 in production), making all committee weights zero. Fixed by removing the field and computing effective stake as `self_bond + total_delegated`.
+2. **MAJOR:** `execute_set_commission` validated the commission rate and consumed the nonce but never stored the rate anywhere — a no-op handler. Fixed by adding `commission_rate` to `ValidatorTracker` and persisting it in the handler.
+3. **MAJOR:** `compute_state_root()` excluded consumed plan IDs (key prefix 0x0A) and task IDs (key prefix 0x06) — a determinism gap where nodes could agree on state root while having divergent consumed plan sets. Fixed by adding both collections to SMT root.
+4. Two `f64` fields found in `telemetry-spec.md` data structures — changed to `u16` basis points.
+5. `incident-response-spec.md` title mismatched filename — fixed title.
+
+Systemic patterns identified: dead/redundant fields on protocol structs (after migration cleanup), state handler incomplete mutation (validated but didn't persist), f64 in spec data structures (existing float scan didn't cover `.md` files), document identity mismatch.
+
+Process improvements: 5 generic guards added to `execute-build.md` `checkpoint.md` covering field population verification, handler mutation tracing, spec float scanning, and spec structural completeness.
 
 ## Next Actions
 
@@ -311,4 +336,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-17b (Stage 01 staking dispatch + fee market wire-up; validator lifecycle fully wired through ConsensusDriver)*
+*Last updated: 2026-05-17c (Malachite SigningScheme + Context implemented; gap fill complete; P2P conformance test fix)*

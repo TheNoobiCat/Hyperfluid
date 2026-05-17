@@ -1,4 +1,4 @@
-# Security Spec: Fee Market & Congestion Control
+# Incident Response & Congestion Control
 
 **Components:** C4 Governance (Post-Incident Bridge)
 **Covered FRs:** FR-0144, FR-0145

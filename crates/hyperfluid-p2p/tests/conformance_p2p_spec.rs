@@ -284,9 +284,9 @@ use hyperfluid_p2p::{PeerCache, SecureChannel};
 /// A relay node (or any other peer with a different identity) cannot read the plaintext.
 #[test]
 fn conforms_to_p2p_spec_1_7_e2e_encryption_across_relay() {
-    let alice = [1u8; 32];
-    let bob = [2u8; 32];
-    let relay = [3u8; 32];
+    let alice = [10u8; 32];
+    let bob = [11u8; 32];
+    let relay = [12u8; 32];
 
     let mut ch_alice = SecureChannel::establish(alice, bob);
     let mut ch_bob = SecureChannel::establish(bob, alice);
@@ -313,8 +313,8 @@ fn conforms_to_p2p_spec_1_7_e2e_encryption_across_relay() {
 /// Hook 7: Negative — tampered ciphertext rejected.
 #[test]
 fn conforms_to_p2p_spec_1_7_tampered_ciphertext_rejected() {
-    let alice = [1u8; 32];
-    let bob = [2u8; 32];
+    let alice = [20u8; 32];
+    let bob = [21u8; 32];
 
     let mut ch_alice = SecureChannel::establish(alice, bob);
     let mut ch_bob = SecureChannel::establish(bob, alice);

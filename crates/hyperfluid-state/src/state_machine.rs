@@ -56,6 +56,7 @@ struct DelegationState {
 pub struct ValidatorTracker {
     pub self_bond: u128,
     pub total_delegated: u128,
+    pub commission_rate: u8,
     pub bonding_height: u64,
     pub unbonding_height: u64,
     pub state: ValidatorLifecycleState,
@@ -99,6 +100,7 @@ impl StateMachine {
             ValidatorTracker {
                 self_bond,
                 total_delegated: 0,
+                commission_rate: 0,
                 bonding_height,
                 unbonding_height: 0,
                 state: ValidatorLifecycleState::Active,
@@ -361,9 +363,7 @@ impl StateMachine {
     }
 
     /// Set validator commission rate. Rate takes effect after 2 epochs.
-    /// This is a stub that updates a placeholder; the actual commission rate
-    /// is stored in ValidatorRecord in the staking crate. Here we track it in
-    /// the delegation state for testing purposes.
+    /// Persists the rate on ValidatorTracker for state root computation.
     pub fn execute_set_commission(
         &mut self,
         validator_id: Hash32,
@@ -383,6 +383,12 @@ impl StateMachine {
 
         if let Some(validator) = self.accounts.get_mut(&validator_id) {
             validator.nonce = nonce;
+        } else {
+            return ExecutionResult::Rejected;
+        }
+
+        if let Some(vt) = self.validators.get_mut(&validator_id) {
+            vt.commission_rate = commission_rate;
         } else {
             return ExecutionResult::Rejected;
         }
@@ -427,6 +433,7 @@ impl StateMachine {
         let vt = self.validators.entry(validator_id).or_insert(ValidatorTracker {
             self_bond: 0,
             total_delegated: 0,
+            commission_rate: 0,
             bonding_height: current_height,
             unbonding_height: 0,
             state: ValidatorLifecycleState::Active,
@@ -561,15 +568,22 @@ impl StateMachine {
     }
 
     /// Compute the SMT root from the current state machine state.
-    /// All accounts and delegation records are serialised with SCALE encoding
-    /// and inserted into the SMT sorted by state key (spec 2.2).
-    /// Delegation records use key prefix 0x0E per state-model.md.
+    /// All accounts, delegations, validators, and consumed plan IDs are
+    /// serialised with SCALE encoding and inserted into the SMT sorted
+    /// by state key (spec 2.2).
+    /// Delegation records use key prefix 0x0E, consumed plans use 0x0A.
     pub fn compute_state_root(&self) -> Hash32 {
         let mut tree = SparseMerkleTree::new();
 
         for (account_id, account) in &self.accounts {
             let key = state_key(KeyPrefix::Account, account_id);
             let value = account.encode();
+            tree.insert(key, value);
+        }
+
+        for (validator_id, vt) in &self.validators {
+            let key = state_key(KeyPrefix::Validator, validator_id);
+            let value = vt.encode();
             tree.insert(key, value);
         }
 
@@ -585,10 +599,14 @@ impl StateMachine {
             tree.insert(delegation_key, value);
         }
 
-        for (validator_id, vt) in &self.validators {
-            let key = state_key(KeyPrefix::Validator, validator_id);
-            let value = vt.encode();
-            tree.insert(key, value);
+        for plan_id in &self.consumed_plans {
+            let key = state_key(KeyPrefix::ActionPlan, plan_id);
+            tree.insert(key, vec![1u8]);
+        }
+
+        for task_id in &self.task_ids {
+            let key = state_key(KeyPrefix::Task, task_id);
+            tree.insert(key, vec![1u8]);
         }
 
         tree.root()
