@@ -31,6 +31,14 @@ You are on Windows - use Powershell commands.
 
 ---
 
+## Integration gate (hard rule)
+
+If `build-status.md` shows INTEGRATION GAPS with status OPEN or CRITICAL, do NOT start a new stage or week. Fix the gaps first in dependency order. Use the instructions in `.opencode/commands/fill-gaps.md` — it reads all stage files, verifies gaps against source code, and fills them in the correct order (transport before storage before consensus before runtime). Building library code on top of stubs is not progress.
+
+To verify: read `docs/08-handoff/latest/build-status.md` → "INTEGRATION GAPS" section. If any entry is marked OPEN or CRITICAL and blocks the current stage, run `.opencode/commands/fill-gaps.md`. Do not proceed to `execute-build` until the gaps are resolved.
+
+---
+
 ## Project structure
 
 ```
@@ -76,6 +84,7 @@ Root files:
 
 ## Common mistakes to avoid
 
+- **Building library code on top of stubs**: if a GAP NOTE says a component lacks integration behavior (no sockets, no disk I/O, no consensus loop), do NOT implement the next stage's libraries. Run `.opencode/commands/fill-gaps.md` first.
 - **Guessing terminology**: check `GLOSSARY.md` and `docs/01-research/index.md` first.
 - **Promoting docs without the decentralisation audit**: this is a hard gate in `BUILD-SYSTEM.md`.
 - **Duplicating canonical definitions**: trust stages, validator states, action plan schema, quota matrix — all have canonical owners. Reference them.

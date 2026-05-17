@@ -400,14 +400,33 @@ See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
 
 ## NEXT ACTION (first task on next build run)
 
-**CRITICAL: Fill Stage 01 integration gaps BEFORE continuing Stage 02 beyond Week 1-2.**
+**Follow `.opencode/commands/fill-gaps.md` to resolve Stage 01 integration gaps BEFORE continuing Stage 02.**
 
 Stage 02 Week 1-2 libraries (C4, C6, C9) are built and tested but will not function end-to-end until:
-1. **Integrate Malachite BFT consensus (ADR-0018)** — wire the state machine into a real block production loop
-2. **Build P2P TCP layer** — actual socket connections between nodes
-3. **Build disk-backed artifact storage** — file I/O for content-addressed blobs
 
-**Next Stage 02 task after integration: Week 3-4 (Agent Runtime + Sandbox + Operator Interface)**
+### Integration Task 1: P2P TCP Layer
+- `crates/hyperfluid-p2p/src/` — Add `tokio::net::TcpListener` + `TcpStream`
+- Wire `ConnState` machine to socket events (Unknown → DirectProbing on connect, DirectProbing → DirectActive on handshake success)
+- Integration test: two nodes on localhost connect, exchange a handshake message, disconnect cleanly
+- Conformance test: `conforms_to_p2p_spec_1_7_actual_socket_roundtrip`
+- CI mimic must pass before moving to Task 2
+
+### Integration Task 2: Disk-Backed Artifact Storage
+- `crates/hyperfluid-artifact/src/` — Add file I/O (`std::fs`) with content-addressed paths
+- `store_chunk(hash, data)` writes to `data/chunks/<hex_hash>`
+- `load_chunk(hash)` reads and verifies hash before returning
+- Integration test: write 3 chunks, read back, verify each hash matches
+- CI mimic must pass before moving to Task 3
+
+### Integration Task 3: Malachite BFT Integration (ADR-0018)
+- Add `arc-malachitebft-core-*` crates to workspace
+- Implement `SigningScheme` for ML-DSA-65, `Context` for Hyperfluid
+- Build effect handler, clatter network bridge, Host actor
+- Wire into `hyperfluid-node/src/main.rs` replacing `sleep(100ms)` loop
+- Integration test: single node produces blocks with real state machine execution
+- CI mimic must pass
+
+After all three tasks pass integration verification, continue Stage 02 Week 3-4 (Agent Runtime + Sandbox + Operator Interface).
 
 **CRITICAL: Fill Stage 01 integration gaps BEFORE starting Stage 02.**
 
