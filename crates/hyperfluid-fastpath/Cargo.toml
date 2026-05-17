@@ -8,3 +8,5 @@ rust-version.workspace = true
 description = "C6 Fast-Path Topic Protocol: Topic-scoped fast merges, quorum certificates, challenge windows"
 
 [dependencies]
+serde.workspace = true
+sha3.workspace = true

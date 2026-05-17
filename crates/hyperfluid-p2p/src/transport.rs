@@ -1,32 +1,22 @@
 //! Secure Channel Transport Integration
 //!
-//! Secure channel abstraction for end-to-end encrypted, mutually authenticated
-//! peer-to-peer messaging across direct and relay paths. This module defines
-//! the interface that the Noise hybrid handshake and transport implement.
+//! Mock secure channel using SHA3-256 XOR for conformance testing.
+//! The production backend is clatter v2.2.0 (Noise hybrid XX, X25519 + ML-KEM-768)
+//! + ml-dsa v0.1.0-rc.11 (ML-DSA-65, FIPS 204). See ADR-0016.
 //!
 //! Source: docs/04-specifications/protocol/p2p-wire-spec.md Section 1.2, 1.8
-//!
-//! SPEC_DEVIATION: Production secure channel deferred — the current implementation
-//! uses a SHA3-256 XOR mock for conformance testing. The production backend is
-//! clatter v2.2.0 (Noise hybrid XX, X25519 + ML-KEM-768) + ml-dsa v0.1.0-rc.11
-//! (ML-DSA-65, FIPS 204). See ADR-0016 and build-status.md NEXT ACTION.
-//! The mock is behind feature flag `mock-secure-channel`. Ockam was superseded
-//! per ADR-0016 (unresolvable from crates.io).
 
 use crate::types::Hash32;
 use sha3::digest::Update;
 use sha3::Digest;
 use sha3::Sha3_256;
 
-/// A secure, mutually authenticated, end-to-end encrypted channel.
+/// Mock secure channel using SHA3-256 XOR for conformance testing.
 ///
-/// Models the behavior required by p2p-wire-spec.md Section 1.2:
-/// "The system MUST preserve end-to-end confidentiality, integrity, and
-/// mutual authentication regardless of relay hops."
-///
-/// Backed by Ockam SecureChannel in production; mock implementation for testing.
+/// Provides the same interface as the production clatter-based SecureChannel.
+/// Key derivation is deterministic from peer IDs and nonce.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SecureChannel {
+pub struct MockSecureChannel {
     session_id: Hash32,
     local_id: Hash32,
     remote_id: Hash32,
@@ -34,11 +24,10 @@ pub struct SecureChannel {
     nonce: u64,
 }
 
-impl SecureChannel {
+impl MockSecureChannel {
     /// Establish a new secure channel between two peers.
     ///
-    /// In production this performs the Ockam handshake (XX pattern via Noise).
-    /// The mock uses SHA3-256 key derivation from peer identities.
+    /// Uses SHA3-256 key derivation from peer identities.
     /// Peer IDs are sorted to ensure both sides derive the same shared secret.
     pub fn establish(local_id: Hash32, remote_id: Hash32) -> Self {
         let (low, high) =
@@ -50,9 +39,6 @@ impl SecureChannel {
     }
 
     /// Encrypt a plaintext message for the remote peer.
-    ///
-    /// Only the holder of the corresponding SecureChannel can decrypt.
-    /// Relay nodes that forward the ciphertext cannot read the plaintext.
     pub fn seal(&mut self, plaintext: &[u8]) -> Vec<u8> {
         self.nonce = self.nonce.saturating_add(1);
         xof_encrypt(&self.shared_secret, self.nonce, plaintext)
@@ -116,7 +102,6 @@ fn fast_nonce(a: Hash32, b: Hash32) -> Hash32 {
 }
 
 /// Symmetric XOR encryption using SHAKE-256 XOF keystream.
-/// For conformance testing only. Production uses Ockam's SecureChannel.
 fn xof_encrypt(key: &Hash32, nonce: u64, data: &[u8]) -> Vec<u8> {
     use sha3::digest::{ExtendableOutput, XofReader};
     use sha3::Shake256;
@@ -213,8 +198,8 @@ mod tests {
         let alice = [1u8; 32];
         let bob = [2u8; 32];
 
-        let mut ch_alice = SecureChannel::establish(alice, bob);
-        let mut ch_bob = SecureChannel::establish(bob, alice);
+        let mut ch_alice = MockSecureChannel::establish(alice, bob);
+        let mut ch_bob = MockSecureChannel::establish(bob, alice);
 
         let msg = b"hello over relay";
         let ciphertext = ch_alice.seal(msg);
@@ -230,8 +215,8 @@ mod tests {
         let bob = [2u8; 32];
         let eve = [3u8; 32];
 
-        let mut ch_alice = SecureChannel::establish(alice, bob);
-        let mut ch_eve = SecureChannel::establish(eve, bob);
+        let mut ch_alice = MockSecureChannel::establish(alice, bob);
+        let mut ch_eve = MockSecureChannel::establish(eve, bob);
 
         let msg = b"secret data";
         let ciphertext = ch_alice.seal(msg);
@@ -248,7 +233,7 @@ mod tests {
         let alice = [1u8; 32];
         let bob = [2u8; 32];
 
-        let mut ch = SecureChannel::establish(alice, bob);
+        let mut ch = MockSecureChannel::establish(alice, bob);
         let c1 = ch.seal(b"msg1");
         let c2 = ch.seal(b"msg2");
         assert_ne!(c1, c2, "different nonces produce different ciphertexts");

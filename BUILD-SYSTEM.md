@@ -90,7 +90,8 @@ No artifact promotes to the next layer without passing the gate for its current 
 | Architecture → Specifications | Component definitions, ADRs | Trust boundaries documented; interfaces deterministic |
 | Specifications → Planning | Spec inventory | Every spec has conformance test hooks; trust-assumption inventory complete |
 | Planning → Implementation | Stage plan for current stage | All upstream specs for this stage are frozen |
-| Any stage → Validation | Implementation artifacts | Conformance matrix updated; tests pass |
+| Implementation → Integration | Component code | Component actually functions end-to-end (see Integration Gate below) |
+| Any stage → Validation | Implementation artifacts | Conformance matrix updated; tests pass; integration tests pass |
 
 ### Gate rules
 - A gate blocks promotion until all items in its checklist are satisfied.
@@ -157,6 +158,58 @@ If issues are found, create `docs/01-research/_overengineered.md` (or a per-spec
 - Proposed fix
 
 Fix issues before promotion. Do not create an empty audit file if no issues are found.
+
+---
+
+## Integration Gate (hard)
+
+This gate runs before any stage week can be marked complete. It ensures components actually function end-to-end, not just pass isolated unit tests.
+
+### Checklist
+
+For each component claimed as "complete" this week, verify:
+
+1. **Network components** (P2P, transport, discovery):
+   - Actual socket connections established (TCP/UDP), not just state machine transitions
+   - Messages sent and received between two independent processes or threads
+   - Connection lifecycle (connect → exchange → disconnect) demonstrated
+
+2. **Storage components** (artifact storage, state persistence):
+   - Actual disk I/O: write data, restart, read it back
+   - Content-addressed verification: hash of stored data matches expected hash
+   - Not just in-memory data structures with types defined
+
+3. **Consensus/protocol components** (block production, voting, state transitions):
+   - Actual processing loop: input transactions → execute → produce output (block/state update)
+   - State changes are observable and verifiable after processing
+   - Not just type definitions + pure function unit tests
+
+4. **Runtime components** (agent runtime, governance engine, PDP):
+   - Component runs its main loop and processes real input
+   - Output is observable (state changes, messages sent, decisions made)
+   - Not just types + rule definitions with unit tests of individual rules
+
+5. **Node binary / integration**:
+   - Node binary demonstrates the component in action (not just boot and sleep)
+   - At least one integration test exercises the component through its public interface with real I/O
+
+### Failure criteria
+
+A component FAILS the integration gate if:
+- It only has unit tests of internal/pure functions with no end-to-end demonstration
+- It defines types, enums, and structs but has no behavior that produces observable output
+- It uses mocks, shims, or in-memory simulations where real I/O is required by the spec
+- The node binary does not exercise the component (e.g., consensus loop is a `sleep()` timer)
+
+### Gate output
+
+If a component fails the integration gate:
+1. Do NOT mark the week as complete.
+2. Document the gap in `docs/08-handoff/latest/open-questions.md` with:
+   - Component name
+   - What behavior is missing (e.g., "no actual socket connections", "no disk I/O", "consensus loop is stub")
+   - What is needed to pass (e.g., "implement TCP listener + connector", "wire state machine into block production loop")
+3. The component remains in progress until the integration gate passes.
 
 ---
 

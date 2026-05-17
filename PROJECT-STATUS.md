@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 Week 1-8 complete. Stage 02 next: Agent Runtime) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 PARTIALLY COMPLETE — algorithms/types done, integration NOT done. Node binary is stub. No P2P sockets. No disk I/O. Stage 02 BLOCKED until integration gaps filled.) |
 
 ---
 
@@ -57,7 +57,11 @@ Key fixes:
 
 ## Blockers
 
-None.
+1. **Node binary consensus loop is a stub** — `main.rs` runs `while running { height += 1; sleep(100ms); }`. No transaction processing, no block production, no state machine execution. Stage 02 cannot build agent runtime on top of this.
+2. **No P2P sockets** — `hyperfluid-p2p` has types, state machines, and crypto but zero TCP/UDP connections. No actual peer discovery, gossip, or relay routing.
+3. **No disk I/O for artifact storage** — `hyperfluid-artifact` has Merkle proofs but no file system backend.
+4. **No BFT consensus** — `hyperfluid-consensus` has committee sampling math but no propose/vote/commit protocol. Malachite never integrated. ADR-0018 defines integration strategy: use Malachite `core-*` crates only (no libp2p), implement `SigningScheme` for ML-DSA-65, build effect handler + clatter network bridge.
+5. **No multi-node integration** — All tests are single-process. No harness for running multiple nodes and verifying state consistency.
 
 ---
 
@@ -119,6 +123,16 @@ Key findings:
 
 Systemic patterns identified: SMT root completeness gap (new entity added but root not updated), validate-then-mutate ordering violation in state handlers, spec-code field name drift recurrence.
 
+## Recent Design Changes (2026-05-17) — Stage 02 Week 1-2
+
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| C9 PDP implemented | Full 5-step rule chain, quota matrix (14 entries), key rotation (ML-DSA-65, 100-block grace window), audit log. 58 tests. | `hyperfluid-pdp/` (types, rule_chain, quota, key_rotation, audit) |
+| C4 Governance implemented | Proposal lifecycle (submit/vote/tally/execute), quorum + majority, anti-flood (32 open, 1 per epoch, 3-epoch cooldown). 9 tests. | `hyperfluid-governance/` (types, proposal) |
+| C6 Fast-Path implemented | Merge lifecycle (propose/certify/challenge/rollback/finalize), 2f+1 quorum, 144-block challenge window. 7 tests. | `hyperfluid-fastpath/` (types, lifecycle) |
+| CI mimic all-green | fmt, clippy (zero warnings), test (291/291), doc, deny, bench-check — all PASS | |
+| SPEC_DEVIATION: InsufficientFunds | Added to PDP DenyReason enum (spec gap in §1.3) | `policy-engine-spec.md` §1.3, `hyperfluid-pdp/src/types.rs` |
+
 ## Bug Audit (2026-05-14) — Post-Stage-01 Full Code Audit
 
 **Result:** 1 bug found and fixed across 1 crate. See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
@@ -132,7 +146,16 @@ CI mimic: all 6 checks pass (fmt, clippy, test, doc, deny, bench-check).
 
 ## Next Actions
 
-1. ~~Begin Stage 00 (Foundation): Create Cargo workspace with 12 crate scaffolds, `justfile`, CI pipeline, local testnet scaffold.~~ Stage 00 complete.
+**CRITICAL — must be done before Stage 02 can continue beyond Week 1-2:**
+1. Integrate Malachite BFT consensus (ADR-0018): add `arc-malachitebft-core-*` crates, implement `SigningScheme` for ML-DSA-65, implement `Context` for Hyperfluid, build effect handler, build clatter network bridge, build Host actor. Wire into node binary to replace `sleep(100ms)` stub.
+2. Build P2P TCP listener + connector — wire connection state machine to actual socket events. At minimum: two nodes on localhost can connect and exchange messages.
+3. Build disk-backed artifact storage — write chunks to disk, read them back, verify hashes.
+
+**After critical blockers are resolved:**
+4. Continue Stage 02 Week 3-4 (Agent Runtime + Sandbox + Operator Interface)
+
+**Stage 02 Week 1-2 (Governance + Fast-Path + PDP): COMPLETE (libraries only, not integrated)**
+5. ~~Bug audit (code) completed.~~
 2. ~~Bug audit (code) completed.~~
 3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013.~~
 4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5.~~
@@ -144,8 +167,8 @@ CI mimic: all 6 checks pass (fmt, clippy, test, doc, deny, bench-check).
 10. ~~Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.~~ COMPLETE (2026-05-08)
 11. ~~Bug audit (2026-05-08) completed.~~
 12. ~~Stage 01 Week 7-8: Integration, soak test, polish.~~ COMPLETE (2026-05-14)
-13. **NEXT: clatter+ml-dsa Secure Channel Implementation** — wire clatter `HybridHandshake` + ml-dsa identity keys into `hyperfluid-p2p` SecureChannel trait. See ADR-0016.
-14. Stage 02 (Agent Runtime): Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
+13. ~~clatter+ml-dsa Secure Channel Implementation~~ — COMPLETE (2026-05-15). Wire clatter `HybridHandshakeCore` + ml-dsa identity keys into `hyperfluid-p2p` SecureChannel. See ADR-0016.
+14. **NEXT: Stage 02 (Agent Runtime):** Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
 14. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
 15. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
 16. Freeze all 15 specs before Stage 01 implementation continues. Post-freeze spec changes require governance proposals.
@@ -209,6 +232,12 @@ CI mimic: all 6 checks pass (fmt, clippy, test, doc, deny, bench-check).
 |--------|---------|---------------|
 | Ockam→clatter+ml-dsa | Ockam crate unresolvable (yanked dep). Replaced with clatter (Noise hybrid XX, PQ key exchange) + ml-dsa (ML-DSA-65 identity). ~10 deps vs 400+. ADR-0016. | `p2p-wire-spec.md`, `consensus-spec.md`, `components.md`, `stage-01-protocol-core.md`, `build-status.md`, `open-questions.md`, `planning/index.md`, `index.md` |
 
+## New Documents (2026-05-15)
+
+| Document | Type | Description |
+|----------|------|-------------|
+| `docs/03-architecture/decisions/ADR-0018-malachite-core-library-integration.md` | ADR | Malachite integration strategy: use `core-*` crates only (no libp2p), implement `SigningScheme` for ML-DSA-65, build effect handler + clatter network bridge. No fork required. ~1,500 lines of new code. |
+
 ## New Requirements (2026-05-06)
 
 | FR | Description | File |
@@ -259,4 +288,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-15 (Q3-Q10 all resolved: Q3 deferred, Q4 data model reconciled, Q5 [TUNE] accepted, Q6 Task struct aligned, Q7 nice-to-haves demoted, Q8 gas defaults set, Q9 failure guard removed, Q10 ADR-0008 clarified. CI: all 6 checks pass)*
+*Last updated: 2026-05-17 (Stage 02 Week 1-2: C4/C6/C9 libraries complete, CI all-green, integration gaps remain)*

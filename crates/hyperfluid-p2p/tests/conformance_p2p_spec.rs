@@ -276,7 +276,7 @@ fn conforms_to_p2p_spec_2_7_no_type_capacity_reservation() {
 
 // ── Section 1.7 Hook 7: End-to-end encryption maintained across relay hops ──
 
-use hyperfluid_p2p::transport::{PeerCache, SecureChannel};
+use hyperfluid_p2p::{PeerCache, SecureChannel};
 
 /// Hook 7: Verify end-to-end encryption maintained across relay hops.
 ///

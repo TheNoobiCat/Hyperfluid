@@ -4,7 +4,8 @@ description: "Audit specs for overengineering, unnecessary complexity, and stale
 
 Read `GLOSSARY.md`, then:
 
-1. **Scan all non-research docs** (`docs/02-requirements/`, `docs/03-architecture/`, `docs/04-specifications/`, `docs/05-planning/`) for:
+1. **Scan all non-research docs** — farm per directory in parallel:
+   Launch a `build-worker` subagent per directory. Each scans for:
 
    **Stale/dead features:**
    - Fields, structs, enums, or key prefixes referencing deleted features
@@ -24,6 +25,14 @@ Read `GLOSSARY.md`, then:
    - Sections that say "this doesn't exist" instead of just not mentioning it
    - Comments documenting design decisions that were rejected (not the decision, the rejection)
 
+   - **Worker A:** `docs/02-requirements/`
+   - **Worker B:** `docs/03-architecture/`
+   - **Worker C:** `docs/04-specifications/`
+   - **Worker D:** `docs/05-planning/`
+
+   Each returns structured findings: `[file, line, finding, action: DELETE|SIMPLIFY|FLAG]`.
+   Wait for all workers. Aggregate into a unified findings table.
+
 2. **For each finding**, check:
    - Is it actually dead (feature was removed, file was kept)?
    - Is it false precision (8192 because 2^13, not because it's the right number)?
@@ -36,12 +45,9 @@ Read `GLOSSARY.md`, then:
 
 4. **Apply the fixes** unless the finding is FLAG'd. For FLAG'd items, write to `PROJECT-STATUS.md` under "Open Design Questions".
 
-5. **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
-   - `cargo fmt --all -- --check`
-   - `cargo clippy --workspace --all-targets -- -D warnings`
-   - `cargo test --workspace`
-   - `cargo doc --workspace --no-deps --document-private-items`
-   - `cargo deny check`
-   - `cargo bench --workspace --no-run`
+5. **CI mimic** — run in parallel via 3 `build-worker` subagents:
+   - **Worker A:** `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings`
+   - **Worker B:** `cargo test --workspace && cargo doc --workspace --no-deps --document-private-items`
+   - **Worker C:** `cargo deny check && cargo bench --workspace --no-run`
    
-   If any step fails, stop and fix before proceeding. Do not actually commit or push to github.
+   Wait for all three. If any fails, run the failing tool locally (not in a subagent) to get the exact error output and fix it. Re-run the full CI locally after fix to confirm everything passes. Do not actually commit or push to github.

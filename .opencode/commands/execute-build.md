@@ -1,75 +1,19 @@
 ---
 description: "Execute the current build task from the stage plan"
 ---
-Read `BUILD-SYSTEM.md` (Layer 5, Layer 8), `TEMPLATES.md` (Checkpoint contract), then the latest handoff (`docs/08-handoff/latest/`, prioritising most recent `checkpoint-*.md` and `build-status.md`). If previous agent left unfinished work, complete it first.
 
-Read:
-1. Current week's stage file.
-2. The specification referenced for that week.
-3. `docs/08-handoff/latest/build-status.md` (what's already done).
+This command is split into multiple files. You must read **all of the files** listed below before doing anything else. 
 
-Implement in the appropriate crate/directory. Follow the spec exactly.
+1. `.opencode/commands/execute-build/preamble.md`
+2. `.opencode/commands/execute-build/read-and-implement.md`
+3. `.opencode/commands/execute-build/spec-ambiguity.md`
+4. `.opencode/commands/execute-build/requirement-gap.md`
+5. `.opencode/commands/execute-build/stop-rule.md`
+6. `.opencode/commands/execute-build/testing-tdd.md`
+7. `.opencode/commands/execute-build/checkpoint.md`
+8. `.opencode/commands/execute-build/integration-verification.md`
+9. `.opencode/commands/execute-build/week-completion.md`
 
-**When a spec is ambiguous or contradictory:**
-1. Do not guess. Check `docs/08-handoff/latest/open-questions.md` — if a ruling exists, follow it.
-2. If no ruling exists, make a decision, document it as an ADR in `docs/03-architecture/decisions/`, and file a spec change request.
-3. Implement with a `// SPEC_DEVIATION: [reason]` comment.
+After you have read every single file, follow each file in order.
 
-**When a requirement gap is discovered mid-implementation:**
-1. STOP. Do not paper over the gap.
-2. File the gap in `docs/08-handoff/latest/open-questions.md` with:
-   - The spec section that is underspecified
-   - What is missing
-   - Whether it blocks the current task or can be deferred
-3. If it blocks, escalate to spec revision. Track in `PROJECT-STATUS.md`.
-
-**Stop rule (trust assumptions):**
-If you discover a trust assumption or centralised dependency not listed in the spec's trust-assumption inventory:
-1. STOP implementation of that component.
-2. File in `open-questions.md`.
-3. Escalate to spec revision before continuing.
-
-**Testing (TDD — Red → Green → Refactor → Recurse):**
-- The spec's Section X.7 Conformance Test Hooks ARE the TDD stories.
-- For each hook, in order:
-   1. **RED:** Write a failing test that asserts the hook's behavior.
-   2. **GREEN:** Write minimum code to make the test pass.
-   3. **REFACTOR:** Clean up while keeping the test green.
-   4. **RECURSE:** After GREEN, grep for the SAME bug pattern across ALL crates. If found, file a new issue or fix inline before moving to the next hook.
-- **Every conformance test must have at least one NEGATIVE assertion** (wrong input → correct rejection). If the hook only tests positive behavior, add an explicit edge-case subtest.
-- `cargo test` before any implementation must fail on the new test.
-- Test file convention: `crates/<component>/tests/` mirroring spec sections.
-- Test naming: `conforms_to_<spec>_<section>_<short_description>`.
-- Conformance matrix entries are derived from these tests (they ARE the evidence).
-
-**Checkpoint cadence:**
-- Create a checkpoint after each passing green test, not just week boundaries.
-- A checkpoint is one line per test: `hook <name> — PASS`.
-- At week boundaries, before summarising, run a **determinism sweep** on any new protocol-level code:
-  - `grep -rn "as f64\|as f32\|f64::\|f32::" crates/` — flag any floating-point in deterministic paths
-  - `grep -rn "Instant::now\|SystemTime::now\|thread_rng\|rand::random" crates/` — flag wall-clock/random sources in protocol logic
-  - Verify all new `HashMap`/`HashSet` usages in protocol code don't leak iteration order into consensus decisions
-  - Verify every `pub fn` that returns `HashMap` cannot feed into deterministic state (should use `BTreeMap` or sorted `Vec` instead)
-  - For any new graph/clustering/connectivity algorithm, add a transitive-closure test case: three-or-more hop chains must produce the same cluster as direct connections
-  - In state-machine transaction handlers, grep for `if let Some.*get_mut` — every such expression must have an `else` arm that rejects, not silently skip
-  - In state-machine transaction handlers, verify the **validate-then-mutate** ordering: every mutation must be preceded by all validations. Scan for state mutated before a subsequent `?`/`return` path can exit without completing related mutations
-  - After adding a new in-memory entity collection (HashMap/Set) to the state machine, verify that `compute_state_root()` includes it — grep for the new field in the `compute_state_root` implementation
-  - After any code field rename that changes a type's semantic meaning (e.g., `pct`→`per_mil`, single-value→pair), grep all spec `.md` files for the old field name to catch documentation drift
-- File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.
-
-When the week's tasks are complete:
-1. Update stage file (mark week complete).
-2. Update `build-status.md`.
-3. Update `PROJECT-STATUS.md`.
-
-4. **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
-   - `cargo fmt --all -- --check`
-   - `cargo clippy --workspace --all-targets -- -D warnings`
-   - `cargo test --workspace`
-   - `cargo doc --workspace --no-deps --document-private-items`
-   - `cargo deny check`
-   - `cargo bench --workspace --no-run`
-
-If any step fails, fix the issue before proceeding. Do not actually commit or push to github.
-
-Then stop and wait for next prompt.
+**Parallelization note:** Steps 2 (read-and-implement) and 6 (testing-tdd) may farm independent work items to `build-worker` subagents. Steps 9 (week-completion) farms CI checks in parallel. See each step file for delegation patterns.

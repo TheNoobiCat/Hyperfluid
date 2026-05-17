@@ -39,15 +39,25 @@
 
 ## Week-by-Week Breakdown
 
-### Week 1–2: Consensus + State Machine (C1 + C2) — **COMPLETE (2026-05-05)**
-1. Integrate Malachite BFT: define validator identity, epoch structure, block proposal pipeline. (deferred: Malachite integration pending external dep)
+### Week 1–2: Consensus + State Machine (C1 + C2) — **PARTIALLY COMPLETE (2026-05-05)**
+1. Integrate Malachite BFT via core-library approach (ADR-0018): add `arc-malachitebft-core-*` crates to workspace, implement `SigningScheme` for ML-DSA-65, implement `Context` for Hyperfluid, build effect handler that routes Malachite effects to clatter network + tokio timers + state machine. (deferred: Malachite integration pending external dep)
 2. Implement SMT-backed state: key-value state store, transaction execution, block finalisation, SMT root hash computation. — **DONE**
 3. VDF-based committee rotation: deterministic committee from epoch seed (initially seeded from genesis; full VDF integration and tuning in Stage 03 (Validation)). — **DONE (deterministic SHA3-256 sampling; full VDF deferred)**
 4. Transaction types: `TransferTx`, `StakeBondTx`, `UnbondRequestTx`, `WithdrawUnbondedTx`, `TaskCreateTx`, `GovernanceProposeTx`, `GovernanceVoteTx`, `EvidenceTx`, etc. — **DONE (7 base types with action sub-enums)**
 5. Unit tests for state transitions; integration test for single-node block production. — **DONE (56 workspace tests)**
 6. Exit checkpoint: `cargo test` passes for C1 and C2 crates; single-node testnet produces blocks. — **DONE (see checkpoint-2026-05-05d.md)**
 
-### Week 3–4: Staking + Fee Market (C3 + C5)
+**GAP NOTE:** Malachite BFT was never integrated. C1 has committee sampling math but no propose/vote/commit protocol. The node binary does not produce blocks — it runs a `sleep(100ms)` counter. The state machine (C2) is genuinely implemented and works, but it is not wired into a running consensus loop.
+
+**INTEGRATION STRATEGY (ADR-0018):** Malachite will be integrated using only its `core-*` crates (`core-types`, `core-state-machine`, `core-votekeeper`, `core-driver`, `core-consensus`) as pure libraries. The `engine`, `network`, `app`, `app-channel`, `discovery`, and `sync` crates are NOT used because they are hardcoded to libp2p. Instead:
+- `SigningScheme` trait is implemented for ML-DSA-65 (~50 lines)
+- `Context` trait is implemented for Hyperfluid types (~200 lines)
+- Effect handler routes Malachite effects to clatter network, tokio timers, and state machine (~300 lines)
+- clatter network bridge sends/receives consensus messages over PQ-Noise channels (~500 lines)
+- Host actor handles proposal building, block validation, vote extensions, commit (~400 lines)
+Total new code: ~1,500 lines. No Malachite fork required.
+
+### Week 3–4: Staking + Fee Market (C3 + C5) — **PARTIALLY COMPLETE**
 1. Validator lifecycle state machine: `active` → `paused` (downtime trigger) → `unbonding` (user request, 14-day window) → `withdrawn`.
 2. Stake-weighted committee sampling using `self_bond + total_delegated` as effective weight; operator identity deduplication via stake-graph anti-split clustering (see `stake-graph-analysis-spec.md`).
 3. Delegation: `DelegateTx`, `UndelegateTx`, `WithdrawDelegationTx`, `SetCommissionTx`; DelegationRecord management; proportional slash propagation; commission rate constraints.
@@ -57,7 +67,9 @@
 6. Integration test: 3-validator network with staking lifecycle and fee market.
 7. Exit checkpoint: validators bond/unbond correctly; fees adjust to load; slashing fires on detected byzantine behavior.
 
-### Week 5–6: P2P Networking + Artifact Storage (C7 + C8) — **COMPLETE (2026-05-08)**
+**GAP NOTE:** C3 staking types and stake-graph clustering are implemented, but the staking lifecycle execution (bond/unbond/withdraw) lives in C2's state machine, not C3. No slashing execution, no reward distribution, no liveness tracking. C5 fee market algorithms are real pure functions but not integrated into block production. The 3-validator integration test in step 6 has not been run (no multi-node harness exists).
+
+### Week 5–6: P2P Networking + Artifact Storage (C7 + C8) — **PARTIALLY COMPLETE (2026-05-08)**
 1. Peer discovery: bootstrap nodes, Kademlia DHT for validator discovery, connection state machine (outbound/inbound, keepalive, backoff).
 2. Gossip protocol: transaction gossip (push), block gossip (push), mempool fee-ordered priority queue.
 3. Relay mechanism: nodes behind NAT connect via relay nodes; relay transmits consensus messages.
@@ -67,7 +79,9 @@
 7. State sync: snap-sync (download SMT snapshot + recent blocks), full-sync (replay from genesis).
 8. Exit checkpoint: 5-node network achieves consensus with 2 relay nodes. Artifact write/read/repair lifecycle works.
 
-### Week 7–8: Integration, Soak, Polish — **COMPLETE (2026-05-14)**
+**GAP NOTE:** Types, algorithms, and state machines are implemented. Actual network sockets (TCP/UDP), disk I/O for storage, and multi-node integration are NOT implemented. The exit checkpoint ("5-node network achieves consensus") has NOT been met. Integration Gate in BUILD-SYSTEM.md would block this week from being marked complete.
+
+### Week 7–8: Integration, Soak, Polish — **PARTIALLY COMPLETE (2026-05-14)**
 1. End-to-end integration: single-node boot → add validators → stake tokens → submit transactions → verify fee adjustment → unbond → withdraw.
 2. **clatter+ml-dsa secure channel integration:** wire clatter `HybridHandshake` (Noise hybrid XX) + `TransportState` behind the `hyperfluid-p2p` `SecureChannel` trait. ML-DSA-65 keypairs for peer identity. Enable encrypted peer-to-peer message passing, relay routing, and NAT traversal. Resolves deferred conformance hooks p2p-spec 1.7 hooks 7-8.
 3. 24-hour soak test: 3 validators, steady 1-tx-per-second load. No crashes, no memory leaks, no unbounded disk growth.
@@ -76,8 +90,11 @@
 6. Bug fixes and polish from soak test findings.
 7. Exit checkpoint: all exit criteria met; clatter+ml-dsa secure channels functional (multi-node encrypted messaging), conformance log written.
 
+**GAP NOTE:** The node binary consensus loop is a stub (`sleep(100ms)` counter). No actual transaction processing, block production, or multi-node consensus exists. The soak test and end-to-end integration described in the exit checkpoint have NOT been performed. Integration Gate in BUILD-SYSTEM.md would block this week from being marked complete.
+
 ## Risk Areas
-- **Malachite BFT mismatch with Hyperfluid specs:** Hyperfluid's committee model (exactly 100, anti-split clustering, VDF rotation) may not be a direct fit for Malachite's internals. Mitigation: first verify Malachite supports custom validator set changes at epoch boundaries. If not, adapt Hyperfluid's consensus-spec or compile a custom Malachite fork.
+- **Malachite core-* crate stability:** Using only `core-*` crates means we depend on their API stability. Malachite is alpha and under active development by Circle. Mitigation: pin to specific version/commit. The `core-*` crates are the most stable part of Malachite (pure logic, no I/O) and have formal Quint specs. API breaks are less likely in these crates than in `engine` or `network`.
+- **Effect handler correctness:** The effect handler is the critical glue between Malachite's consensus logic and Hyperfluid's transport/state machine. A bug here could cause missed votes, double-signing, or stalled consensus. Mitigation: TDD with conformance hooks; each effect type gets explicit positive and negative tests.
 - **clatter+ml-dsa version compatibility:** clatter is a single-maintainer project (MIT licensed). Mitigation: vendor clatter source at integration time. Pin to exact commit. For ml-dsa, use RustCrypto's FIPS 204 implementation pinned to v0.1.0-rc.11.
 - **State sync correctness:** Snap-sync reconstructed state must match SMT root exactly; divergence = network split risk. Mitigation: automated differential fuzzing: replay same transaction stream via full-sync and snap-sync; assert identical state roots.
 - **gix repository-scale performance:** Content-addressed blob store may become a bottleneck at scale. Mitigation: benchmark with 100k+ blobs in Week 5; if performance degrades, add RocksDB-backed blob index.

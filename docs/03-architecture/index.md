@@ -97,6 +97,7 @@ Located in `docs/03-architecture/decisions/`
 | ADR-0015 | Stake Delegation | Accepted |
 | ADR-0016 | clatter + ml-dsa Secure Channel Stack (replaces Ockam) | Accepted |
 | ADR-0017 | 90/10 Review Payout Split (replaces quality-weighted scoring) | Accepted |
+| ADR-0018 | Malachite Core-Library Integration (no fork, no libp2p) | Accepted |
 
 ---
 

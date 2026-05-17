@@ -43,6 +43,21 @@
         "skill": "allow",
         "task": "allow"
       }
+    },
+    "build-worker": {
+      "mode": "subagent",
+      "description": "Stateless build worker for Hyperfluid. Implements spec tasks, writes tests, runs CI tools. Receives narrow task context from the build orchestrator. Same full project knowledge as the primary build agent — no specialization, just parallel execution.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "bash": "allow",
+        "skill": "allow",
+        "task": "deny",
+        "webfetch": "deny",
+        "websearch": "deny"
+      }
     }
   },
   "permission": {

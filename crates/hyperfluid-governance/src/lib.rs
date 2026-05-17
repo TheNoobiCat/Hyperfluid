@@ -2,6 +2,8 @@
 //!
 //! On-chain `git:head` management, proposal lifecycle, vote aggregation,
 //! proposal validation, and hermetic sandbox execution.
+//!
+//! Source: docs/04-specifications/protocol/governance-spec.md
 
-#[cfg(test)]
-mod tests {}
+pub mod proposal;
+pub mod types;

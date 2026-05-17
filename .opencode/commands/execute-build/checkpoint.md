@@ -1,0 +1,16 @@
+**Checkpoint cadence:**
+- Create a checkpoint after each passing green test, not just week boundaries.
+- A checkpoint is one line per test: `hook <name> — PASS`.
+- At week boundaries, before summarising, run a **determinism sweep** on any new protocol-level code:
+  - `grep -rn "as f64\|as f32\|f64::\|f32::" crates/` — flag any floating-point in deterministic paths
+  - `grep -rn "Instant::now\|SystemTime::now\|thread_rng\|rand::random" crates/` — flag wall-clock/random sources in protocol logic
+  - `grep -rn "thread_local!\|RefCell\|SPEC_DEVIATION\|conformance shim" crates/*/src/` — any match must be justified as NOT being a test shim in library code
+  - Verify `default` feature in each crate's `Cargo.toml` does not enable any `mock-*` or `*-shim` features
+  - Verify all new `HashMap`/`HashSet` usages in protocol code don't leak iteration order into consensus decisions
+  - Verify every `pub fn` that returns `HashMap` cannot feed into deterministic state (should use `BTreeMap` or sorted `Vec` instead)
+  - For any new graph/clustering/connectivity algorithm, add a transitive-closure test case: three-or-more hop chains must produce the same cluster as direct connections
+  - In state-machine transaction handlers, grep for `if let Some.*get_mut` — every such expression must have an `else` arm that rejects, not silently skip
+  - In state-machine transaction handlers, verify the **validate-then-mutate** ordering: every mutation must be preceded by all validations. Scan for state mutated before a subsequent `?`/`return` path can exit without completing related mutations
+  - After adding a new in-memory entity collection (HashMap/Set) to the state machine, verify that `compute_state_root()` includes it — grep for the new field in the `compute_state_root` implementation
+  - After any code field rename that changes a type's semantic meaning (e.g., `pct`→`per_mil`, single-value→pair), grep all spec `.md` files for the old field name to catch documentation drift
+- File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.

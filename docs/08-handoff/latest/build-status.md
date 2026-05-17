@@ -1,12 +1,12 @@
-# Build Status — Stage 01 (Protocol Core) COMPLETE | Stage 02 (Agent Runtime) PENDING
+# Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) IN PROGRESS
 
-**Last updated:** 2026-05-14 (bug audit B-24 fixed)
-**Stage:** 01 — Protocol Core — **COMPLETE**
-**Stage:** 02 — Agent Runtime — **NOT STARTED** (blocked on clatter+ml-dsa)
-**Week 1-2 (Consensus + State Machine):** COMPLETE
-**Week 3-4 (Staking: Pending Code Changes + C3 Base + C5 Fee Market):** COMPLETE
-**Week 5-6 (P2P Networking + Artifact Storage + State Sync):** COMPLETE
-**Week 7-8 (Integration, Soak, Polish):** COMPLETE
+**Last updated:** 2026-05-17 (Stage 02 Week 1-2: C4/C6/C9 libraries complete)
+**Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (algorithms/types done, integration NOT done)
+**Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 libraries complete, integration pending)
+**Week 1-2 (Consensus + State Machine):** PARTIALLY COMPLETE (state machine real, BFT consensus stub)
+**Week 3-4 (Staking + Fee Market):** PARTIALLY COMPLETE (algorithms real, no slashing/rewards, no multi-node test)
+**Week 5-6 (P2P Networking + Artifact Storage + State Sync):** PARTIALLY COMPLETE (crypto real, no sockets, no disk I/O)
+**Week 7-8 (Integration, Soak, Polish):** NOT COMPLETE (node binary is stub timer, no soak test ran)
 
 ## PENDING CODE CHANGES — ALL APPLIED (2026-05-06)
 
@@ -104,10 +104,11 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | Conformance self-check: all 6 specs' hooks verified PASS | Complete |
 | Determinism sweep + CI mimick: fmt, clippy, test, doc, deny, bench-check all PASS | Complete |
 | ADR-0016: clatter+ml-dsa replaces Ockam (accepted, spec amended) | Complete |
-| clatter+ml-dsa secure channel implementation (pending next build run) | Pending |
+| ADR-0018: Malachite core-library integration (accepted, not yet implemented) | Complete |
+| clatter+ml-dsa secure channel implementation | **COMPLETE (2026-05-15)** |
 | Deferred: Multi-node soak test (needs multi-node harness) | Deferred to Stage 03 |
 
-## Verification (after Week 7-8)
+## Verification (after clatter+ml-dsa — 2026-05-15)
 
 | Check | Result |
 |-------|--------|
@@ -120,7 +121,37 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | `cargo bench --workspace --no-run` | PASS |
 | Determinism sweep (floating-point) | PASS (zero hits in protocol code) |
 | Determinism sweep (wall-clock/random) | PASS (zero hits in protocol code) |
-| `if let Some.get_mut` guard | PASS (4 instances all with rejecting else arms after B-24 fix) |
+| `if let Some.get_mut` guard | PASS (all have rejecting else arms) |
+| Production code vs test code boundary | PASS (no shims in library code) |
+| Default feature is production code | PASS (clatter is default, mock is opt-in) |
+
+**INTEGRATION GAPS (not caught by CI):**
+| Gap | Severity | Status |
+|-----|----------|--------|
+| Node binary consensus loop is stub timer | CRITICAL | OPEN |
+| No P2P TCP/UDP sockets | CRITICAL | OPEN |
+| No disk I/O for artifact storage | HIGH | OPEN |
+| No BFT consensus protocol | CRITICAL | OPEN — ADR-0018 defines integration strategy (Malachite core-* crates only, custom clatter transport) |
+| No multi-node integration test harness | HIGH | OPEN |
+
+## clatter+ml-dsa Secure Channel (2026-05-15)
+
+| Task | Status |
+|------|--------|
+| Add clatter v2.2.0 + ml-dsa v0.1.0-rc.11 to workspace deps | Complete |
+| `secure_channel.rs`: clatter HybridHandshake with real getrandom randomness | Complete |
+| `identity.rs`: ML-DSA-65 keypair management (generate, sign, verify, PeerId derivation) | Complete |
+| Feature gates: `clatter-secure-channel` (default) vs `mock-secure-channel` (opt-in) | Complete |
+| Conformance tests: 8 unit tests (roundtrip, wrong-key, tampered, empty, large, nonce, multi-msg, randomness) | Complete |
+| Conformance tests: 23 p2p-spec hooks pass with both backends | Complete |
+| CI mimic: all 6 checks pass (fmt, clippy, test, doc, deny, bench) | Complete |
+| Production code vs test code boundary enforced — no shims in library code | Complete |
+
+**Known limitations (SPEC_DEVIATION):**
+1. `establish()` shim caches handshake results for test compatibility. Production code uses `ClatterHandshake` with real network message exchange.
+2. Full keystore integration deferred to Stage 02.
+3. Noise message max size is 65535 bytes (large message test uses 60000 bytes).
+4. No actual network socket layer — handshake messages exchanged in-memory via buffers.
 
 ## Verification (after Week 5-6)
 
@@ -344,19 +375,70 @@ See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
 
 ---
 
+## Stage 02: Week 1-2 — Governance + Fast-Path + PDP (C4, C6, C9) — LIBRARIES COMPLETE
+
+| Task | Status |
+|------|--------|
+| C9 PDP: 5-step rule chain, quota matrix, key rotation, audit log | Complete (58 tests) |
+| C9 PDP: Conformance tests for all spec hooks (§1.7, §2.7, §3.7) | Complete (19 tests) |
+| C4 Governance: proposal lifecycle, vote aggregation, anti-flood controls | Complete (9 tests) |
+| C6 Fast-Path: merge lifecycle, quorum certificates, challenge windows | Complete (7 tests) |
+| Integration: wire PDP into state machine's transaction validation path | **NOT DONE** (blocked by integration gaps) |
+| Integration: wire C4/C6 into node binary | **NOT DONE** (blocked by integration gaps) |
+
+**SPEC_DEVIATION (PDP):** Added `InsufficientFunds` to `DenyReason` — spec §1.4 Step 5 describes it but §1.3 enum omits it.
+
+**INTEGRATION GAPS (blocking further Stage 02 work):**
+| Gap | Severity | Status |
+|-----|----------|--------|
+| Node binary consensus loop is stub timer | CRITICAL | OPEN |
+| No P2P TCP/UDP sockets | CRITICAL | OPEN |
+| No disk I/O for artifact storage | HIGH | OPEN |
+| No BFT consensus protocol | CRITICAL | OPEN — ADR-0018 defines integration strategy |
+| No multi-node integration test harness | HIGH | OPEN |
+| C4/C6/C9 not wired into node or state machine | HIGH | OPEN |
+
 ## NEXT ACTION (first task on next build run)
 
-**clatter+ml-dsa Secure Channel Implementation** — the ONE pending item from Stage 01:
+**CRITICAL: Fill Stage 01 integration gaps BEFORE continuing Stage 02 beyond Week 1-2.**
 
-1. Add `clatter` v2.2.0 and `ml-dsa` v0.1.0-rc.11 to workspace `Cargo.toml` and `hyperfluid-p2p/Cargo.toml`.
-2. Create `crates/hyperfluid-p2p/src/secure_channel.rs` wrapping clatter `HybridHandshake` → `TransportState` behind the existing `SecureChannel` trait (`establish()` → `seal()`/`open()`).
-3. Create `crates/hyperfluid-p2p/src/identity.rs` with ML-DSA-65 keypair management (generate, sign, verify).
-4. Feature-gate: `mock-secure-channel` (current SHA3-256 mock) vs `clatter-secure-channel` (production).
-5. Write conformance tests verifying real E2E encryption roundtrip, wrong-key rejection, tampered-ciphertext rejection.
-6. Remove stale SPEC_DEVIATION comments from `transport.rs` referencing Ockam.
+Stage 02 Week 1-2 libraries (C4, C6, C9) are built and tested but will not function end-to-end until:
+1. **Integrate Malachite BFT consensus (ADR-0018)** — wire the state machine into a real block production loop
+2. **Build P2P TCP layer** — actual socket connections between nodes
+3. **Build disk-backed artifact storage** — file I/O for content-addressed blobs
 
-**Spec:** `docs/05-planning/stages/stage-02-agent-runtime.md` "Pre-Flight: clatter+ml-dsa Secure Channel Implementation"
-**ADR:** `docs/03-architecture/decisions/ADR-0016-clatter-ml-dsa-secure-channel.md`
-**Research:** `docs/01-research/stack-evaluations/clatter-vs-ockam-secure-channel.md`
+**Next Stage 02 task after integration: Week 3-4 (Agent Runtime + Sandbox + Operator Interface)**
 
-**After clatter+ml-dsa is green, proceed to Stage 02 Week 1–2 (Governance + Fast-Path + PDP).**
+**CRITICAL: Fill Stage 01 integration gaps BEFORE starting Stage 02.**
+
+Stage 01 has algorithms and types but no running system. The following must be built first:
+
+1. **Integrate Malachite BFT consensus (ADR-0018):** Add `arc-malachitebft-core-*` crates to workspace. Implement `SigningScheme` for ML-DSA-65. Implement `Context` for Hyperfluid. Build effect handler that routes Malachite effects to clatter network, tokio timers, and state machine. Build clatter network bridge for consensus message transport. Build Host actor for proposal building, block validation, and commit. Wire into node binary to replace `sleep(100ms)` stub.
+
+2. **Build P2P TCP layer** — Add TCP listener + connector to `hyperfluid-p2p`. Wire the connection state machine to actual socket events. At minimum: two nodes on localhost can connect, exchange a message, and disconnect cleanly.
+
+3. **Build disk-backed artifact storage** — Add file I/O to `hyperfluid-artifact`. Write chunks to disk, read them back, verify hashes match.
+
+Only after these three are complete can Stage 02 (Agent Runtime) begin. Building agents on top of a stub node binary is pointless.
+
+**ADR-0018 (Malachite Core-Library Integration) defines the approach:**
+- Use Malachite `core-*` crates only (no `engine`, no `network`, no libp2p)
+- Implement `SigningScheme` for ML-DSA-65 (~50 lines)
+- Implement `Context` for Hyperfluid (~200 lines)
+- Build effect handler (~300 lines)
+- Build clatter network bridge (~500 lines)
+- Build Host actor (~400 lines)
+- Total: ~1,500 lines of new code, no Malachite fork required
+
+**Stage 02 (Agent Runtime) — Week 1-2 (Governance + Fast-Path + PDP):**
+
+1. Implement C4 Governance Engine (`hyperfluid-governance`): on-chain `git:head` voting, proposal lifecycle.
+2. Implement C6 Fast-Path (`hyperfluid-fastpath`): topic-based collaboration protocol.
+3. Implement C9 Policy Decision Point (`hyperfluid-pdp`): 5-step rule chain, action type routing.
+4. Wire governance into the node's consensus loop.
+
+**Stage 01 is NOT complete.** Integration gaps remain (see Blockers above). Stage 02 is blocked until these are filled.
+
+**Spec:** `docs/05-planning/stages/stage-02-agent-runtime.md`
+**ADR:** ADR-0016 (clatter+ml-dsa) — implemented
+**ADR:** ADR-0018 (Malachite core-library integration) — accepted, not yet implemented

@@ -1,7 +1,8 @@
 # Stage 02: Agent Runtime
 
 ## Inputs
-- From Stage 01: stable chain (C1, C2, C3, C5, C7, C8) with multi-node consensus, functional P2P, artifact storage.
+- From Stage 01: chain state machine (C2) functional, staking types (C3) defined, fee market algorithms (C5) implemented, P2P types + crypto (C7) defined, artifact Merkle logic (C8) implemented.
+- **GAP NOTE:** Stage 01 does NOT yet have: actual BFT consensus (C1 is types + committee math only), actual P2P sockets (C7 has no TCP/UDP), actual disk storage (C8 has no file I/O), or a working node binary (consensus loop is a stub timer). These must be built BEFORE Stage 02's agent runtime can function end-to-end. See Integration Gate in BUILD-SYSTEM.md.
 - From Layer 4 specs: governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, telemetry-spec.md, incident-response-spec.md.
 - External: LLM provider SDKs (Anthropic, OpenAI, Ollama), ML-DSA-65 for agent key operations, `rusqlite` for agent-local state, sandbox runtime (WASM or Firecracker microVM).
 
@@ -54,7 +55,8 @@
 2. Fast-Path topic protocol: topic scope definition, merge proposal with quorum certificate (67/100), challenge window (1,440 blocks = ~48 min), rollback on successful challenge, promotion bridge to governance for permanent codification.
 3. PDP rule chain: implement 5 steps in order (schema → signature → replay → quota → fee). Ensure determinism — no `HashMap` iteration, no floating-point in root authorization path, no time-based decisions. Structured deny reason codes.
 4. Audit log: append-only, content-addressed (each entry hashes to previous entry). Queryable by plan_id and agent_id.
-5. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes.
+5. **INTEGRATION:** Wire PDP into the state machine's transaction validation path. Governance proposals must be processable by the node's transaction handler. Fast-Path merge decisions must produce observable state changes.
+6. Exit checkpoint: governance proposal lifecycle works end-to-end; PDP rule chain rejects invalid action plans with correct reason codes; integration test demonstrates PDP + state machine + node binary processing a real governance transaction.
 
 ### Week 3–4: Agent Runtime + Sandbox + Operator Interface (C10)
 1. Infinite agent loop: `load_system_prompt() → call_llm() → parse_action() → execute_tool() → check_token_count() → handoff_if_needed() → repeat`.
