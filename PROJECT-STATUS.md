@@ -57,7 +57,9 @@ Key fixes:
 
 ## Blockers
 
-**All previous CRITICAL/HIGH blockers resolved 2026-05-17.** Malachite type-level integration (SigningScheme + Context) implemented 2026-05-17c (410 lines, 13 tests). Remaining work:
+**All previous CRITICAL/HIGH blockers resolved 2026-05-17.** Malachite type-level integration (SigningScheme + Context) implemented 2026-05-17c (410 lines, 13 tests). Bug Audit Round 5 (2026-05-18) resolved 12 new issues across 6 crates.
+
+Remaining work:
 
 1. **Malachite BFT protocol wiring** — SigningScheme + Context implemented (malachite.rs). Effect handler, network bridge, host actor deferred (~1,100 lines remaining). Not blocking Stage 02 — ConsensusDriver produces blocks.
 2. **Slashing execution + reward distribution** — deferred to Stage 03 (Validation).
@@ -189,14 +191,56 @@ Systemic patterns identified: dead/redundant fields on protocol structs (after m
 
 Process improvements: 5 generic guards added to `execute-build.md` `checkpoint.md` covering field population verification, handler mutation tracing, spec float scanning, and spec structural completeness.
 
+## Bug Audit (2026-05-18) — Round 5
+
+**Result:** 12 bugs found and fixed across 6 crates and 2 spec documents. See `docs/01-research/_audit-bugs-2026-05-18.md` for full report.
+
+Key findings:
+1. **CRITICAL:** `get_inbox_signal` priority comparison inverted (`>` vs `<`) — agents receive incorrect sender alerts.
+2. **CRITICAL:** `ClatterHandshake::remote_id()` returns local peer ID (not remote) — breaks peer authentication.
+3. **MAJOR:** `snapshot_state()` excluded 4 of 5 state collections — state sync would produce divergent roots.
+4. **MAJOR:** Fast-path challenge tracking was dead code — `Challenged` guard never matched.
+5. **MAJOR:** PDP quota `reserve_quota` hard-coded `TrustStage::Trusted` — stage multipliers ineffective.
+6. **MAJOR:** PDP `check_quota` ignored trust stage — all agents treated as same stage.
+7. **MAJOR:** `dispatch_tool` 10 `.unwrap()` calls would panic on malformed LLM JSON.
+8. **MEDIUM:** `compute_committee_weights` integer division lost remainder (atto-AGX leakage).
+9. **MEDIUM:** `execute_delegate` skipped validator existence check.
+10. **MEDIUM:** `SMTNode` dead struct not removed.
+11. **MINOR:** `incident-response-spec.md` f64 fee formula vs integer code.
+
+Systemic patterns identified: comparison direction errors, constructor self-reference leaks, parallel serialisation drift, challenge/finalisation lifecycle gaps, stage multiplier bypass, fractional percentage type mismatch.
+
+Process improvements: 6 generic guards added to `execute-build.md` `checkpoint.md`.
+
+CI mimic: fmt, clippy (zero warnings), test (all pass), doc, deny, bench-check — ALL PASS.
+
+## Bug Audit (2026-05-18 — Round 2 / Round 6)
+
+**Result:** 10 bugs found and fixed across 7 crates and 1 process file. See `docs/01-research/_audit-bugs-2026-05-18-r2.md` for full report.
+
+Key findings:
+1. **CRITICAL:** PDP validation bypass — all governance/fast-path transactions passed unconditionally (fail-open).
+2. **CRITICAL:** `panic!()` in `sample_with_rotation` — production crash on exhausted validators.
+3. **CRITICAL:** `assert!(count > 0)` in `select_proposer` — production crash on empty validator set.
+4. **MAJOR:** TOCTOU race in `connect_to_peer` dual-lock pattern — concurrent disconnect could panic.
+5. **MAJOR:** `step4_quota_check` ignored stage multipliers — incomplete G-06 fix propagation.
+6. **MAJOR:** Credential leakage — API keys persisted in SQLite in plaintext.
+7. **MAJOR:** `Ordering::Relaxed` on cross-thread shutdown signal — no happens-before on ARM.
+8. **MAJOR:** Double ctrl-c handler in `main.rs` — confusing two-press shutdown.
+9. **MAJOR:** Dead `ClusterAncestorType` enum — unused code from refactoring.
+10. **MEDIUM:** `copy_from_slice` panic on corrupted DB — three unvalidated BLOB reads.
+
+Systemic patterns identified: fail-open when state absent, panic/assert in production, TOCTOU dual-lock, duplicate implementation drift, credential persistence, relaxed atomics for signaling.
+
+Process improvements: 7 new generic guards added to `execute-build.md` `checkpoint.md`.
+
 ## Next Actions
 
 **Stage 02 Week 3-4 (Agent Runtime): COMPLETE (2026-05-18) — C10 library built, 87 tests**
 
-**Stage 02 can now continue to Week 5-6 (Collaboration + Review + Economics + Sybil Detection):**
-1. Task board, soft leases, bounty escrow, airdrop agent, task discovery via gossip/DHT, inbox system
-2. Trust ladder promotion, review engine, reviewer independence, Sybil detection correlation engine
-3. Anti-collusion clawback
+**Stage 02 Week 5-6 (Collaboration + Review + Economics + Sybil Detection): READY (2026-05-18)**
+- C11 collaboration crate foundation (task board types, inbox with quotas, trust ladder, topic lifecycle, replay protection) built — 38 tests
+- Remaining: review engine integration, economics crate, Sybil detection, gossip/DHT task discovery wiring
 
 **Recent resolution (2026-05-17b):**
 - Validator lifecycle (bond/unbond/withdraw/renew) implemented in StateMachine with 13 tests.
@@ -344,4 +388,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-17c (Malachite SigningScheme + Context implemented; gap fill complete; P2P conformance test fix)*
+*Last updated: 2026-05-18 (Bug Audit Round 5: 12 issues fixed across 6 crates + 2 specs. All CI checks pass.)*

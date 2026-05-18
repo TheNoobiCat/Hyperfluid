@@ -264,9 +264,9 @@ impl Committee {
             }
 
             if !found {
-                // Every validator is already used; this shouldn't happen
-                // with validators.len() >= committee_size, but guard anyway.
-                panic!("cannot sample committee: all validators already used");
+                // Every validator is already used — fall back to seat-index
+                // based selection to avoid panic in production.
+                chosen_idx = seat_index % validators.len();
             }
 
             members.push(validators[chosen_idx]);
@@ -317,6 +317,7 @@ pub struct TransactionEnvelope {
 
 /// All transaction types on the protocol. Source: consensus-spec.md Section 1.3
 /// Collapsed to 7 base types with action sub-enums (2026-05-06 simplification).
+/// Extended with collaboration tx types for task lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum TxType {
     TransferTx,
@@ -326,6 +327,11 @@ pub enum TxType {
     GovernanceTx(GovernanceAction),
     EvidenceTx,
     FastPathTx,
+    ClaimTaskTx,
+    HeartbeatTx,
+    ReleaseTaskTx,
+    SubmitTaskTx,
+    ShadowClaimTx,
 }
 
 /// Staking sub-actions. Source: consensus-spec.md Section 1.3
@@ -391,8 +397,13 @@ mod tests {
             TxType::GovernanceTx(GovernanceAction::Vote),
             TxType::EvidenceTx,
             TxType::FastPathTx,
+            TxType::ClaimTaskTx,
+            TxType::HeartbeatTx,
+            TxType::ReleaseTaskTx,
+            TxType::SubmitTaskTx,
+            TxType::ShadowClaimTx,
         ];
-        assert_eq!(types.len(), 14);
+        assert_eq!(types.len(), 19);
     }
 
     #[test]

@@ -174,6 +174,7 @@ fn step4_quota_check(
     }
 
     let mut consumption = Vec::new();
+    let trust_stage = ctx.trust_stage;
 
     for quota_id in &relevant_quota_ids {
         let entry = get_quota_entry(quota_id);
@@ -182,14 +183,28 @@ fn step4_quota_check(
         let consumed = state.map(|s| s.consumed).unwrap_or(0);
         let after = consumed.saturating_add(1);
 
-        if after > entry.limit {
+        // Apply stage multiplier: effective_limit = limit * num / den
+        let effective_limit = entry
+            .stage_multipliers
+            .iter()
+            .find(|(stage, _)| *stage == trust_stage)
+            .map(|(_, (num, den))| {
+                if *den == 0 {
+                    entry.limit
+                } else {
+                    (entry.limit as u128 * *num as u128 / *den as u128) as u64
+                }
+            })
+            .unwrap_or(entry.limit);
+
+        if after > effective_limit {
             return Err(PdpError::QuotaExhausted { quota_id: quota_id.clone() });
         }
 
         consumption.push(QuotaConsumption {
             quota_id: quota_id.clone(),
             amount_consumed: 1,
-            remaining: entry.limit.saturating_sub(after),
+            remaining: effective_limit.saturating_sub(after),
         });
     }
 
@@ -338,14 +353,18 @@ fn get_quota_entry(quota_id: &str) -> QuotaEntry {
                 (TrustStage::Trusted, (10, 10)),
             ],
         },
-        _ => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "unknown".into(),
-            dimension: "unknown".into(),
-            limit: u64::MAX,
-            window_blocks: 0,
-            stage_multipliers: vec![],
-        },
+        _ => {
+            // Unknown quota_id — deny by returning a zero-limit entry.
+            // This prevents silent unlimited access for unrecognised quota IDs.
+            QuotaEntry {
+                quota_id: quota_id.into(),
+                enforcement_point: "unknown".into(),
+                dimension: "unknown".into(),
+                limit: 0,
+                window_blocks: 0,
+                stage_multipliers: vec![],
+            }
+        }
     }
 }
 
@@ -365,7 +384,7 @@ fn step5_fee_check(_request: &ActionPlanRequest, ctx: &PdpContext) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{DenyReason, KeyBinding, QuotaState};
+    use crate::types::{DenyReason, KeyBinding, QuotaState, TrustStage};
     use ml_dsa::{Generate, Keypair, Seed, SignatureEncoding, Signer, SigningKey};
 
     fn test_keypair() -> (Vec<u8>, [u8; 32]) {
@@ -393,6 +412,7 @@ mod tests {
             agent_nonce: nonce,
             consumed_plan_ids: vec![],
             quota_states: vec![],
+            trust_stage: TrustStage::Trusted,
         }
     }
 

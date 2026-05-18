@@ -404,6 +404,7 @@ fn test_governance_proposal_submitted() {
     );
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true; // PDP state not wired in this test
     driver.init_genesis(&genesis);
 
     // Build a GovernanceTx(Propose) transaction
@@ -470,6 +471,7 @@ fn test_governance_vote_cast() {
     );
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true; // PDP state not wired in this test
     driver.init_genesis(&genesis);
 
     // Step 1: Submit the proposal
@@ -548,6 +550,7 @@ fn test_fastpath_merge_submitted() {
     );
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true; // PDP state not wired in this test
     driver.init_genesis(&genesis);
 
     // Build a FastPathTx (merge proposal, not a challenge)

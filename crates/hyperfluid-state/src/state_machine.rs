@@ -11,7 +11,11 @@ use std::collections::{HashMap, HashSet};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::smt::SparseMerkleTree;
-use crate::{state_key, Account, Hash32, KeyPrefix};
+use crate::{
+    state_key, Account, EscrowStatus, Hash32, HeartbeatPayload, KeyPrefix, LeasePenaltyLevel,
+    ShadowClaim, Task, TaskLease, TaskStatus, TopicRecord, TopicStatus, TrustStageEnum,
+    TrustStageRecord,
+};
 
 /// Execution context passed to each state transition.
 #[derive(Debug, Clone, Copy)]
@@ -32,8 +36,18 @@ pub enum ExecutionResult {
 pub struct StateMachine {
     accounts: HashMap<Hash32, Account>,
     consumed_plans: HashSet<Hash32>,
-    /// Tracked task IDs for deduplication
-    task_ids: HashSet<Hash32>,
+    /// Canonical task records (key = task_id). Source: collaboration-spec.md §1.3
+    tasks: HashMap<Hash32, Task>,
+    /// Active leases (key = lease_id)
+    leases: HashMap<Hash32, TaskLease>,
+    /// Shadow claims (key = task_id)
+    shadow_claims: HashMap<Hash32, Vec<ShadowClaim>>,
+    /// Trust stage records (key = agent_id)
+    trust_stages: HashMap<Hash32, TrustStageRecord>,
+    /// Topic lifecycle records (key = topic_id)
+    topic_records: HashMap<Hash32, TopicRecord>,
+    /// Consumed freshness nonces: (task_id, nonce)
+    consumed_nonces: HashSet<(Hash32, Hash32)>,
     /// Delegation records: (delegator_id, validator_id) -> (amount, unbonding_height, active)
     delegations: HashMap<(Hash32, Hash32), DelegationState>,
     /// Validator records: validator_id -> ValidatorTracker
@@ -43,7 +57,7 @@ pub struct StateMachine {
 /// In-memory delegation state tracked by the state machine.
 /// Mirrors on-chain DelegationRecord from staking-spec.md Section 1.3.
 #[derive(Debug, Clone, Encode, Decode)]
-struct DelegationState {
+pub(crate) struct DelegationState {
     amount: u128,
     unbonding_at_height: u64,
     active: bool,
@@ -82,7 +96,12 @@ impl StateMachine {
         Self {
             accounts: HashMap::new(),
             consumed_plans: HashSet::new(),
-            task_ids: HashSet::new(),
+            tasks: HashMap::new(),
+            leases: HashMap::new(),
+            shadow_claims: HashMap::new(),
+            trust_stages: HashMap::new(),
+            topic_records: HashMap::new(),
+            consumed_nonces: HashSet::new(),
             delegations: HashMap::new(),
             validators: HashMap::new(),
         }
@@ -186,7 +205,8 @@ impl StateMachine {
     }
 
     /// Execute a TaskCreateTx.
-    /// Debits bounty from creator, creates an escrow entry, records the task.
+    /// Debits bounty from creator, stores full Task struct on-chain.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_task_create(
         &mut self,
         creator_id: Hash32,
@@ -194,30 +214,30 @@ impl StateMachine {
         fee_agx: u128,
         task_id: Hash32,
         nonce: u64,
-        _seed_ref: Hash32,
+        seed_ref: Hash32,
+        topic_id: Hash32,
+        metadata_hash: Hash32,
+        required_skills_hash: Hash32,
+        sponsor_id: Hash32,
+        requester_pubkey: Hash32,
+        current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
-        // Prevent duplicate task creation
-        if self.task_ids.contains(&task_id) {
+        if self.tasks.contains_key(&task_id) {
             return ExecutionResult::Rejected;
         }
 
-        // Nonce enforcement
         let creator_nonce = self.accounts.get(&creator_id).map(|a| a.nonce).unwrap_or(0);
-
         if nonce != creator_nonce + 1 {
             return ExecutionResult::Rejected;
         }
 
         let total_cost = bounty_agx.saturating_add(fee_agx);
-
         let creator_balance = self.accounts.get(&creator_id).map(|a| a.balance).unwrap_or(0);
-
         if creator_balance < total_cost {
             return ExecutionResult::Rejected;
         }
 
-        // Debit creator (must exist)
         match self.accounts.get_mut(&creator_id) {
             Some(creator) => {
                 creator.balance -= total_cost;
@@ -226,8 +246,25 @@ impl StateMachine {
             None => return ExecutionResult::Rejected,
         }
 
-        // Record task for deduplication
-        self.task_ids.insert(task_id);
+        let task = Task {
+            task_id,
+            topic_id,
+            seed_ref,
+            parent_task_id: [0u8; 32],
+            depends_on: vec![],
+            funder: creator_id,
+            primary_owner: [0u8; 32],
+            status: TaskStatus::Open,
+            bounty_agx,
+            created_at_height: current_height,
+            lease_expires_height: current_height,
+            required_skills_hash,
+            metadata_hash,
+            sponsor_id,
+            requester_pubkey,
+            escrow_status: EscrowStatus::Locked,
+        };
+        self.tasks.insert(task_id, task);
 
         ExecutionResult::Success
     }
@@ -247,6 +284,9 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
         if delegator_id == validator_id {
+            return ExecutionResult::Rejected;
+        }
+        if !self.validators.contains_key(&validator_id) {
             return ExecutionResult::Rejected;
         }
 
@@ -567,11 +607,401 @@ impl StateMachine {
         }
     }
 
-    /// Compute the SMT root from the current state machine state.
-    /// All accounts, delegations, validators, and consumed plan IDs are
-    /// serialised with SCALE encoding and inserted into the SMT sorted
-    /// by state key (spec 2.2).
-    /// Delegation records use key prefix 0x0E, consumed plans use 0x0A.
+    // ── Task & Lease State Transitions ──────────────────────────────
+
+    /// Claim an open task. Validates: task is Open, prior lease expired,
+    /// agent has lease capacity, sufficient collateral.
+    pub fn execute_claim_task(
+        &mut self,
+        task_id: Hash32,
+        agent_id: Hash32,
+        collateral: u128,
+        current_height: u64,
+        trust_stage: TrustStageEnum,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let max_leases = match trust_stage {
+            TrustStageEnum::Untrusted => 2,
+            TrustStageEnum::Trusted => 6,
+        };
+        let active_count: u32 = self
+            .leases
+            .values()
+            .filter(|l| l.owner_id == agent_id && l.expires_at_height > current_height)
+            .count() as u32;
+        if active_count >= max_leases {
+            return ExecutionResult::Rejected;
+        }
+
+        let task = match self.tasks.get_mut(&task_id) {
+            Some(t) if matches!(t.status, TaskStatus::Open) => t,
+            _ => return ExecutionResult::Rejected,
+        };
+
+        if task.lease_expires_height > current_height {
+            return ExecutionResult::Rejected;
+        }
+
+        let min_collateral = 10_000_000_000_000_000_000u128.max(task.bounty_agx * 5 / 1000);
+        if collateral < min_collateral {
+            return ExecutionResult::Rejected;
+        }
+
+        task.status = TaskStatus::Claimed;
+        task.primary_owner = agent_id;
+        task.lease_expires_height = current_height + 120;
+
+        let lease_id = crate::sha3_256(
+            &[task_id.as_slice(), agent_id.as_slice(), &current_height.to_le_bytes()].concat(),
+        );
+        let lease = TaskLease {
+            lease_id,
+            task_id,
+            owner_id: agent_id,
+            collateral,
+            started_at_height: current_height,
+            expires_at_height: task.lease_expires_height,
+            last_heartbeat_height: current_height,
+            heartbeats_received: 0,
+            timeout_count: 0,
+            penalty: LeasePenaltyLevel::Warning,
+        };
+        self.leases.insert(lease_id, lease);
+        ExecutionResult::Success
+    }
+
+    /// Submit a heartbeat for an active lease. Extends lease by 120 blocks.
+    /// Rejected if heartbeat has no progress evidence.
+    pub fn execute_heartbeat(
+        &mut self,
+        heartbeat: HeartbeatPayload,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let lease = match self.leases.get_mut(&heartbeat.lease_id) {
+            Some(l) => l,
+            None => return ExecutionResult::Rejected,
+        };
+
+        if heartbeat.artifact_hash.is_none()
+            && heartbeat.diff_pointer.is_none()
+            && heartbeat.test_result_ref.is_none()
+        {
+            return ExecutionResult::Rejected;
+        }
+
+        lease.last_heartbeat_height = current_height;
+        lease.heartbeats_received += 1;
+        lease.expires_at_height = current_height.saturating_add(120);
+
+        if let Some(task) = self.tasks.get_mut(&lease.task_id) {
+            task.lease_expires_height = lease.expires_at_height;
+            if matches!(task.status, TaskStatus::Claimed) {
+                task.status = TaskStatus::InProgress;
+            }
+        }
+
+        ExecutionResult::Success
+    }
+
+    /// Release a task lease (voluntary). Removes lease, returns task to Open.
+    pub fn execute_release_task(
+        &mut self,
+        task_id: Hash32,
+        agent_id: Hash32,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let task = match self.tasks.get_mut(&task_id) {
+            Some(t) if t.primary_owner == agent_id => t,
+            _ => return ExecutionResult::Rejected,
+        };
+        if !matches!(task.status, TaskStatus::Claimed | TaskStatus::InProgress) {
+            return ExecutionResult::Rejected;
+        }
+
+        let expired: Vec<Hash32> =
+            self.leases.values().filter(|l| l.task_id == task_id).map(|l| l.lease_id).collect();
+        for lid in expired {
+            self.leases.remove(&lid);
+        }
+
+        task.primary_owner = [0u8; 32];
+        task.status = TaskStatus::Open;
+        ExecutionResult::Success
+    }
+
+    /// Submit completed task for review. Transitions InProgress → Done.
+    pub fn execute_submit_completion(
+        &mut self,
+        task_id: Hash32,
+        agent_id: Hash32,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        let task = match self.tasks.get_mut(&task_id) {
+            Some(t) if t.primary_owner == agent_id => t,
+            _ => return ExecutionResult::Rejected,
+        };
+        if !matches!(task.status, TaskStatus::InProgress) {
+            return ExecutionResult::Rejected;
+        }
+        task.status = TaskStatus::Done;
+        ExecutionResult::Success
+    }
+
+    /// Register a shadow claim on an actively leased task.
+    pub fn execute_register_shadow(
+        &mut self,
+        task_id: Hash32,
+        claimant_id: Hash32,
+        trust_score: u32,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        match self.tasks.get(&task_id) {
+            Some(t) if matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress) => {}
+            _ => return ExecutionResult::Rejected,
+        }
+
+        let claim_id = crate::sha3_256(
+            &[task_id.as_slice(), claimant_id.as_slice(), &current_height.to_le_bytes()].concat(),
+        );
+        let claim = ShadowClaim {
+            claim_id,
+            task_id,
+            claimant_id,
+            trust_score,
+            submitted_at_height: current_height,
+            evidence_hash: [0u8; 32],
+        };
+        self.shadow_claims.entry(task_id).or_default().push(claim);
+        ExecutionResult::Success
+    }
+
+    /// Check lease expiry for a task. If lease expired:
+    /// - Increment timeout counter on lease
+    /// - Promote best shadow claimant if available, else return to Open.
+    ///   Called at every block boundary, not as a transaction.
+    pub fn run_lease_expiry(&mut self, task_id: &Hash32, current_height: u64) -> bool {
+        let should_expire = self.tasks.get(task_id).is_some_and(|t| {
+            matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress)
+                && t.lease_expires_height <= current_height
+        });
+        if !should_expire {
+            return false;
+        }
+
+        let expired_ids: Vec<Hash32> = self
+            .leases
+            .values()
+            .filter(|l| l.task_id == *task_id && l.expires_at_height <= current_height)
+            .map(|l| l.lease_id)
+            .collect();
+
+        for lid in &expired_ids {
+            if let Some(lease) = self.leases.get_mut(lid) {
+                lease.timeout_count += 1;
+                lease.penalty = match lease.timeout_count {
+                    0 | 1 => LeasePenaltyLevel::Warning,
+                    2 => LeasePenaltyLevel::BudgetReduction,
+                    _ => LeasePenaltyLevel::SevereReduction,
+                };
+            }
+            self.leases.remove(lid);
+        }
+
+        // Promote best shadow claim if eligible
+        let promoted = self.shadow_claims.remove(task_id).and_then(|mut claims| {
+            claims.sort_by_key(|c| (std::cmp::Reverse(c.trust_score), c.submitted_at_height));
+            claims.into_iter().find(|c| c.submitted_at_height + 48 <= current_height)
+        });
+
+        if let Some(ref claim) = promoted {
+            if let Some(task) = self.tasks.get_mut(task_id) {
+                task.primary_owner = claim.claimant_id;
+                task.lease_expires_height = current_height + 120;
+                task.status = TaskStatus::Claimed;
+                let lease_id = crate::sha3_256(
+                    &[
+                        task_id.as_slice(),
+                        claim.claimant_id.as_slice(),
+                        &current_height.to_le_bytes(),
+                    ]
+                    .concat(),
+                );
+                self.leases.insert(
+                    lease_id,
+                    TaskLease {
+                        lease_id,
+                        task_id: *task_id,
+                        owner_id: claim.claimant_id,
+                        collateral: 0,
+                        started_at_height: current_height,
+                        expires_at_height: current_height + 120,
+                        last_heartbeat_height: current_height,
+                        heartbeats_received: 0,
+                        timeout_count: 0,
+                        penalty: LeasePenaltyLevel::Warning,
+                    },
+                );
+            }
+        } else if let Some(task) = self.tasks.get_mut(task_id) {
+            task.primary_owner = [0u8; 32];
+            task.status = TaskStatus::Open;
+        }
+
+        true
+    }
+
+    /// Consume a freshness nonce for artifact replay prevention.
+    /// Returns Rejected if nonce already consumed (replay detected).
+    pub fn consume_freshness_nonce(
+        &mut self,
+        task_id: Hash32,
+        nonce: Hash32,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        if self.consumed_nonces.contains(&(task_id, nonce)) {
+            return ExecutionResult::Rejected;
+        }
+        self.consumed_nonces.insert((task_id, nonce));
+        ExecutionResult::Success
+    }
+
+    // ── Trust Ladder ────────────────────────────────────────────────
+
+    /// Initialize a trust stage record for a new agent.
+    pub fn init_trust_stage(&mut self, agent_id: Hash32) {
+        self.trust_stages.entry(agent_id).or_insert(TrustStageRecord {
+            agent_id,
+            stage: TrustStageEnum::Untrusted,
+            accepted_work_count: 0,
+            abuse_flags: 0,
+        });
+    }
+
+    /// Record an accepted task completion for trust promotion.
+    pub fn record_accepted_work(&mut self, agent_id: &Hash32) {
+        if let Some(record) = self.trust_stages.get_mut(agent_id) {
+            record.accepted_work_count += 1;
+        }
+    }
+
+    /// Record an abuse event on an agent.
+    pub fn record_abuse(&mut self, agent_id: &Hash32, is_high_severity: bool) {
+        if let Some(record) = self.trust_stages.get_mut(agent_id) {
+            record.abuse_flags += 1;
+            if is_high_severity {
+                record.stage = TrustStageEnum::Untrusted;
+                record.accepted_work_count = 0;
+            }
+        }
+    }
+
+    /// Run trust promotion at epoch boundary.
+    /// Promotes untrusted agents with >= 10 accepted work and 0 abuse flags.
+    pub fn run_trust_promotion(&mut self) -> Vec<Hash32> {
+        let to_promote: Vec<Hash32> = self
+            .trust_stages
+            .iter()
+            .filter(|(_, r)| {
+                r.stage == TrustStageEnum::Untrusted
+                    && r.accepted_work_count >= 10
+                    && r.abuse_flags == 0
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        for agent_id in &to_promote {
+            if let Some(record) = self.trust_stages.get_mut(agent_id) {
+                record.stage = TrustStageEnum::Trusted;
+            }
+        }
+        to_promote
+    }
+
+    // ── Topic Lifecycle ─────────────────────────────────────────────
+
+    /// Register a new topic at genesis or governance.
+    pub fn init_topic(&mut self, topic_id: Hash32, seed_ref: Hash32, created_at_height: u64) {
+        self.topic_records.entry(topic_id).or_insert(TopicRecord {
+            topic_id,
+            seed_ref,
+            status: TopicStatus::New,
+            created_at_height,
+            last_activity_height: created_at_height,
+            message_count: 0,
+            decay_score: 100,
+        });
+    }
+
+    /// Record activity on a topic (resets decay).
+    pub fn record_topic_activity(&mut self, topic_id: &Hash32, current_height: u64) {
+        if let Some(topic) = self.topic_records.get_mut(topic_id) {
+            topic.last_activity_height = current_height;
+            topic.message_count += 1;
+            topic.decay_score = topic.decay_score.saturating_add(10).min(100);
+            if matches!(topic.status, TopicStatus::New | TopicStatus::Stale) {
+                topic.status = TopicStatus::Active;
+            }
+        }
+    }
+
+    /// Run topic decay at epoch boundary.
+    pub fn run_topic_decay(&mut self, current_height: u64) {
+        let decay_rate: u64 = 1000;
+        for topic in self.topic_records.values_mut() {
+            let inactive_blocks = current_height.saturating_sub(topic.last_activity_height);
+            let decay_units = inactive_blocks / decay_rate;
+            topic.decay_score = topic.decay_score.saturating_sub(decay_units as u32);
+            if topic.decay_score < 25 {
+                topic.status = TopicStatus::Stale;
+            }
+            if topic.decay_score == 0 {
+                topic.status = TopicStatus::Archived;
+            }
+        }
+    }
+
+    // ── Query Methods ───────────────────────────────────────────────
+
+    pub fn get_task(&self, task_id: &Hash32) -> Option<&Task> {
+        self.tasks.get(task_id)
+    }
+
+    pub fn get_lease(&self, lease_id: &Hash32) -> Option<&TaskLease> {
+        self.leases.get(lease_id)
+    }
+
+    pub fn get_trust_stage(&self, agent_id: &Hash32) -> Option<&TrustStageRecord> {
+        self.trust_stages.get(agent_id)
+    }
+
+    pub fn get_topic(&self, topic_id: &Hash32) -> Option<&TopicRecord> {
+        self.topic_records.get(topic_id)
+    }
+
+    pub fn tasks_iter(&self) -> impl Iterator<Item = &Task> {
+        self.tasks.values()
+    }
+
+    pub fn trust_stages_iter(&self) -> impl Iterator<Item = &TrustStageRecord> {
+        self.trust_stages.values()
+    }
+
+    pub fn topic_records_iter(&self) -> impl Iterator<Item = &TopicRecord> {
+        self.topic_records.values()
+    }
+
+    pub fn task_count(&self) -> usize {
+        self.tasks.len()
+    }
+
+    pub fn lease_count(&self) -> usize {
+        self.leases.len()
+    }
+
+    // ── SMT Root Computation ────────────────────────────────────────
+
     pub fn compute_state_root(&self) -> Hash32 {
         let mut tree = SparseMerkleTree::new();
 
@@ -604,8 +1034,39 @@ impl StateMachine {
             tree.insert(key, vec![1u8]);
         }
 
-        for task_id in &self.task_ids {
+        for (task_id, task) in &self.tasks {
             let key = state_key(KeyPrefix::Task, task_id);
+            tree.insert(key, task.encode());
+        }
+
+        for (lease_id, lease) in &self.leases {
+            let key = state_key(KeyPrefix::TaskLease, lease_id);
+            tree.insert(key, lease.encode());
+        }
+
+        for claims in self.shadow_claims.values() {
+            for claim in claims {
+                let key = state_key(KeyPrefix::ShadowClaim, &claim.claim_id);
+                tree.insert(key, claim.encode());
+            }
+        }
+
+        for (agent_id, record) in &self.trust_stages {
+            let key = state_key(KeyPrefix::TrustStage, agent_id);
+            tree.insert(key, record.encode());
+        }
+
+        for (topic_id, record) in &self.topic_records {
+            let key = state_key(KeyPrefix::Topic, topic_id);
+            tree.insert(key, record.encode());
+        }
+
+        for (task_id, nonce) in &self.consumed_nonces {
+            let mut preimage = Vec::with_capacity(64);
+            preimage.extend_from_slice(task_id);
+            preimage.extend_from_slice(nonce);
+            let id = crate::sha3_256(&preimage);
+            let key = state_key(KeyPrefix::ConsumedNonce, &id);
             tree.insert(key, vec![1u8]);
         }
 
@@ -625,6 +1086,27 @@ impl StateMachine {
     /// Get validator tracker by ID.
     pub fn get_validator(&self, validator_id: &Hash32) -> Option<&ValidatorTracker> {
         self.validators.get(validator_id)
+    }
+
+    /// Iterate over all consumed plan IDs.
+    pub fn consumed_plans_iter(&self) -> impl Iterator<Item = &Hash32> {
+        self.consumed_plans.iter()
+    }
+
+    /// Iterate over all delegation records.
+    pub(crate) fn delegations_iter(
+        &self,
+    ) -> impl Iterator<Item = (&(Hash32, Hash32), &DelegationState)> {
+        self.delegations.iter()
+    }
+
+    /// Iterate over all validators.
+    pub fn validators_iter(&self) -> impl Iterator<Item = (&Hash32, &ValidatorTracker)> {
+        self.validators.iter()
+    }
+
+    pub fn delegations_count(&self) -> usize {
+        self.delegations.len()
     }
 }
 
@@ -770,6 +1252,12 @@ mod tests {
             [0xA1u8; 32],
             1,
             [0xBBu8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            10,
             ExecutionContext { height: 10, timestamp: 1000 },
         );
         assert_eq!(result, ExecutionResult::Success);
@@ -790,11 +1278,16 @@ mod tests {
             task_id,
             1,
             seed,
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            10,
             ExecutionContext { height: 10, timestamp: 1000 },
         );
         assert_eq!(r1, ExecutionResult::Success);
 
-        // Second creation with same task_id
         sm.init_account(test_account(1, 2000, 1));
         let r2 = sm.execute_task_create(
             [1u8; 32],
@@ -803,6 +1296,12 @@ mod tests {
             task_id,
             2,
             seed,
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            11,
             ExecutionContext { height: 11, timestamp: 1000 },
         );
         assert_eq!(r2, ExecutionResult::Rejected);
@@ -820,6 +1319,12 @@ mod tests {
             [0xA1u8; 32],
             1,
             [0xBBu8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            10,
             ExecutionContext { height: 10, timestamp: 1000 },
         );
         assert_eq!(result, ExecutionResult::Rejected);

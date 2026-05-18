@@ -417,7 +417,9 @@ impl Context for HyperfluidContext {
         round: Round,
     ) -> &'a Self::Validator {
         let count = validator_set.count();
-        assert!(count > 0, "select_proposer called on empty validator set");
+        if count == 0 {
+            panic!("select_proposer called on empty validator set (bug: no validators in set)");
+        }
 
         use sha3::{Digest, Sha3_256};
         let mut hasher = Sha3_256::new();

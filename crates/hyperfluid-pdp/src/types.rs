@@ -185,4 +185,5 @@ pub struct PdpContext {
     pub agent_nonce: u64,
     pub consumed_plan_ids: Vec<Hash32>,
     pub quota_states: Vec<QuotaState>,
+    pub trust_stage: TrustStage,
 }

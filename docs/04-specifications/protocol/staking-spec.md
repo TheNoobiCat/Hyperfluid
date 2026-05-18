@@ -148,7 +148,8 @@ DelegationTx(SetCommission) ──► ValidatorRecord.commission_rate updated (a
 - **Delayed evidence:** Equivocation evidence submitted more than 8,640 blocks after the event cancels the slash but marks the validator for governance review.
 - **Invalid evidence:** EvidenceTx with non-verifiable proof is rejected; reporter may be penalized for repeated false submissions.
 - **Committee eligibility during unbonding:** Unbonding validators remain committee-eligible until the epoch boundary after unbond initiation, then are excluded.
-- **Slashing propagation:** On validator slash, each delegator's stake is reduced by `delegated_amount * (slash_pct / 100)`. The slash is applied proportionally across all delegators and the self-bond. The slash fires even if the delegator is in unbonding status (same as validator unbonding slashing).
+- **Slashing propagation:** On validator slash, each delegator's stake is reduced by `delegated_amount * slash_basis_points / 10000`. The slash is applied proportionally across all delegators and the self-bond. The slash fires even if the delegator is in unbonding status (same as validator unbonding slashing).  
+    Slash percentages: Equivocation = 1000 basis points (10%), Liveness = 10 basis points (0.1%), Escalated liveness = 100 basis points (1%). All slash rates use u16 basis points (0-10000 = 0%-100%) for deterministic integer arithmetic.
 - **Commission abuse:** A validator setting commission rate > max_commission_rate (20%) is rejected at admission. Rate changes take 2 epochs to allow delegators to undelegate before the new rate applies.
 
 ### 1.6 Versioning and Compatibility

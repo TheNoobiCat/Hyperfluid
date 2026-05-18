@@ -8,7 +8,7 @@ use hyperfluid_pdp::quota::QuotaManager;
 use hyperfluid_pdp::rule_chain::evaluate;
 use hyperfluid_pdp::types::{
     ActionPlanRequest, ActionPlanResponse, ActionType, Decision, DenyReason, Hash32, KeyBinding,
-    KeyRotationTransaction, PdpContext, QuotaState,
+    KeyRotationTransaction, PdpContext, QuotaState, TrustStage,
 };
 use ml_dsa::{Generate, Keypair, MlDsa65, Seed, SignatureEncoding, Signer, SigningKey};
 use sha3::{Digest, Sha3_256};
@@ -92,6 +92,7 @@ fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: KeyBinding) -> 
         agent_nonce: nonce,
         consumed_plan_ids: vec![],
         quota_states: vec![],
+        trust_stage: TrustStage::Trusted,
     }
 }
 
@@ -228,18 +229,21 @@ fn conforms_to_pdp_spec_2_7_quota_manager_canonical_entries() {
 #[test]
 fn conforms_to_pdp_spec_2_7_quota_atomic_reservation() {
     let mut qm = QuotaManager::with_canonical_entries();
-    let result = qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0);
+    let result =
+        qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0);
     assert!(result.is_ok());
-    let result2 = qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0);
+    let result2 =
+        qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0);
     assert!(result2.is_err());
 }
 
 #[test]
 fn conforms_to_pdp_spec_2_7_quota_release_after_failure() {
     let mut qm = QuotaManager::with_canonical_entries();
-    qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0).unwrap();
+    qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0).unwrap();
     qm.release_quota("gov_proposals_per_identity", "agent1", 1);
-    let result = qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0);
+    let result =
+        qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0);
     assert!(result.is_ok());
 }
 

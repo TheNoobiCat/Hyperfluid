@@ -2,6 +2,8 @@
 //
 // Source: fastpath-spec.md §1.4 State Transitions
 
+use std::collections::BTreeSet;
+
 use crate::types::{
     FastPathCertificate, FastPathChallengeTx, FastPathParams, FastPathProposal, FastPathRollbackTx,
     Hash32, ReviewerSignature, ReviewerVote,
@@ -15,6 +17,8 @@ pub struct FastPathEngine {
     certificates: Vec<FastPathCertificate>,
     /// Track challenge count per identity per epoch for rate limiting.
     challenge_counts: Vec<(Hash32, u64, u64)>, // (challenger_id, epoch, count)
+    /// Track which proposals have been successfully challenged (cannot be finalized).
+    challenged_proposals: BTreeSet<Hash32>,
 }
 
 impl FastPathEngine {
@@ -24,6 +28,7 @@ impl FastPathEngine {
             proposals: Vec::new(),
             certificates: Vec::new(),
             challenge_counts: Vec::new(),
+            challenged_proposals: BTreeSet::new(),
         }
     }
 
@@ -69,7 +74,7 @@ impl FastPathEngine {
 
         // Count unique approvers and their total weight
         let mut total_approvals: u128 = 0;
-        let mut seen_reviewers = std::collections::HashSet::new();
+        let mut seen_reviewers = BTreeSet::new();
         let mut valid_approvals = Vec::new();
 
         for sig in &approvals {
@@ -142,6 +147,7 @@ impl FastPathEngine {
         }
 
         self.challenge_counts.push((challenge.challenger_id, current_epoch, 1));
+        self.challenged_proposals.insert(challenge.proposal_id);
 
         Ok(())
     }
@@ -184,10 +190,8 @@ impl FastPathEngine {
             return Err(FastPathError::ChallengeWindowNotEnded);
         }
 
-        // Check no successful challenges exist
-        let challenged = self.challenge_counts.iter().any(|(id, _, _)| *id == proposal_id);
-
-        if challenged {
+        // Check no successful challenges exist against this proposal
+        if self.challenged_proposals.contains(&proposal_id) {
             return Err(FastPathError::Challenged);
         }
 

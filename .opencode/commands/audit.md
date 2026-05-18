@@ -39,6 +39,8 @@ Read `BUILD-SYSTEM.md`, `GLOSSARY.md`, then:
 
    **Post-aggregation cross-cutter checks** (run locally, not in subagent):
    - Cross-crate type drift: grep for the same type/enum name in two different crate `src/` dirs — flag if field layouts differ
+   - Wrong-layer state check: for every crate other than `hyperfluid-state`, grep for `pub struct.*{` definitions that contain `HashMap` or `BTreeMap` fields holding protocol types. If the struct holds mutable state that should be committed to the SMT (tasks, leases, trust records, consumed nonces), flag it — only `hyperfluid-state` should own consensus state.
+   - Placeholder data check: grep for struct literal fields set to `0`, `false`, `vec![]`, `Vec::new()`, or `None` in non-test code where the field represents a computed value (score, count, hash, amount). If >30% of a struct's fields are hardcoded defaults, flag the function as likely shipping placeholder data disguised as real logic.
    - Combine findings across all spec-crate pairs, deduplicate, build a unified finding list
 
 5. **Filter against known-state** — skip bugs already documented in checkpoints, build-status "Known Issues", open-questions.md, or PROJECT-STATUS gaps.

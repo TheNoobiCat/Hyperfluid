@@ -67,6 +67,7 @@ fn e2e_02_delegation_full_lifecycle() {
 
     sm.init_account(new_account(7, 10_000_000_000_000_000_000, 0));
     sm.init_account(new_account(3, 100_000_000_000_000_000_000, 0));
+    sm.init_validator(validator, 1_000_000_000_000_000_000_000, 0);
 
     // Delegate 5 AGX
     let r = sm.execute_delegate(
@@ -206,6 +207,12 @@ fn e2e_09_task_create_flow() {
         task_id,
         1,
         seed_ref,
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        20,
         ctx(20),
     );
     assert_eq!(r, ExecutionResult::Success);
@@ -221,11 +228,39 @@ fn e2e_10_task_create_duplicate_rejected() {
     let task_id: Hash32 = [0xCC; 32];
     let seed: Hash32 = [0xDD; 32];
 
-    let r1 = sm.execute_task_create([8u8; 32], 1_000_000, 100_000, task_id, 1, seed, ctx(1));
+    let r1 = sm.execute_task_create(
+        [8u8; 32],
+        1_000_000,
+        100_000,
+        task_id,
+        1,
+        seed,
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        1,
+        ctx(1),
+    );
     assert_eq!(r1, ExecutionResult::Success);
 
     sm.init_account(new_account(8, 10_000_000_000_000_000_000, 1));
-    let r2 = sm.execute_task_create([8u8; 32], 1_000_000, 100_000, task_id, 2, seed, ctx(2));
+    let r2 = sm.execute_task_create(
+        [8u8; 32],
+        1_000_000,
+        100_000,
+        task_id,
+        2,
+        seed,
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        2,
+        ctx(2),
+    );
     assert_eq!(r2, ExecutionResult::Rejected);
 }
 
@@ -262,6 +297,7 @@ fn e2e_12_undelegate_withdraw_cycle() {
 
     sm.init_account(new_account(7, 10_000_000_000, 0));
     sm.init_account(new_account(3, 100_000_000_000, 0));
+    sm.init_validator(validator, 1_000_000_000_000_000_000_000, 0);
 
     let initial_balance = sm.get_account(&delegator).unwrap().balance;
 
@@ -343,6 +379,7 @@ fn e2e_15_multi_op_state_consistency() {
     sm.init_account(new_account(3, 500_000_000_000_000_000_000, 0));
     sm.init_account(new_account(4, 10_000_000_000_000_000_000, 0));
     sm.init_account(new_account(5, 10_000_000_000_000_000_000, 0));
+    sm.init_validator([3u8; 32], 1_000_000_000_000_000_000_000, 0);
 
     let root_genesis = sm.compute_state_root();
     assert_ne!(root_genesis, [0u8; 32]);
@@ -361,6 +398,12 @@ fn e2e_15_multi_op_state_consistency() {
         [0xA1; 32],
         1,
         [0xB1; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        [0u8; 32],
+        2,
         ctx(2),
     );
     let root_after_task = sm.compute_state_root();

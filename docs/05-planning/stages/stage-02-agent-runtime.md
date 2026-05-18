@@ -79,7 +79,7 @@
 
 
 
-**GAP NOTE (Tracking — inbox budgets, topic decay, abuse evidence, replay prevention):** FR-0093 (global inbox budget 2000/hr), FR-0094 (topic budget 500/5min), FR-0095 (abuse evidence + quarantine), FR-0101 (topic decay lifecycle), and FR-0175 (freshness nonce for artifact replay prevention) are must-have requirements with no explicit build task in this week or any other. They are small but required by specs. If not absorbed into W5-6 implementation, must be added to W9-10.
+**GAP NOTE (Resolved 2026-05-18 — inbox budgets, topic decay, abuse evidence, replay prevention):** FR-0093 (global inbox budget 2000/hr), FR-0094 (topic budget 500/5min), FR-0095 (abuse evidence + quarantine), FR-0101 (topic decay lifecycle), and FR-0175 (freshness nonce for artifact replay prevention) are must-have requirements with no explicit build task in this week or any other. They are small but required by specs. If not absorbed into W5-6 implementation, must be added to W9-10.
 
 ### Week 5–6: Collaboration + Review + Economics + Sybil Detection (C11, C12)
 1. Task board: global task queue, soft leases (claim window = 600 blocks, ~20 min), lease renewal, lease expiry → task returns to queue.

@@ -20,7 +20,8 @@ fn ctx(height: u64) -> ExecutionContext {
 fn conforms_to_staking_spec_1_7_delegate_credits_validator() {
     let mut sm = StateMachine::new();
     sm.init_account(test_account(1, 10000, 0)); // delegator
-    sm.init_account(test_account(2, 0, 0)); // validator
+    sm.init_account(test_account(2, 0, 0)); // validator account
+    sm.init_validator([2u8; 32], 1_000_000_000_000_000_000_000, 0);
 
     let min_delegation = 1u128;
     let result = sm.execute_delegate([1u8; 32], [2u8; 32], 500, 1, min_delegation, ctx(10));
@@ -65,6 +66,7 @@ fn conforms_to_staking_spec_1_7_undelegate_initiates_unbonding() {
     let mut sm = StateMachine::new();
     sm.init_account(test_account(1, 10000, 0));
     sm.init_account(test_account(2, 0, 0));
+    sm.init_validator([2u8; 32], 1_000_000_000_000_000_000_000, 0);
 
     let min_delegation = 1u128;
     sm.execute_delegate([1u8; 32], [2u8; 32], 500, 1, min_delegation, ctx(10));
@@ -87,6 +89,7 @@ fn conforms_to_staking_spec_1_7_withdraw_delegation_after_delay() {
     let mut sm = StateMachine::new();
     sm.init_account(test_account(1, 10000, 0));
     sm.init_account(test_account(2, 0, 0));
+    sm.init_validator([2u8; 32], 1_000_000_000_000_000_000_000, 0);
 
     let min_delegation = 1u128;
     let delegation_unbond_delay = 60_480u64;

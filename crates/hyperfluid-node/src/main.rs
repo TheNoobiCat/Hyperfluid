@@ -111,10 +111,11 @@ async fn main() {
     let r = running.clone();
 
     // Register signal handler for clean shutdown (ctrl-c, SIGTERM)
+    let r_shutdown = r.clone();
     tokio::spawn(async move {
         let _ = tokio::signal::ctrl_c().await;
         tracing::info!("Shutdown signal received, stopping consensus loop...");
-        r.store(false, Ordering::SeqCst);
+        r_shutdown.store(false, Ordering::SeqCst);
     });
 
     let block_interval = Duration::from_secs(config.block_interval_secs);
@@ -122,11 +123,11 @@ async fn main() {
     tracing::info!("Node entering consensus loop (live block production)");
 
     // Start the async block production loop
-    let _loop_handle =
+    let loop_handle =
         ConsensusDriver::run_block_loop(driver.clone(), running.clone(), block_interval);
 
-    // Wait for shutdown signal
-    let _ = tokio::signal::ctrl_c().await;
+    // Wait for the block loop to complete (it exits when running becomes false)
+    let _ = loop_handle.await;
     running.store(false, Ordering::SeqCst);
 
     // Give the loop a moment to flush

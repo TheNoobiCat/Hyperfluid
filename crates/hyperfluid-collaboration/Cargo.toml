@@ -8,3 +8,7 @@ rust-version.workspace = true
 description = "C11 Collaboration & Inbox: Task board, team formation, topic lifecycle, inbox buckets, trust ladder"
 
 [dependencies]
+hyperfluid-state = { path = "../hyperfluid-state" }
+
+[dev-dependencies]
+hex = "0.4"

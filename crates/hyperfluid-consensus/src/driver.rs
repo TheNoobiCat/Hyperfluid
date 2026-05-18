@@ -17,14 +17,14 @@ use tokio::task::JoinHandle;
 use hyperfluid_fee_market::{compute_next_base_fee, FeeConfig, FeeMarketState};
 use hyperfluid_staking::SystemParameters;
 use hyperfluid_state::state_machine::{ExecutionContext, StateMachine};
-use hyperfluid_state::Account;
+use hyperfluid_state::{Account, HeartbeatPayload, TaskStatus, TrustStageEnum};
 
 use hyperfluid_fastpath::lifecycle::FastPathEngine;
 use hyperfluid_fastpath::types::{FastPathChallengeTx, FastPathParams, FastPathProposal};
 use hyperfluid_governance::proposal::GovernanceEngine;
 use hyperfluid_governance::types::{GovernanceParams, GovernanceVote, VoteOption};
 use hyperfluid_pdp::rule_chain;
-use hyperfluid_pdp::types::{ActionPlanRequest, ActionType, Decision, PdpContext};
+use hyperfluid_pdp::types::{ActionPlanRequest, ActionType, Decision, PdpContext, TrustStage};
 
 use crate::genesis::GenesisConfig;
 use crate::types::{
@@ -109,6 +109,47 @@ struct DelegationPayload {
     nonce: u64,
 }
 
+/// Payload format for ClaimTaskTx transactions.
+#[derive(Encode, Decode)]
+struct ClaimTaskPayload {
+    task_id: Hash32,
+    agent_id: Hash32,
+    collateral: u128,
+    trust_stage_flag: bool, // false = Untrusted, true = Trusted
+}
+
+/// Payload format for HeartbeatTx transactions.
+#[derive(Encode, Decode)]
+struct HeartbeatTxPayload {
+    lease_id: Hash32,
+    artifact_hash: Option<Hash32>,
+    diff_pointer: Option<Hash32>,
+    test_result_ref: Option<Hash32>,
+    signature: Vec<u8>,
+}
+
+/// Payload format for ReleaseTaskTx transactions.
+#[derive(Encode, Decode)]
+struct ReleaseTaskPayload {
+    task_id: Hash32,
+    agent_id: Hash32,
+}
+
+/// Payload format for SubmitTaskTx transactions.
+#[derive(Encode, Decode)]
+struct SubmitTaskPayload {
+    task_id: Hash32,
+    agent_id: Hash32,
+}
+
+/// Payload format for ShadowClaimTx transactions.
+#[derive(Encode, Decode)]
+struct ShadowClaimPayload {
+    task_id: Hash32,
+    claimant_id: Hash32,
+    trust_score: u32,
+}
+
 /// Consensus driver that coordinates block production, transaction execution,
 /// and state management. Wraps the deterministic StateMachine and maintains
 /// the canonical block store.
@@ -127,6 +168,10 @@ pub struct ConsensusDriver {
     pub fee_config: FeeConfig,
     /// Staking system parameters for bond/unbond/delegation thresholds.
     pub staking_params: SystemParameters,
+    /// When true, bypasses PDP validation for all transaction types.
+    /// Used for development/testing when full PDP state (key bindings,
+    /// nonce tracking, quota states) is not yet wired.
+    pub pdp_bypass: bool,
 }
 
 impl ConsensusDriver {
@@ -145,6 +190,7 @@ impl ConsensusDriver {
             fee_state: FeeMarketState::default(),
             fee_config: FeeConfig::default(),
             staking_params: SystemParameters::default(),
+            pdp_bypass: false,
         }
     }
 
@@ -209,10 +255,31 @@ impl ConsensusDriver {
             self.execute_tx(tx, ctx);
         }
 
-        // 2. Compute SMT root from post-execution state
+        // 2a. Check lease expiry for all active tasks
+        let active_tasks: Vec<Hash32> = self
+            .state_machine
+            .tasks_iter()
+            .filter(|t| {
+                matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress)
+                    && t.lease_expires_height <= new_height
+            })
+            .map(|t| t.task_id)
+            .collect();
+        for task_id in &active_tasks {
+            self.state_machine.run_lease_expiry(task_id, new_height);
+        }
+
+        // 2b. Run trust promotion and topic decay at epoch boundaries
+        let new_epoch = new_height / self.epoch_length;
+        if new_height > 0 && new_height.is_multiple_of(self.epoch_length) {
+            self.state_machine.run_trust_promotion();
+            self.state_machine.run_topic_decay(new_height);
+        }
+
+        // 3. Compute SMT root from post-execution state
         let state_root = self.state_machine.compute_state_root();
 
-        // 3. Compute transaction Merkle root
+        // 3b. Compute transaction Merkle root
         let transaction_root = Self::compute_transaction_root(&txs);
 
         // 4. Adjust EIP-1559 base fee
@@ -224,7 +291,7 @@ impl ConsensusDriver {
         let parent_hash =
             self.block_store.last().map(|b| b.header.block_hash()).unwrap_or([0u8; 32]);
 
-        let new_epoch = new_height / self.epoch_length;
+        let _new_epoch = new_height / self.epoch_length;
 
         let block = Block {
             header: BlockHeader {
@@ -481,9 +548,10 @@ impl ConsensusDriver {
                             );
                         }
                         DelegationAction::SetCommission => {
+                            let commission_rate = payload.amount.min(100) as u8;
                             self.state_machine.execute_set_commission(
                                 payload.validator_id,
-                                payload.amount as u8,
+                                commission_rate,
                                 payload.nonce,
                                 self.staking_params.max_commission_rate,
                                 ctx,
@@ -492,7 +560,81 @@ impl ConsensusDriver {
                     }
                 }
             }
-            // Other transaction types (TaskCreateTx, EvidenceTx) are not yet wired.
+            TxType::TaskCreateTx => {
+                if let Ok(payload) = TransferPayload::decode(&mut &tx.tx_payload[..]) {
+                    let task_id = sha3_256_hash(&tx.tx_payload);
+                    self.state_machine.execute_task_create(
+                        payload.sender_id,
+                        payload.amount,
+                        0, // fee: not yet tracked in payload
+                        task_id,
+                        payload.nonce,
+                        [0u8; 32], // seed_ref placeholder
+                        [0u8; 32], // topic_id placeholder
+                        [0u8; 32], // metadata_hash placeholder
+                        [0u8; 32], // required_skills_hash placeholder
+                        [0u8; 32], // sponsor_id placeholder
+                        [0u8; 32], // requester_pubkey placeholder
+                        ctx.height,
+                        ctx,
+                    );
+                }
+            }
+            TxType::ClaimTaskTx => {
+                if let Ok(payload) = ClaimTaskPayload::decode(&mut &tx.tx_payload[..]) {
+                    let trust_stage = if payload.trust_stage_flag {
+                        TrustStageEnum::Trusted
+                    } else {
+                        TrustStageEnum::Untrusted
+                    };
+                    self.state_machine.execute_claim_task(
+                        payload.task_id,
+                        payload.agent_id,
+                        payload.collateral,
+                        ctx.height,
+                        trust_stage,
+                        ctx,
+                    );
+                }
+            }
+            TxType::HeartbeatTx => {
+                if let Ok(payload) = HeartbeatTxPayload::decode(&mut &tx.tx_payload[..]) {
+                    let heartbeat = HeartbeatPayload {
+                        lease_id: payload.lease_id,
+                        artifact_hash: payload.artifact_hash,
+                        diff_pointer: payload.diff_pointer,
+                        test_result_ref: payload.test_result_ref,
+                        signature: payload.signature,
+                    };
+                    self.state_machine.execute_heartbeat(heartbeat, ctx.height, ctx);
+                }
+            }
+            TxType::ReleaseTaskTx => {
+                if let Ok(payload) = ReleaseTaskPayload::decode(&mut &tx.tx_payload[..]) {
+                    self.state_machine.execute_release_task(payload.task_id, payload.agent_id, ctx);
+                }
+            }
+            TxType::SubmitTaskTx => {
+                if let Ok(payload) = SubmitTaskPayload::decode(&mut &tx.tx_payload[..]) {
+                    self.state_machine.execute_submit_completion(
+                        payload.task_id,
+                        payload.agent_id,
+                        ctx,
+                    );
+                }
+            }
+            TxType::ShadowClaimTx => {
+                if let Ok(payload) = ShadowClaimPayload::decode(&mut &tx.tx_payload[..]) {
+                    self.state_machine.execute_register_shadow(
+                        payload.task_id,
+                        payload.claimant_id,
+                        payload.trust_score,
+                        ctx.height,
+                        ctx,
+                    );
+                }
+            }
+            // EvidenceTx not yet wired
             _ => {}
         }
     }
@@ -518,11 +660,12 @@ impl ConsensusDriver {
 
         let pdp_ctx = PdpContext {
             current_height: ctx.height,
-            key_binding: None, // Not yet tracked in ConsensusDriver
+            key_binding: None,
             agent_balance_attagx: u128::MAX,
             agent_nonce: 0,
             consumed_plan_ids: vec![],
             quota_states: vec![],
+            trust_stage: TrustStage::Untrusted,
         };
 
         let request = ActionPlanRequest {
@@ -539,10 +682,16 @@ impl ConsensusDriver {
 
         let response = rule_chain::evaluate(&request, &pdp_ctx);
 
-        // When full state is wired, this gate enforces PDP rules.
-        // Currently key_binding is always None, so execution proceeds.
-        if pdp_ctx.key_binding.is_none() {
+        // PDP bypass for development/testing — allows transactions without
+        // full PDP state wiring (key bindings, nonce tracking, quota states).
+        if self.pdp_bypass {
             return true;
+        }
+
+        // Without key_binding wired, governance/fast-path transactions are
+        // denied (fail-closed) when pdp_bypass is disabled.
+        if pdp_ctx.key_binding.is_none() {
+            return false;
         }
 
         matches!(response.decision, Decision::Approved)
@@ -605,7 +754,7 @@ impl ConsensusDriver {
         block_interval: Duration,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            while running.load(Ordering::Relaxed) {
+            while running.load(Ordering::Acquire) {
                 let timestamp =
                     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
 

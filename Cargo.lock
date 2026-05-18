@@ -937,6 +937,10 @@ dependencies = [
 [[package]]
 name = "hyperfluid-collaboration"
 version = "0.1.0"
+dependencies = [
+ "hex",
+ "hyperfluid-state",
+]
 
 [[package]]
 name = "hyperfluid-consensus"

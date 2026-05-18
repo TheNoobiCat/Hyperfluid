@@ -23,12 +23,12 @@ Define the EIP-1559 base fee adjustment formula for congestion control. No emerg
 
 ### 1.4 State Transitions
 
-Base fee adjustment per block:
+Base fee adjustment per block (using integer arithmetic, 12.5% = 125/1000):
 ```
 if block_utilization > target_utilization:
-    base_fee = base_fee * (1 + (excess / target) * 0.125)
+    base_fee = base_fee * (1000 + (excess / target) * 125) / 1000
 else:
-    base_fee = base_fee * (1 - (shortfall / target) * 0.125)
+    base_fee = base_fee * (1000 - (shortfall / target) * 125) / 1000
 base_fee = max(base_fee, minimum_base_fee)
 ```
 

@@ -26,6 +26,10 @@ pub enum KeyPrefix {
     ReplicationLease = 0x0C,
     ReviewAssignment = 0x0D,
     Delegation = 0x0E,
+    TaskLease = 0x0F,
+    ShadowClaim = 0x10,
+    Topic = 0x11,
+    ConsumedNonce = 0x12,
 }
 
 impl KeyPrefix {
@@ -49,6 +53,10 @@ impl KeyPrefix {
             0x0C => Some(KeyPrefix::ReplicationLease),
             0x0D => Some(KeyPrefix::ReviewAssignment),
             0x0E => Some(KeyPrefix::Delegation),
+            0x0F => Some(KeyPrefix::TaskLease),
+            0x10 => Some(KeyPrefix::ShadowClaim),
+            0x11 => Some(KeyPrefix::Topic),
+            0x12 => Some(KeyPrefix::ConsumedNonce),
             _ => None,
         }
     }
@@ -82,12 +90,120 @@ pub struct Account {
     pub pubkey: Option<Vec<u8>>,
 }
 
-/// Sparse Merkle Tree node. Source: consensus-spec.md Section 2.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SMTNode {
-    pub key: Hash32,
-    pub value: Vec<u8>,
-    pub hash: Hash32,
+/// Task entity (on-chain state). Source: collaboration-spec.md §1.3
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct Task {
+    pub task_id: Hash32,
+    pub topic_id: Hash32,
+    pub seed_ref: Hash32,
+    pub parent_task_id: Hash32,
+    pub depends_on: Vec<Hash32>,
+    pub funder: Hash32,
+    pub primary_owner: Hash32,
+    pub status: TaskStatus,
+    pub bounty_agx: u128,
+    pub created_at_height: u64,
+    pub lease_expires_height: u64,
+    pub required_skills_hash: Hash32,
+    pub metadata_hash: Hash32,
+    pub sponsor_id: Hash32,
+    pub requester_pubkey: Hash32,
+    pub escrow_status: EscrowStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub enum TaskStatus {
+    Open,
+    Claimed,
+    InProgress,
+    Done,
+    Decomposed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub enum EscrowStatus {
+    Locked,
+    BountyRedistributed,
+    Released,
+    Refunded,
+}
+
+/// Task lease (on-chain state). Source: collaboration-spec.md §1.3
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct TaskLease {
+    pub lease_id: Hash32,
+    pub task_id: Hash32,
+    pub owner_id: Hash32,
+    pub collateral: u128,
+    pub started_at_height: u64,
+    pub expires_at_height: u64,
+    pub last_heartbeat_height: u64,
+    pub heartbeats_received: u32,
+    pub timeout_count: u32,
+    pub penalty: LeasePenaltyLevel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub enum LeasePenaltyLevel {
+    Warning,
+    BudgetReduction,
+    SevereReduction,
+}
+
+/// Heartbeat payload (submitted via consensus tx). Source: collaboration-spec.md §1.3
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct HeartbeatPayload {
+    pub lease_id: Hash32,
+    pub artifact_hash: Option<Hash32>,
+    pub diff_pointer: Option<Hash32>,
+    pub test_result_ref: Option<Hash32>,
+    pub signature: Vec<u8>,
+}
+
+/// Shadow claim (on-chain state). Source: collaboration-spec.md §1.3
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct ShadowClaim {
+    pub claim_id: Hash32,
+    pub task_id: Hash32,
+    pub claimant_id: Hash32,
+    pub trust_score: u32,
+    pub submitted_at_height: u64,
+    pub evidence_hash: Hash32,
+}
+
+/// Trust stage record (on-chain state under prefix 0x09)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct TrustStageRecord {
+    pub agent_id: Hash32,
+    pub stage: TrustStageEnum,
+    pub accepted_work_count: u32,
+    pub abuse_flags: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub enum TrustStageEnum {
+    Untrusted,
+    Trusted,
+}
+
+/// Topic lifecycle record (on-chain state under prefix 0x11)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub struct TopicRecord {
+    pub topic_id: Hash32,
+    pub seed_ref: Hash32,
+    pub status: TopicStatus,
+    pub created_at_height: u64,
+    pub last_activity_height: u64,
+    pub message_count: u64,
+    pub decay_score: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub enum TopicStatus {
+    New,
+    Active,
+    Stale,
+    Archived,
 }
 
 #[cfg(test)]
@@ -96,7 +212,7 @@ mod tests {
 
     #[test]
     fn key_prefix_roundtrip() {
-        for b in 0x01u8..=0x0E {
+        for b in 0x01u8..=0x12 {
             let kp = KeyPrefix::from_byte(b).unwrap();
             assert_eq!(kp.byte(), b);
         }
@@ -105,7 +221,7 @@ mod tests {
     #[test]
     fn key_prefix_invalid_byte() {
         assert!(KeyPrefix::from_byte(0x00).is_none());
-        assert!(KeyPrefix::from_byte(0x0F).is_none());
+        assert!(KeyPrefix::from_byte(0x13).is_none());
     }
 
     #[test]

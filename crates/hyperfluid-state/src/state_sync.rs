@@ -39,8 +39,10 @@ pub struct SyncState {
 
 /// Capture a state snapshot from a StateMachine at a given height.
 ///
-/// Serialises all accounts into the snapshot's `sst_keys` using SCALE encoding.
-/// Builds an SMT from the accounts and commits the root.
+/// Serialises all state collections (accounts, validators, delegations,
+/// consumed plans, task IDs) into the snapshot's `sst_keys` using SCALE encoding.
+/// Builds an SMT from all keys and commits the root.
+/// Must include every collection that `StateMachine::compute_state_root()` uses.
 pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Hash32) -> Snapshot {
     let mut smt = SparseMerkleTree::new();
     let mut sst_keys = Vec::new();
@@ -48,6 +50,40 @@ pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Ha
     for (account_id, account) in sm.accounts_iter() {
         let key = crate::state_key(crate::KeyPrefix::Account, account_id);
         let value = account.encode();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for (validator_id, vt) in sm.validators_iter() {
+        let key = crate::state_key(crate::KeyPrefix::Validator, validator_id);
+        let value = vt.encode();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for ((delegator_id, validator_id), del) in sm.delegations_iter() {
+        let delegation_key = {
+            let mut preimage = Vec::with_capacity(64);
+            preimage.extend_from_slice(delegator_id);
+            preimage.extend_from_slice(validator_id);
+            let id = crate::sha3_256(&preimage);
+            crate::state_key(crate::KeyPrefix::Delegation, &id)
+        };
+        let value = del.encode();
+        smt.insert(delegation_key, value.clone());
+        sst_keys.push((delegation_key, value));
+    }
+
+    for plan_id in sm.consumed_plans_iter() {
+        let key = crate::state_key(crate::KeyPrefix::ActionPlan, plan_id);
+        let value = vec![1u8];
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for task in sm.tasks_iter() {
+        let key = crate::state_key(crate::KeyPrefix::Task, &task.task_id);
+        let value = task.encode();
         smt.insert(key, value.clone());
         sst_keys.push((key, value));
     }

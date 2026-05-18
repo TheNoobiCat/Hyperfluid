@@ -44,42 +44,73 @@ pub fn dispatch_tool(
         return ToolOutput::Error(e.message);
     }
 
+    let deserialize_err = |name: &str| {
+        ToolOutput::Error(format!("failed to parse {} arguments: {}", tool_name, name))
+    };
+
     match tool_name {
         "bash" => {
-            let input: BashToolInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: BashToolInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             let timeout_ms = input.timeout.unwrap_or(DEFAULT_TIMEOUT_MS);
             execute_bash(&input, working_dir, timeout_ms)
         }
         "todo_write" => {
-            let input: TodoWriteInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: TodoWriteInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_todo_write(&input)
         }
         "todo_update" => {
-            let input: TodoUpdateInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: TodoUpdateInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_todo_update(&input)
         }
         "remember" => {
-            let input: RememberInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: RememberInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_remember(&input)
         }
         "forget" => {
-            let input: ForgetInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: ForgetInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_forget(&input)
         }
         "read" => {
-            let input: ReadToolInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: ReadToolInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_read(&input, working_dir)
         }
         "edit" => {
-            let input: EditToolInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: EditToolInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_edit(&input, working_dir)
         }
         "write" => {
-            let input: WriteToolInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: WriteToolInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_write(&input, working_dir)
         }
         "apply_patch" => {
-            let input: ApplyPatchInput = serde_json::from_value(arguments.clone()).unwrap();
+            let input: ApplyPatchInput = match serde_json::from_value(arguments.clone()) {
+                Ok(v) => v,
+                Err(e) => return deserialize_err(e.to_string().as_str()),
+            };
             execute_apply_patch(&input, working_dir)
         }
         _ => ToolOutput::Error(format!("unknown tool: {}", tool_name)),
@@ -140,21 +171,6 @@ fn require_string(
         _ => Err(ToolError {
             tool_name: tool_name.to_string(),
             message: format!("field '{}' must be a string", key),
-        }),
-    }
-}
-
-#[allow(dead_code)]
-fn require_number(
-    obj: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-    tool_name: &str,
-) -> Result<(), ToolError> {
-    match obj.get(key) {
-        Some(v) if v.is_number() => Ok(()),
-        _ => Err(ToolError {
-            tool_name: tool_name.to_string(),
-            message: format!("field '{}' must be a number", key),
         }),
     }
 }

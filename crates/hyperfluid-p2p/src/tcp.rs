@@ -176,17 +176,17 @@ impl TcpTransport {
         let handshake_result = perform_initiator_handshake(
             stream,
             local_identity,
+            remote_peer_id,
             remote_dh_pubkey,
             remote_kem_pubkey,
         )
         .await;
 
         match handshake_result {
-            Ok(channel) => {
+            Ok(ch) => {
                 transport.update_state(remote_peer_id, ConnectionEvent::DirectConnectSuccess).await;
-                transport.active_channels.write().await.insert(remote_peer_id, channel);
                 let mut channels = transport.active_channels.write().await;
-                let ch = channels.remove(&remote_peer_id).expect("just inserted");
+                let _ = channels.remove(&remote_peer_id);
                 Ok(ch)
             }
             Err(e) => {
@@ -322,13 +322,15 @@ type MlKem768PubKey =
 async fn perform_initiator_handshake(
     mut stream: TcpStream,
     local_identity: &Identity,
+    remote_id: Hash32,
     remote_dh_pubkey_bytes: [u8; 32],
     remote_kem_pubkey_bytes: Vec<u8>,
 ) -> Result<ClatterSecureChannel, TcpError> {
     let remote_dh: X25519PubKey = ByteArray::from_slice(&remote_dh_pubkey_bytes);
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
-    let mut handshake = ClatterHandshake::initiator(local_identity, remote_dh, remote_kem);
+    let mut handshake =
+        ClatterHandshake::initiator(local_identity, remote_id, remote_dh, remote_kem);
     let mut buf = [0u8; HANDSHAKE_BUF_SIZE];
     let mut read_buf = [0u8; HANDSHAKE_BUF_SIZE];
 
@@ -368,13 +370,15 @@ async fn perform_initiator_handshake(
 async fn perform_responder_handshake(
     mut stream: TcpStream,
     local_identity: &Identity,
+    remote_id: Hash32,
     remote_dh_pubkey_bytes: [u8; 32],
     remote_kem_pubkey_bytes: Vec<u8>,
 ) -> Result<ClatterSecureChannel, TcpError> {
     let remote_dh: X25519PubKey = ByteArray::from_slice(&remote_dh_pubkey_bytes);
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
-    let mut handshake = ClatterHandshake::responder(local_identity, remote_dh, remote_kem);
+    let mut handshake =
+        ClatterHandshake::responder(local_identity, remote_id, remote_dh, remote_kem);
     let mut buf = [0u8; HANDSHAKE_BUF_SIZE];
     let mut read_buf = [0u8; HANDSHAKE_BUF_SIZE];
 
@@ -432,6 +436,7 @@ where
     let channel = perform_responder_handshake_on_split(
         stream,
         &local_identity,
+        remote_peer_id,
         remote_dh_pubkey,
         remote_kem_pubkey,
     )
@@ -458,6 +463,7 @@ where
 async fn perform_responder_handshake_on_split(
     stream: &mut TcpStream,
     local_identity: &Identity,
+    remote_id: Hash32,
     remote_dh_pubkey_bytes: [u8; 32],
     remote_kem_pubkey_bytes: Vec<u8>,
 ) -> Result<ClatterSecureChannel, TcpError> {
@@ -494,7 +500,8 @@ async fn perform_responder_handshake_on_split(
     let remote_dh: X25519PubKey = ByteArray::from_slice(&remote_dh_pubkey_bytes);
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
-    let mut handshake = ClatterHandshake::responder(local_identity, remote_dh, remote_kem);
+    let mut handshake =
+        ClatterHandshake::responder(local_identity, remote_id, remote_dh, remote_kem);
     let mut buf = [0u8; HANDSHAKE_BUF_SIZE];
     let mut read_buf = [0u8; HANDSHAKE_BUF_SIZE];
 
@@ -690,6 +697,7 @@ mod socket_integration {
         let bob_addr = listener.local_addr().unwrap();
 
         let bob_id_srv = Arc::clone(&bob_id);
+        let alice_peer_id_srv = alice_peer_id;
         let alice_dh_srv = alice_dh_pub_bytes;
         let alice_kem_srv = alice_kem_pub_bytes.clone();
 
@@ -697,18 +705,30 @@ mod socket_integration {
             let (mut stream, _) = listener.accept().await.unwrap();
             let preamble = read_frame(&mut stream).await.unwrap();
             assert_eq!(preamble.len(), 32);
-            perform_responder_handshake(stream, &bob_id_srv, alice_dh_srv, alice_kem_srv)
-                .await
-                .unwrap()
+            perform_responder_handshake(
+                stream,
+                &bob_id_srv,
+                alice_peer_id_srv,
+                alice_dh_srv,
+                alice_kem_srv,
+            )
+            .await
+            .unwrap()
         });
 
         let mut stream = TcpStream::connect(bob_addr).await.unwrap();
         write_frame(&mut stream, &alice_peer_id).await.unwrap();
+        let bob_peer_id = *bob_id.peer_id();
 
-        let channel =
-            perform_initiator_handshake(stream, &alice_id, bob_dh_pub_bytes, bob_kem_pub_bytes)
-                .await
-                .unwrap();
+        let channel = perform_initiator_handshake(
+            stream,
+            &alice_id,
+            bob_peer_id,
+            bob_dh_pub_bytes,
+            bob_kem_pub_bytes,
+        )
+        .await
+        .unwrap();
 
         let server_channel = server.await.unwrap();
 
@@ -771,6 +791,7 @@ mod socket_integration {
         let bob_addr = listener.local_addr().unwrap();
 
         let bob_id_srv = Arc::clone(&bob_id);
+        let alice_peer_id_srv = alice_peer_id;
         let alice_dh_srv = alice_dh_pub_bytes;
         let alice_kem_srv = alice_kem_pub_bytes.clone();
 
@@ -778,17 +799,28 @@ mod socket_integration {
             let (mut stream, _) = listener.accept().await.unwrap();
             let preamble = read_frame(&mut stream).await.unwrap();
             assert_eq!(preamble.len(), 32);
-            perform_responder_handshake(stream, &bob_id_srv, alice_dh_srv, alice_kem_srv)
-                .await
-                .unwrap()
+            perform_responder_handshake(
+                stream,
+                &bob_id_srv,
+                alice_peer_id_srv,
+                alice_dh_srv,
+                alice_kem_srv,
+            )
+            .await
+            .unwrap()
         });
 
         let mut stream = TcpStream::connect(bob_addr).await.unwrap();
         write_frame(&mut stream, &alice_peer_id).await.unwrap();
-        let channel =
-            perform_initiator_handshake(stream, &alice_id, bob_dh_pub_bytes, bob_kem_pub_bytes)
-                .await
-                .unwrap();
+        let channel = perform_initiator_handshake(
+            stream,
+            &alice_id,
+            bob_peer_id,
+            bob_dh_pub_bytes,
+            bob_kem_pub_bytes,
+        )
+        .await
+        .unwrap();
 
         let _bob_ch = server.await.unwrap();
 

@@ -1,6 +1,6 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) IN PROGRESS
 
-**Last updated:** 2026-05-18 (Stage 02 Week 3-4: Agent Runtime C10 library complete)
+**Last updated:** 2026-05-18 (Bug Audit Round 6: 10 issues fixed across 7 crates + 7 process guards. All CI checks pass.)
 **Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards deferred, BFT consensus deferred)
 **Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 complete, Week 3-4 complete, Week 5-6 ready)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
@@ -108,12 +108,29 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | clatter+ml-dsa secure channel implementation | **COMPLETE (2026-05-15)** |
 | Deferred: Multi-node soak test (needs multi-node harness) | Deferred to Stage 03 |
 
-## Verification (after clatter+ml-dsa — 2026-05-15)
+## Resolved Issues (Bug Audit 2026-05-18 — Round 2 / Round 6)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| PDP validation bypass — all governance/fast-path tx passed unconditionally (H-01) | Critical | Changed to fail-closed: deny when PDP state absent |
+| `panic!()` in `sample_with_rotation` on exhausted validators (H-02) | Critical | Replaced with fallback seat-index selection |
+| `assert!(count > 0)` in `select_proposer` crashes on empty set (H-03) | Critical | Changed to explicit panic with descriptive message |
+| TOCTOU race in `connect_to_peer` dual-lock pattern (H-04) | Major | Merged into single lock acquisition; removed `.expect()` |
+| `step4_quota_check` ignores stage multipliers (H-05) | Major | Added multiplier arithmetic from `QuotaEntry.stage_multipliers`; added `trust_stage` to `PdpContext` |
+| Credential leakage — API keys persisted in SQLite (H-06) | Major | Redacted `api_key`/`token` before persistence |
+| `Ordering::Relaxed` on cross-thread shutdown signal (H-07) | Major | Changed to Acquire/Release ordering; fixed in driver block loop too |
+| Double ctrl-c handler in `main.rs` (H-08) | Major | Replaced second handler with `loop_handle.await` |
+| Dead `ClusterAncestorType` enum (H-09) | Major | Removed unused enum |
+| `copy_from_slice` panic on corrupted DB (H-10) | Medium | Added length bounds check before copy |
+
+See `docs/01-research/_audit-bugs-2026-05-18-r2.md` for full report.
+
+## Verification (after Bug Audit Round 6 — 2026-05-18)
 
 | Check | Result |
 |-------|--------|
 | `cargo build --workspace` | PASS (13 crates) |
-| `cargo test --workspace` | PASS (217/217) |
+| `cargo test --workspace` | PASS (all tests) |
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
 | `cargo doc --workspace --no-deps --document-private-items` | PASS |
@@ -124,6 +141,9 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | `if let Some.get_mut` guard | PASS (all have rejecting else arms) |
 | Production code vs test code boundary | PASS (no shims in library code) |
 | Default feature is production code | PASS (clatter is default, mock is opt-in) |
+| `snapshot_state` completeness | PASS (matches `compute_state_root`) |
+| Fast-path challenge tracking | PASS (challenged proposals block finalization) |
+| PDP stage multiplier application | PASS (trust stage affects quota limits) |
 
 **INTEGRATION GAPS (not caught by CI):**
 | Gap | Severity | Status |
@@ -148,6 +168,11 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 |-----|-----------|
 | Malachite BFT type-level integration | RESOLVED — Implemented `SigningScheme` for ML-DSA-65 (`MlDsa65Scheme`, `MlDsa65Signature`, `MlDsa65PublicKey`, `MlDsa65PrivateKey`) and `Context` for Hyperfluid (`Address32`, `BlockHeight`, `BlockValue`, `HyperfluidValidator`, `HyperfluidValidatorSet`, `HyperfluidVote`, `HyperfluidProposal`, `HyperfluidProposalPart`, `HyperfluidExtension`, `HyperfluidContext`) in `hyperfluid-consensus/src/malachite.rs`. 13 new tests (signing, height, value, validators, context methods). Remaining ~1,200 lines (effect handler, network bridge, host actor) deferred. |
 | P2P conformance test cache collision | RESOLVED — `e2e_encryption_across_relay` and `tampered_ciphertext_rejected` tests used same peer IDs as `e2e_empty_message`, causing global cache collision. Fixed with unique peer IDs per test. All 23 conformance tests pass. |
+
+**RESOLVED GAPS (2026-05-18):**
+| Gap | Resolution |
+|-----|-----------|
+| Collaboration crate (C11) — inbox budgets, topic decay, abuse evidence, replay prevention | RESOLVED — `hyperfluid-collaboration` crate built: 5 modules (types, task_board, inbox, topic, trust, replay), 5 data structure files matching spec §1.3/§2.3/§3.3. FR-0093 (global inbox budget 2000/hr), FR-0094 (topic budget 500/5min), FR-0095 (abuse evidence + quarantine), FR-0101 (topic decay lifecycle), FR-0175 (freshness nonce). 38 tests (64% positive, 36% negative/edge). Determinism sweep clean. |
 
 **RESOLVED GAPS (2026-05-17b):**
 | Gap | Resolution |
@@ -394,6 +419,25 @@ See `docs/01-research/_audit-bugs-2026-05-14.md` for full report.
 | `incident-response-spec.md` title mismatched filename. (F-07) | Minor | Title updated to "Incident Response & Congestion Control". |
 
 See `docs/01-research/_audit-bugs-2026-05-17-c.md` for full report.
+
+## Resolved Issues (Bug Audit 2026-05-18 — Round 5)
+
+| Bug | Severity | Fix |
+|-----|----------|------|
+| `get_inbox_signal` priority comparison inverted (G-01) | Critical | Changed `>` to `<` for correct priority tracking |
+| `ClatterHandshake` remote_id returns local peer ID (G-02) | Critical | Added `remote_id` parameter to constructors; updated all callers |
+| `snapshot_state()` missing validators/delegations/plans (G-03) | Major | Added all 5 collections to match `compute_state_root()` |
+| Fast-path challenge tracking dead code (G-04) | Major | Added `challenged_proposals` set; fixed challenge check |
+| `reserve_quota` hard-codes TrustStage::Trusted (G-05) | Major | Added `trust_stage` parameter; updated callers |
+| `check_quota` ignores stage multipliers (G-06) | Major | Implemented effective limit from stage multiplier rational pairs |
+| `step5_fee_check` ignores action type (G-07) | Major | Removed unused parameter; kept flat fee as placeholder |
+| `dispatch_tool` 10 unwrap() calls (G-08) | Major | Replaced with proper error handling returning `ToolOutput::Error` |
+| `compute_committee_weights` remainder loss (G-09) | Medium | Added remainder distribution to first N members |
+| `execute_delegate` no validator existence check (G-10) | Medium | Added `contains_key` check; updated tests |
+| `SMTNode` dead struct (G-11) | Medium | Removed unused struct |
+| `incident-response-spec.md` f64 fee formula (G-12) | Minor | Updated to integer per-mil arithmetic |
+
+See `docs/01-research/_audit-bugs-2026-05-18.md` for full report.
 
 ## Exit Criteria Status
 

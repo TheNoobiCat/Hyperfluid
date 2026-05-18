@@ -120,7 +120,8 @@ impl ClatterHandshake {
     ///
     /// Generates fresh static keys and ephemeral keys internally.
     pub fn initiator(
-        identity: &Identity,
+        _identity: &Identity,
+        remote_id: Hash32,
         remote_static_dh: X25519PubKey,
         remote_static_kem: MlKem768PubKey,
     ) -> Self {
@@ -137,14 +138,15 @@ impl ClatterHandshake {
 
         let handshake = ClatterHybridHandshake::new(params).expect("handshake construction");
 
-        Self { handshake, remote_id: *identity.peer_id() }
+        Self { handshake, remote_id }
     }
 
     /// Create a new handshake as the responder.
     ///
     /// Generates fresh static keys internally.
     pub fn responder(
-        identity: &Identity,
+        _identity: &Identity,
+        remote_id: Hash32,
         remote_static_dh: X25519PubKey,
         remote_static_kem: MlKem768PubKey,
     ) -> Self {
@@ -161,7 +163,7 @@ impl ClatterHandshake {
 
         let handshake = ClatterHybridHandshake::new(params).expect("handshake construction");
 
-        Self { handshake, remote_id: *identity.peer_id() }
+        Self { handshake, remote_id }
     }
 
     /// Write the next handshake message to `out`.

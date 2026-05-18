@@ -1,7 +1,13 @@
 //! C11 Collaboration & Inbox Layer
 //!
-//! Task board with soft leases, task splitting with dependency DAG, topic lifecycle,
-//! inbox buckets, priority scoring, message quotas, trust ladder.
+//! Canonical type definitions live in `hyperfluid-state`. State machine logic lives
+//! in `hyperfluid-state::state_machine`. This crate re-exports types and provides
+//! pure helper functions for collaboration-layer collaboration logic.
 
-#[cfg(test)]
-mod tests {}
+pub mod replay;
+
+pub use hyperfluid_state::{
+    EscrowStatus, HeartbeatPayload, LeasePenaltyLevel, ShadowClaim, Task, TaskLease, TaskStatus,
+    TopicRecord, TopicStatus, TrustStageEnum, TrustStageRecord,
+};
+pub use replay::generate_nonce;

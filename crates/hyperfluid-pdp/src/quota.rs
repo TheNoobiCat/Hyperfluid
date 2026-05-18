@@ -184,11 +184,19 @@ impl QuotaManager {
         &self,
         quota_id: &str,
         principal_id: &str,
-        _trust_stage: TrustStage,
+        trust_stage: TrustStage,
         amount: u64,
         current_height: u64,
     ) -> Result<u64, QuotaError> {
         let entry = self.entries.get(quota_id).ok_or(QuotaError::NotFound)?;
+
+        // Apply stage multiplier: use (numerator, denominator) rational pair
+        let effective_limit = entry
+            .stage_multipliers
+            .iter()
+            .find(|(stage, _)| *stage == trust_stage)
+            .map(|(_, (num, den))| (entry.limit as u128 * *num as u128) / *den as u128)
+            .unwrap_or(entry.limit as u128) as u64;
 
         let state_key = format!("{principal_id}:{quota_id}");
         let state = self.states.get(&state_key).and_then(|states| {
@@ -206,11 +214,11 @@ impl QuotaManager {
         let consumed = state.map(|s| s.consumed).unwrap_or(0);
         let after = consumed.saturating_add(amount);
 
-        if after > entry.limit {
+        if after > effective_limit {
             return Err(QuotaError::Exhausted);
         }
 
-        Ok(entry.limit.saturating_sub(after))
+        Ok(effective_limit.saturating_sub(after))
     }
 
     /// Atomically reserve quota consumption. Returns the QuotaState after
@@ -219,10 +227,11 @@ impl QuotaManager {
         &mut self,
         quota_id: &str,
         principal_id: &str,
+        trust_stage: TrustStage,
         amount: u64,
         current_height: u64,
     ) -> Result<QuotaState, QuotaError> {
-        self.check_quota(quota_id, principal_id, TrustStage::Trusted, amount, current_height)?;
+        self.check_quota(quota_id, principal_id, trust_stage, amount, current_height)?;
 
         let state_key = format!("{principal_id}:{quota_id}");
         let states = self.states.entry(state_key).or_default();
@@ -300,14 +309,17 @@ mod tests {
     #[test]
     fn reserve_and_release_quota_atomic() {
         let mut qm = QuotaManager::with_canonical_entries();
-        let result = qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0);
+        let result =
+            qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0);
         assert!(result.is_ok());
 
-        let result2 = qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0);
+        let result2 =
+            qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0);
         assert!(result2.is_err());
 
         qm.release_quota("gov_proposals_per_identity", "agent1", 1);
-        let result3 = qm.reserve_quota("gov_proposals_per_identity", "agent1", 1, 0);
+        let result3 =
+            qm.reserve_quota("gov_proposals_per_identity", "agent1", TrustStage::Trusted, 1, 0);
         assert!(result3.is_ok());
     }
 

@@ -9,13 +9,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use crate::{Hash32, ValidatorRecord};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClusterAncestorType {
-    AirdropAgent,
-    DirectFunding,
-    IndirectFunding,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FundingEdge {
     pub from_account: Hash32,
     pub to_account: Hash32,
@@ -198,13 +191,15 @@ pub fn compute_committee_weights(
     let mut weights: BTreeMap<Hash32, u128> = BTreeMap::new();
 
     for c in clusters {
-        let weight_per_member = if !c.members.is_empty() {
-            c.total_bonded_stake / (c.members.len() as u128)
-        } else {
-            0
-        };
-        for member in &c.members {
-            weights.insert(*member, weight_per_member);
+        let member_count = c.members.len();
+        if member_count == 0 {
+            continue;
+        }
+        let base_weight = c.total_bonded_stake / (member_count as u128);
+        let remainder = c.total_bonded_stake % (member_count as u128);
+        for (i, member) in c.members.iter().enumerate() {
+            let extra = if (i as u128) < remainder { 1 } else { 0 };
+            weights.insert(*member, base_weight + extra);
         }
     }
 
@@ -360,8 +355,11 @@ mod tests {
         assert!(weights.contains_key(&[1u8; 32]));
         let v1w = weights[&[1u8; 32]];
         let v2w = weights[&[2u8; 32]];
-        assert_eq!(v1w, v2w, "cluster stake should be evenly split");
-        assert_eq!(v1w + v2w, 3000);
+        assert!(
+            v1w == v2w || v1w + 1 == v2w || v2w + 1 == v1w,
+            "cluster stake should be split with at most 1 remainder difference"
+        );
+        assert_eq!(v1w + v2w, 3000, "sum must equal total cluster stake");
     }
 
     #[test]

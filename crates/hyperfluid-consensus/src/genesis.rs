@@ -31,6 +31,7 @@ pub struct GenesisValidator {
 /// format; the testnet scaffold uses the exact same structure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenesisConfig {
+    // TODO: should be Hash32 for deterministic encoding; currently String for ergonomic config parsing
     pub chain_id: String,
     pub timestamp: u64,
     pub epoch_length: u64,

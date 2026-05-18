@@ -285,7 +285,8 @@ impl Database {
         let mut rows = stmt.query_map([], |row| {
             let blob: Vec<u8> = row.get(0)?;
             let mut session_id = [0u8; 32];
-            session_id.copy_from_slice(&blob);
+            let len = blob.len().min(32);
+            session_id[..len].copy_from_slice(&blob[..len]);
             let next_actions_json: String = row.get(3)?;
             let todos_json: String = row.get(4)?;
             Ok(HandoffRecord {
@@ -357,7 +358,8 @@ impl Database {
         let rows = stmt.query_map(params![tool_name, since], |row| {
             let blob: Vec<u8> = row.get(2)?;
             let mut input_hash = [0u8; 32];
-            input_hash.copy_from_slice(&blob);
+            let len = blob.len().min(32);
+            input_hash[..len].copy_from_slice(&blob[..len]);
             Ok(FailureRecord {
                 timestamp: row.get(0)?,
                 tool_name: row.get(1)?,
@@ -451,7 +453,8 @@ fn parse_knowledge_kind(s: &str) -> KnowledgeKind {
 fn row_to_knowledge(row: &rusqlite::Row<'_>) -> rusqlite::Result<KnowledgeEntry> {
     let blob: Vec<u8> = row.get(0)?;
     let mut id = [0u8; 32];
-    id.copy_from_slice(&blob);
+    let len = blob.len().min(32);
+    id[..len].copy_from_slice(&blob[..len]);
     Ok(KnowledgeEntry {
         id,
         kind: parse_knowledge_kind(&row.get::<_, String>(1)?),

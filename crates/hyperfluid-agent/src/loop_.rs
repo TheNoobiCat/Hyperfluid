@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sha3::{Digest, Sha3_256};
 
-use crate::config::Config;
+use crate::config::{Config, LlmSection, TelegramSection};
 use crate::db::Database;
 use crate::prompt;
 use crate::tools;
@@ -103,9 +103,25 @@ impl AgentRuntime {
             }
         };
 
-        // Persist config as JSON for crash recovery
-        let config_json = serde_json::to_string(&config).unwrap_or_default();
-        db.set_state("config_json", &config_json)?;
+        // Persist non-sensitive config fields for crash recovery.
+        // API keys and Telegram tokens are NOT stored in the database —
+        // they are loaded from the config file on restart.
+        let safe_telegram = config.telegram.as_ref().map(|t| TelegramSection {
+            token: None, // redacted — reloaded from config file
+            chat_id: t.chat_id.clone(),
+        });
+        let safe_config = Config {
+            agent: config.agent.clone(),
+            llm: LlmSection {
+                api_key: None, // redacted — reloaded from config file
+                ..config.llm.clone()
+            },
+            telegram: safe_telegram,
+            limits: config.limits.clone(),
+        };
+        if let Ok(config_json) = serde_json::to_string(&safe_config) {
+            let _ = db.set_state("config_json", &config_json);
+        }
 
         // Create working directory if it does not exist
         if !working_dir.exists() {
@@ -140,7 +156,7 @@ impl AgentRuntime {
         loop {
             // 10. Check shutdown signal (also checked at top to avoid
             //    unnecessary work after shutdown is requested mid-sleep)
-            if self.shutdown.load(Ordering::Relaxed) {
+            if self.shutdown.load(Ordering::Acquire) {
                 break;
             }
 
@@ -150,7 +166,7 @@ impl AgentRuntime {
             }
 
             // Re-check shutdown after sleep
-            if self.shutdown.load(Ordering::Relaxed) {
+            if self.shutdown.load(Ordering::Acquire) {
                 break;
             }
 
@@ -899,7 +915,7 @@ mod tests {
         let shutdown = Arc::clone(&rt.shutdown);
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(50));
-            shutdown.store(true, Ordering::Relaxed);
+            shutdown.store(true, Ordering::Release);
         });
 
         let start = std::time::Instant::now();
