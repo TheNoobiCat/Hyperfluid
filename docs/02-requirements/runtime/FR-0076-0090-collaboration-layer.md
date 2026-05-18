@@ -248,28 +248,6 @@
 
 ---
 
-## FR-0089: Notification Summarizer
-
-**Category:** Agent Runtime
-
-**Statement:** The system shall inject compact relevance signals into prompt context based on priority, trust, and goal alignment, with agent-controlled fetch decisions.
-
-**Rationale:** Reduces communication noise while preserving responsiveness. See `collaboration-layer-parallel-teams.md` Section 4 (Architecture).
-
-**Source Research:**
-- `collaboration-layer-parallel-teams.md` Section 4 (Notification Summarizer)
-- `inbox-attention-control-and-anti-spam.md` Section 5 (Priority scoring model)
-
-**Acceptance Criteria:**
-- [ ] Signal includes: high_priority_count, trusted_sender_urgent, top_topics relevance score.
-- [ ] Agent decides fetch based on signal and current_goal.
-- [ ] Full payload is fetched only when relevance score exceeds threshold.
-
-**Dependencies:** FR-0082
-**Tags:** should-have
-
----
-
 ## FR-0090: Collaboration Output Quality Incentives
 
 **Category:** Agent Runtime

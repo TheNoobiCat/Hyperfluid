@@ -44,9 +44,6 @@ enum ArtifactClass {
     GovernanceBundle,
     ReviewEvidence,
     ResearchOutput,
-    TelemetryArchive,
-}
-
 enum RetentionTier {
     Pinned,         // no expiry
     MediumTerm,     // default 90 days
@@ -126,8 +123,7 @@ Expired (block height > expires_at_height + buffer)
 | Governance Bundle | Pinned | 5 | None (pinned) | 1 epoch |
 | Review Evidence | MediumTerm | 3 | 90 days | 2 epochs |
 | Research Output | MediumTerm | 2 | 90 days | 3 epochs |
-| Telemetry Archive | ShortTerm | 2 | 30 days | N/A (pruned) |
-
+ 
 ### 1.5 Failure Behavior
 
 - **Proof-of-possession failure:** Provider fails challenge → lease moves to AtRisk → collateral slashed if repeated within 3 windows.

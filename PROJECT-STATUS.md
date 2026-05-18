@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 ready for Week 3-4.) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 Week 3-4 Agent Runtime C10 library COMPLETE 2026-05-18. Stage 02 ready for Week 5-6.) |
 
 ---
 
@@ -124,6 +124,13 @@ Key findings:
 
 Systemic patterns identified: SMT root completeness gap (new entity added but root not updated), validate-then-mutate ordering violation in state handlers, spec-code field name drift recurrence.
 
+## Recent Design Changes (2026-05-18) — Stage 02 Week 3-4 Agent Runtime
+
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| C10 Agent Runtime | Full agent runtime library: infinite loop, 9 core tools (bash, todo, remember, forget, read, edit, write, apply_patch), system prompt assembly, SQLite persistence (WAL mode, 6 tables), handoff + crash recovery, failure guard, resource limits + sandbox validation, config.toml parsing. 87 tests (64 unit + 23 conformance). | `hyperfluid-agent/` |
+| CLI_SPEC embedded | `hyperfluid task submit` specification embedded statically in system prompt | `hyperfluid-agent/src/prompt.rs` |
+
 ## Recent Design Changes (2026-05-17c) — Malachite BFT Type-Level Integration
 
 | Change | Summary | Docs Affected |
@@ -184,11 +191,12 @@ Process improvements: 5 generic guards added to `execute-build.md` `checkpoint.m
 
 ## Next Actions
 
-**Stage 02 can now continue to Week 3-4 (Agent Runtime + Sandbox + Operator Interface):**
-1. Infinite agent loop, system prompt loader, core tool set, handoff mechanism, resource limits, process isolation.
-2. TUI setup wizard (ratatui), Telegram bot client (optional), config.toml.
-3. Crash recovery via handoff replay.
-4. C4/C6/C9 libraries already built and wired — PDP validates transactions, governance processes proposals, fast-path manages topic merges.
+**Stage 02 Week 3-4 (Agent Runtime): COMPLETE (2026-05-18) — C10 library built, 87 tests**
+
+**Stage 02 can now continue to Week 5-6 (Collaboration + Review + Economics + Sybil Detection):**
+1. Task board, soft leases, bounty escrow, airdrop agent, task discovery via gossip/DHT, inbox system
+2. Trust ladder promotion, review engine, reviewer independence, Sybil detection correlation engine
+3. Anti-collusion clawback
 
 **Recent resolution (2026-05-17b):**
 - Validator lifecycle (bond/unbond/withdraw/renew) implemented in StateMachine with 13 tests.

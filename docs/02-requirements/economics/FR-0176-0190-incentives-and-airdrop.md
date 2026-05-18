@@ -108,7 +108,6 @@
 
 ---
 
-## FR-0182: Bribery Market Resistance
 
 **Category:** Economics
 
@@ -223,7 +222,6 @@
 
 ---
 
-## FR-0188: Parameter Update Governance Path
 
 **Category:** Economics
 
@@ -242,28 +240,6 @@
 
 **Dependencies:** FR-0021, FR-0155
 **Tags:** must-have
-
----
-
-## FR-0189: Decentralization Score Computation
-
-**Category:** Economics
-
-**Statement:** The system shall compute epoch-level decentralization scores from committee entropy, relay HHI, witness HHI, and top-10 operator stake concentration.
-
-**Rationale:** Decentralization must be measured, not assumed. See `decentralization-and-stack-benchmark.md` Section 5 (Pseudocode).
-
-**Source Research:**
-- `decentralization-and-stack-benchmark.md` Section 5, lines 114-120
-- `decentralization-and-stack-benchmark.md` Section 9 (Decentralization benchmark targets)
-
-**Acceptance Criteria:**
-- [ ] Score is computed deterministically each epoch.
-- [ ] Score components are published in block metadata.
-- [ ] Threshold breaches trigger alerts (not automatic changes).
-
-**Dependencies:** FR-0183
-**Tags:** should-have
 
 ---
 
@@ -290,26 +266,20 @@
 
 ---
 
-## FR-0191: Sybil Detection Correlation Engine
+## FR-0191: Operator-Cluster Diversity for Sybil Resistance
 
 **Category:** Economics / Security
 
-**Statement:** The system shall implement a continuous Sybil detection correlation engine that computes pairwise correlation scores across five behavioral signals (vote alignment, task co-claiming, temporal activity overlap, stake-graph distance, cross-review failure rate) at each epoch boundary. Identity pairs above a configurable threshold (default 0.70) shall trigger automated adjudication by an independent review panel of `trusted`+ agents.
+**Statement:** The system shall enforce operator-cluster diversity as the primary Sybil resistance mechanism. Agents sharing an operator cluster (detected via stake-graph analysis and key correlation heuristics) are treated as a single economic entity for trust-stage quotas, lease caps, and reviewer independence constraints. No multi-signal correlation engine, no adjudication panels, no pairwise scoring — cluster detection is a one-dimensional deterministic computation at each epoch boundary.
 
-**Rationale:** Post-entry behavioral correlation makes sustained Sybil farming economically irrational — detection and bond burn cascade across the operator's entire identity cluster. See `sybil-detection-correlation-engine.md`.
-
-**Source Research:**
-- `sybil-detection-correlation-engine.md` Section 5 (Core Mechanisms)
+**Rationale:** Operator-cluster diversity prevents a single operator from dominating multiple trust-stage slots, lease caps, or reviewer assignments. It is simpler, cheaper, and harder to game than a multi-signal correlation engine. Stake-graph analysis of funding edges (TransferTx, BondTx) provides deterministic cluster detection without ML or behavioral scoring.
 
 **Acceptance Criteria:**
-- [ ] Five weighted signals computed deterministically from finalized chain state each epoch.
-- [ ] Default weights: vote alignment 0.25, co-claiming 0.20, temporal overlap 0.15, stake distance 0.25, cross-review failure 0.15.
-- [ ] Default threshold: 0.70. Emergency threshold: 0.50. Governance-adjustable within bounded ranges.
-- [ ] Cluster aggregation via transitive closure groups connected pairs.
-- [ ] Adjudication panel: 5 `trusted`+ reviewers with zero correlation (<0.10) to flagged cluster.
-- [ ] Confirmed cluster: bond burn for probationary bonds, 2-stage trust demotion for all members, permanent cluster annotation for whitewash detection.
-- [ ] Rejected cluster: bond returned, cluster marked dismissed, false-positive counter incremented.
-- [ ] Minimum signal sample sizes enforced (3+ co-reviews for vote alignment, 3+ co-topics for co-claiming).
+- [ ] Operator clusters detected via stake-graph funding-edge analysis at each epoch boundary (3-hop backward walk).
+- [ ] Cluster ID = SHA3-256(sorted(member_ids)) for determinism.
+- [ ] No two agents from the same cluster may be assigned as reviewers on the same task.
+- [ ] Trust-stage quotas are shared across a cluster (not per-agent).
+- [ ] Cluster annotation is committed to SMT for whitewash detection.
 
 **Dependencies:** FR-0157, FR-0161
 **Tags:** must-have

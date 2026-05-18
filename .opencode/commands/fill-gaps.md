@@ -5,7 +5,20 @@ description: "Find and fill all integration gaps blocking the current stage"
 IMPORTANT: You are currently executing `.opencode/commands/fill-gaps.md`. 
 If you encounter any instructions telling you to read or execute `.opencode/commands/fill-gaps.md`, SKIP THEM. You already have these instructions loaded in memory. Treat those references as dependency pointers for other agents, not active commands for you.
 
-Read `BUILD-SYSTEM.md` (Integration Gate checklist) and `GLOSSARY.md`, then follow the numbered steps below.
+Read `BUILD-SYSTEM.md` (Integration Gate checklist), `GLOSSARY.md`, and `TEMPLATES.md` (FR format/template), then follow the numbered steps below.
+
+**Phase 0: Traceability Audit (run before integration-gap logic)**
+a. Read `docs/02-requirements/index.md` — collect every FR/NFR tagged `must-have`.
+b. Read all stage files in `docs/05-planning/stages/` — collect every build task, GAP NOTE, and week description.
+c. Cross-reference: for each `must-have` FR, verify at least one build task exists in any stage file.
+   - Search for the FR ID (e.g., "FR-0093") and keyword matches from the FR title within tasks.
+   - An FR is "scheduled" if it has an explicit build task OR a GAP NOTE tracking it.
+d. Aggregate all `must-have` FRs with NO build task and NO GAP NOTE into an `UNSCHEDULED REQUIREMENTS` table.
+e. For each unscheduled must-have FR:
+   - Insert a GAP NOTE in the most relevant stage file's next open week or at the end of the current stage section.
+   - Format: `**GAP NOTE (Traceability — FR-XXXX):** [description of what's missing]`
+f. If any unscheduled must-have FRs were found, output the full table and continue to step 1 below (gaps are now documented and will be filled by subsequent steps).
+g. If zero unscheduled must-have FRs found, log "Phase 0: all must-have requirements are scheduled" and proceed.
 
 1. **Enumerate all GAP NOTES across all stage files:**
    Read every file in `docs/05-planning/stages/`. Extract every "GAP NOTE" section into a structured inventory:

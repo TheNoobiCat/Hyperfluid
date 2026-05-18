@@ -203,7 +203,6 @@ enum KeyPrefix {
     Committee = 0x04,
     ArtifactManifest = 0x05,
     Task = 0x06,
-    TelemetryEnvelope = 0x07,
     SystemParams = 0x08,
     TrustStage = 0x09,
     ActionPlan = 0x0A,
@@ -244,7 +243,7 @@ struct Account {
 
 - **State root mismatch:** A node producing a different state root than the committed block root halts consensus participation. Logs discrepancy for operator investigation.
 - **Serialization non-determinism:** Any non-deterministic field in hash input produces divergent state roots. Schema validation rejects non-canonical serializations.
-- **Pruning:** Archived entities (telemetry envelopes, expired manifests, consumed action plans) are pruned by archive nodes after retention windows. Validating nodes keep SMT root and current state only.
+- **Pruning:** Archived entities (expired manifests, consumed action plans) are pruned by archive nodes after retention windows. Validating nodes keep SMT root and current state only.
 
 ### 2.6 Versioning and Compatibility
 

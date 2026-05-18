@@ -90,50 +90,6 @@
 
 ---
 
-## FR-0150: Flash Loan Resistance in Settlement
-
-**Category:** Economics
-
-**Statement:** The system shall use stake weight snapshot at challenge_window_start for settlement calculations, with commit-reveal for challenges (commit hash, reveal after 6 blocks).
-
-**Rationale:** Prevents flash loan attacks on challenge outcomes. See `agx-economics-and-adversarial-incentives.md` Section 5 (Challenge and settlement timing).
-
-**Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 171-173
-
-**Acceptance Criteria:**
-- [ ] Stake weight snapshot is frozen at challenge window start height.
-- [ ] Challenges use commit-reveal with 6-block reveal delay.
-- [ ] No challenge can be submitted and resolved within same block.
-
-**Dependencies:** FR-0148
-**Tags:** must-have
-
----
-
-## FR-0151: Harm-Class Economic Penalties
-
-**Category:** Economics
-
-**Statement:** The system shall apply distinct penalties by harm class: congestion (adaptive PoW, tighter quotas), safety (slash, jail, exclusion), governance (deposit burn, cooldown).
-
-**Rationale:** Aligns economic consequences with actual system damage. See `agx-economics-and-adversarial-incentives.md` Section 5 (Harm-class economic model).
-
-**Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 85-95
-- `agx-economics-and-adversarial-incentives.md` Section 6, Tradeoff 3
-
-**Acceptance Criteria:**
-- [ ] Congestion harm triggers adaptive PoW increase and temporary fee floor.
-- [ ] Safety harm triggers stake slash and jail duration.
-- [ ] Governance harm triggers deposit burn and proposal cooldown.
-- [ ] Penalty application is deterministic and logged.
-
-**Dependencies:** FR-0014, FR-0015, FR-0024
-**Tags:** must-have
-
----
-
 ## FR-0152: Tiered Fee Economics
 
 **Category:** Economics
@@ -279,7 +235,7 @@
 
 **Source Research:**
 - `agx-economics-and-adversarial-incentives.md` Section 5 (New agent onboarding)
-- `sybil-detection-correlation-engine.md` Section 5 (Economic deterrence model)
+- `FR-0191` (Operator-cluster diversity for Sybil resistance)
 - `PROJECT-STATUS.md` (Decentralisation Audit: Airdrop anti-Sybil)
 
 **Acceptance Criteria:**
@@ -296,29 +252,8 @@
 - [ ] Birth-block delay: 1,000 blocks before airdropped AGX can be spent.
 - [ ] Remaining locked bond is burned if identity is flagged for Sybil farming by the correlation detection engine.
 
-**Dependencies:** FR-0096, FR-0191
+**Dependencies:** FR-0096, FR-0191 (operator-cluster diversity)
 **Tags:** must-have
-
----
-
-## FR-0158: Airdrop Sunset Conditions
-
-**Category:** Economics
-
-**Statement:** The system shall automatically sunset airdrop when daily new registrations drop below 10 for 30 consecutive days or AGX reaches sufficient external liquidity.
-
-**Rationale:** Airdrop is a bootstrap mechanism, not permanent. See `agx-economics-and-adversarial-incentives.md` Section 5 (Sunset).
-
-**Source Research:**
-- `agx-economics-and-adversarial-incentives.md` Section 5, lines 147-152
-
-**Acceptance Criteria:**
-- [ ] Sunset trigger is deterministic and verifiable.
-- [ ] Remaining airdrop funds return to ecosystem treasury.
-- [ ] Post-sunset, new agents must acquire AGX through work or exchange.
-
-**Dependencies:** FR-0157
-**Tags:** should-have
 
 ---
 

@@ -130,7 +130,7 @@ Step 5: APPROVED
 ### 1.5 Failure Behavior
 
 - **PDP crash during evaluation:** Atomic quota reservation ensures no partial consumption. Plan state remains pending; no state mutation applied.
-- **PDP overblock (denies all):** Collaboration degraded but protocol safety preserved. Detection via audit log telemetry (reject ratio spike).
+- **PDP overblock (denies all):** Collaboration degraded but protocol safety preserved. Detection via audit log (reject ratio spike).
 - **PDP underblock (approves malicious plan):** Challenges, slashing, and reviewer attestation layers catch post-hoc. Challenge window (144 blocks) allows rollback.
 - **Split-brain:** policy_bundle_hash mismatch prevents nodes from evaluating plans under different rules. Plan rejected until bundle syncs.
 - **Rule chain timeout:** Evaluation must complete within 100ms (NFR-0003). If timeout approached, partial evaluation is discarded; plan denied with INTERNAL_ERROR.
@@ -216,7 +216,7 @@ struct QuotaState {
 
 - Quota race under concurrency: Atomic reservation (compare-and-swap on quota state) ensures single winner.
 - Reserved quota not consumed (execution failure): Released back to pool immediately.
-- Quota monitoring: Quota exhaustion events are logged and trigger telemetry reporting.
+- Quota monitoring: Quota exhaustion events are logged.
 
 ### 2.6 Versioning and Compatibility
 

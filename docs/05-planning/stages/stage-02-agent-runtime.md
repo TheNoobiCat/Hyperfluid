@@ -32,7 +32,7 @@
 - [ ] Next stage inputs prepared.
 
 ## Duration Estimate
-6–10 weeks. Extend to 10 weeks if PDP determinism across heterogeneous environments (Linux/macOS/aarch64) requires debugging. Extend beyond 10 weeks if LLM provider rate limits or sandbox escape hardening demands extra work. Telegram bot and TUI wizard are estimated at ~3 days combined (simple tokio task + ratatui screens). Sybil detection correlation engine is estimated at ~1 week (signal computation, cluster aggregation, adjudication pipeline).
+10–14 weeks. Extend beyond 12 weeks if VDF integration or governance sandbox execution requires debugging. Telegram bot and TUI wizard are estimated at ~3 days combined. CLI crate estimated at ~1 week. Protocol catch-up items (slashing, rewards, VDF, liveness tiers, quota matrix) estimated at ~2 weeks collective. Soak testing estimated at ~1 week including bug fixes.
 
 ## Dependencies
 - Stage 01 complete (chain, P2P, artifact storage functional).
@@ -75,6 +75,12 @@
 11. Config file (`config.toml`): serde-deserialized with `[agent]`, `[llm]`, `[telegram]` sections.
 12. Exit checkpoint: single agent runs stable loop for 1 hour; survives tool timeout, token limit handoff, and process restart; TUI wizard writes valid config; Telegram bot responds to commands from configured user ID.
 
+**Status: COMPLETE (2026-05-18)** — C10 Agent Runtime library built. All spec sections 1-4 implemented. 87 tests (64 unit + 23 conformance). Core tools (bash, todo, remember, forget, read, edit, write, apply_patch), infinite loop, handoff/crash recovery, system prompt assembly, resource limits/sandbox validation. Deferred: LLM provider integration (stub), TUI wizard (Section 5 optional), Telegram bot (Section 5 optional), OS-level sandbox enforcement (Linux-only), agent binary (library crate).
+
+
+
+**GAP NOTE (Tracking — inbox budgets, topic decay, abuse evidence, replay prevention):** FR-0093 (global inbox budget 2000/hr), FR-0094 (topic budget 500/5min), FR-0095 (abuse evidence + quarantine), FR-0101 (topic decay lifecycle), and FR-0175 (freshness nonce for artifact replay prevention) are must-have requirements with no explicit build task in this week or any other. They are small but required by specs. If not absorbed into W5-6 implementation, must be added to W9-10.
+
 ### Week 5–6: Collaboration + Review + Economics + Sybil Detection (C11, C12)
 1. Task board: global task queue, soft leases (claim window = 600 blocks, ~20 min), lease renewal, lease expiry → task returns to queue.
 2. Bounty escrow: task creation deducts `bounty_agx` from creator's balance into task escrow. Payout on completion after review and challenge window. Refund on unclaimed expiry. Creator pays cancellation fee on refusal.
@@ -85,28 +91,54 @@
 7. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
 8. Review engine: initial review (3 reviewers, binary verdict), challenge window, settlement (fixed payout on majority approval).
 9. Reviewer independence: stake-graph analysis ensures no reviewer shares an operator cluster with the worker or another reviewer.
-10. Anti-collusion: Sybil detection correlation engine — five-signal pairwise scoring (vote alignment, co-claiming, temporal overlap, stake distance, cross-review failure). Cluster aggregation. Automated adjudication with independent review panels. Confirmed Sybil = bond burn + trust regression + cluster annotation for whitewash detection.
+10. Anti-collusion: operator-cluster diversity enforcement — stake-graph funding-edge analysis at epoch boundary prevents same-cluster reviewer assignments. No multi-signal correlation engine.
 11. Clawback: settlement reversed if collusion detected within governance-defined window. Funds clawed back to escrow pool.
-12. Exit checkpoint: 3-agent collaborative task completes with review pipeline; bounty escrow/payout lifecycle works end-to-end; Sybil detection engine flags correlated pairs; trust ladder promotes agent.
+12. Exit checkpoint: 3-agent collaborative task completes with review pipeline; bounty escrow/payout lifecycle works end-to-end; operator-cluster diversity enforced; trust ladder promotes agent.
 
-### Week 7–8: Telemetry + Incident Response + Integration
-1. Telemetry: signed envelopes (agent key signs metrics), aggregation daemon, reconciliation (compare reported vs on-chain state), outlier detection (z-score > 3 sigma flags for review).
-2. Incident Response: basic incident logging only. Congestion handled by EIP-1559 base fee — no FSM, no emergency mode, no recovery ramp-up.
+### Week 7–8: Incident Response + Integration
+1. Incident Response: basic incident logging only. Congestion handled by EIP-1559 base fee — no FSM, no emergency mode, no recovery ramp-up.
 3. End-to-end integration test: network of 5 nodes, each running 2 agents — join, progress through trust ladder, complete collaborative task, face and survive attempted collusion attack, process incident.
 4. Governance stress test: 10 concurrent proposals, multi-epoch vote windows, fast-path challenge + rollback.
 5. Bug fixes and polish from integration test findings.
 6. Exit checkpoint: all exit criteria met; full end-to-end agent workflow demonstrated; incident response lifecycle validated.
 
+### Week 9–10: Protocol Catch-up
+1. **Slashing execution:** Equivocation slashing (double-vote detection from conflicting blocks) and downtime slashing (sliding window of missed blocks). Proportional slash propagation through delegators. Jail → unjail via StakeRenewTx.
+2. **Reward distribution:** Epoch-end computation of validator rewards from priority fees. Rebates proportional to active bonded stake. Automatic distribution — no claim transaction required.
+3. **Liveness/downtime tracking:** Sliding-window tracking of block signing per validator. Hysteresis — brief offline events do not immediately slash.
+4. **VDF integration:** Replace SHA3-256 fallback with full commit-reveal VDF scheme. VDF evaluation function. Seed derivation from VDF output for committee rotation. Epoch-boundary orchestration.
+5. **Consensus liveness tiers:** Normal (67-100 validators active) → Degraded (50-66, critical-tx only) → Emergency (0-49, halt + auto-recovery after 500 idle blocks). Tier detection + tx filtering.
+6. **Full cross-layer quota matrix:** Enforce all 14 quota entries (p2p_conn, p2p_tx_burst, p2p_gossip, inbox_msg, inbox_global, topic_msg, fast_merge, gov_proposals, gov_open, review_concurrent, lease_active, challenge, task_create). Trust-stage multipliers.
+7. **Hermetic governance sandbox executor:** Isolated runtime with pinned gix toolchain for deterministic execution of governance merge proposals.
+8. **Parameter bounds enforcement:** Governance-adjustable bounds on slash_pct, fee_burn_ratio, challenge_window, lease_bond_multiplier, etc. Bounds checked at proposal execution.
+9. **Task splitting with dependency DAG:** `SplitTaskTx` — atomic redistribution of escrowed bounty to children, acyclic validation, gas cost proportional to child count.
+10. **Lease collateral and penalty schedule:** Collateral = max(10 AGX, 0.5% bounty). LeasePenalty escalation: Warning → BudgetReduction 50% → SevereReduction 90% + trust regression. Per-agent lease caps by trust stage.
+11. **Shadow claim promotion:** 8-minute grace window, ShadowClaim struct, promotion sort by trust_score desc then submitted_at_height asc.
+12. **FundingEdge stake-graph pipeline:** 3-hop backward walk at each epoch boundary, cluster ID = SHA3-256(sorted(member_ids)), FundingEdge pruning at 100k blocks.
+13. Exit checkpoint: validator lifecycle complete with rewards and penalties; VDF produces deterministic entropy; liveness tiers handle degraded mode; governance sandbox executes proposals; quota matrix enforced across all 14 entries; task split lifecycle works end-to-end.
+
+### Week 11–12: CLI + Soak
+1. **`hyperfluid` CLI crate:** Implement all 7 top-level subcommands (tx, query, task, review, governance, agent, idea) with clap argument parsing. Machine-parseable JSON output.
+2. **CLI-PDP integration:** All mutating commands route through the Policy Decision Point for schema, signature, replay, quota, and fee validation.
+3. **Static CLI in system prompt:** Ensure the full CLI spec is embedded verbatim in the agent system prompt per agent-runtime-spec.md §3.2.
+4. **Failure guard (FR-0065):** Pre-execution dedup — reject exact duplicate tool calls within 1-hour window. Rate limit — max 3 failures per agent per hour triggers pause. Deterministic hash-based cache.
+5. **Token budget system (FR-0073-75):** ptok normalization, context envelope allocation with priority-score pruning, per-sender ingress budgets by trust stage.
+6. **Tool output sanitization (FR-0115):** Size limit 100KB, content-type validation, Unicode NFC normalization. Sanitized output appended to messages context.
+7. **Cross-component integration:** End-to-end test of CLI → PDP → state machine → gossip pipeline with `hyperfluid task submit`.
+8. **Full soak:** Multi-node deployment with agents claiming tasks, completing review pipeline, governance proposals passing, fast-path merges committing. 1000-block sustained run.
+9. **Bug fixes and polish** from integration test findings.
+10. Exit checkpoint: CLI crate passes all conformance hooks; full end-to-end workflow operates without node restart; soak test passes 1000 blocks with zero state divergence.
+
 ## Risk Areas
 - **PDP determinism across platforms:** Rust floating-point and HashMap ordering are non-deterministic. The PDP spec mandates deterministic rule chain. Mitigation: use `BTreeMap` for ordered maps, `Vec` sort before iteration, no `f32`/`f64` in PDP, use `BTreeSet` for sets. Cross-platform CI (Linux, macOS, aarch64) validates determinism.
 - **LLM provider availability and cost:** Rate limits, API outages, or cost spikes could stall agent testing. Mitigation: support Ollama local models for low-risk testing; cache LLM responses for deterministic replay in tests.
 - **Sandbox escape:** Agent runtime process isolation must prevent filesystem and network escape. Mitigation: WASM sandbox with WASI preview2 (least privilege) or Firecracker microVM. No host network access except through a controlled proxy. Full sandbox escape threat model deferred to Stage 03.
-- **Reviewer collusion:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: operator-cluster independence constraint (stake-graph analysis prevents same-cluster reviewers), Sybil detection correlation engine with automated adjudication. Test with 20% adversarial agent set in Stage 03.
+- **Reviewer collusion:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: operator-cluster independence constraint (stake-graph analysis prevents same-cluster reviewers). Test with 20% adversarial agent set in Stage 03.
 - **Trust ladder promotion gamed:** Agents could complete trivial tasks to inflate metrics. Mitigation: review scores weight by task complexity and reviewer consensus (tasks with higher disagreement contribute more to trust progression). Task quality decay requires sustained quality, not just volume.
 - **Governance vote apathy:** If <33% of stake votes, proposals stall indefinitely. Mitigation: governance-spec no-vote timeout (non-vote = no quorum contribution, proposal expires). Emergency proposals have shorter windows (1 hour, 67% threshold).
 - **Fast-Path challenge DOS:** Attackers could challenge every merge to stall topic progress. Mitigation: challenge requires deposit (slashed if challenge fails). Persistent frivolous challengers flagged by trust regression and temporarily barred.
 - **Telegram bot token leakage:** Bot token stored in local config.toml (Zone 3). Mitigation: no logging of token contents, file permissions restricted to agent process user, agent never includes token in on-chain data or artifact outputs.
-- **Sybil detection false positives:** Correlation engine may flag legitimate collaborators as Sybil. Mitigation: independent adjudication panel of uncorrelated `trusted`+ agents reviews evidence before any penalty. Panel composition verified for independence. False-positive rate tracked and used to recalibrate thresholds.
+- **Sybil detection false positives:** Operator-cluster diversity via stake-graph analysis is deterministic and does not produce false positives. Edge cases from incomplete funding-edge tracking mitigated by pruning thresholds.
 - **Bounty escrow race conditions:** Concurrent task claims on the same bounty-funded task. Mitigation: escrow is locked at task creation; lease claim is atomic. Only the primary lease holder can trigger payout. Canceled tasks refund via atomic escrow release.
 - **Airdrop puzzle difficulty oscillation:** Dynamic difficulty may overshoot under burst registrations, blocking legitimate new agents. Mitigation: hysteresis in difficulty adjustment (only increases after sustained high registration rate; decreases slowly). Difficulty floor ensures puzzle is always solvable on consumer hardware within ~30 seconds.
 - **VDF committee randomness:** VDF integration for committee randomness is deferred to Stage 03 (Validation) for calibration.

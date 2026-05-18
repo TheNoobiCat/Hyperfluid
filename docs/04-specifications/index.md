@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE
 **Last updated:** 2026-05-02
-**Total specs:** 14 (6 protocol, 2 storage, 4 runtime, 2 security)
+**Total specs:** 14 (6 protocol, 2 storage, 5 runtime, 1 security)
 **Phase:** 3 (Specifications)
 
 ---
@@ -42,8 +42,9 @@ Located in `docs/04-specifications/runtime/`
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
 | [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
-| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 6-step deterministic rule chain, action plans, quota matrix, key rotation, audit log |
-| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161, FR-0164-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
+| [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 6-step deterministic rule chain, action plans, quota matrix, audit log |
+| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161, FR-0164-0165, FR-0170, FR-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
+| [`cli-spec.md`](runtime/cli-spec.md) | C10 Agent Runtime | FR-0068, FR-0069, FR-0199 | CLI command taxonomy, PDP integration, static prompt spec |
 | [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, inbox routing, trust ladder, airdrop economics |
 
 ## Security Specs
@@ -52,7 +53,6 @@ Located in `docs/04-specifications/security/`
 
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
-| [`telemetry-spec.md`](security/telemetry-spec.md) | C1, C2 (Telemetry) | FR-0060, FR-0139-0141, NFR-0020-0021 | Signed envelopes, aggregation, reconciliation, outlier detection |
 | [`incident-response-spec.md`](security/incident-response-spec.md) | C12, C4 (Incident Response) | FR-0144-0145 | EIP-1559 base fee adjustment, congestion control |
 
 ---
@@ -72,18 +72,15 @@ Located in `docs/04-specifications/security/`
 | FR-0061-0075 | agent-runtime-spec.md | Sections 1-4 |
 | FR-0076-0105 | collaboration-spec.md | Sections 1-3 |
 | FR-0106-0120 | policy-engine-spec.md | Sections 1-3 |
-| FR-0121-0135 | policy-engine-spec.md | Section 4 (forthcoming — see PROJECT-STATUS.md) |
 | FR-0136-0138 | agent-runtime-spec.md | Section 4 |
-| FR-0139-0141 | telemetry-spec.md | Sections 1-2 |
 | FR-0144-0145 | incident-response-spec.md | Sections 1-2 |
 | FR-0146, FR-0147, FR-0159, FR-0160 | fee-market-spec.md | Sections 1-2 |
-| FR-0148, FR-0149, FR-0150, FR-0153 | review-engine-spec.md | Section 1 |
-| FR-0151 | staking-spec.md | Section 1 |
+| FR-0148, FR-0149, FR-0153 | review-engine-spec.md | Section 1 |
 | FR-0152 | p2p-wire-spec.md | Section 2 |
 | FR-0155 | governance-spec.md | Section 1 |
-| FR-0156, FR-0157, FR-0158 | collaboration-spec.md | Section 3 |
-| FR-0161, FR-0164-0175 | review-engine-spec.md | Section 1 |
-| FR-0176-0180, FR-0182-0186, FR-0188-0190 | collaboration-spec.md | Section 3 |
+| FR-0156, FR-0157 | collaboration-spec.md | Section 3 |
+| FR-0161, FR-0164, FR-0165, FR-0170, FR-0175 | review-engine-spec.md | Section 1 |
+| FR-0176-0180, FR-0185-0186, FR-0190 | collaboration-spec.md | Section 3 |
 | FR-0191 | collaboration-spec.md | Section 3 |
 | FR-0192 | collaboration-spec.md | Section 3 |
 | FR-0193 | agent-runtime-spec.md | Section 2 |
@@ -92,7 +89,7 @@ Located in `docs/04-specifications/security/`
 | FR-0196 | agent-runtime-spec.md | Section 5 |
 | FR-0197 | p2p-wire-spec.md | Section 2 |
 | FR-0198 | collaboration-spec.md | Section 1 |
-| FR-0199 | agent-runtime-spec.md | Section 3 |
+| FR-0199 | cli-spec.md | Section 1 |
 | FR-0200 | agent-runtime-spec.md | Section 5 |
 | NFR-0001-0015 | (cross-cutting, referenced per spec) | — |
 | NFR-0016-0030 | (cross-cutting, referenced per spec) | — |
@@ -164,5 +161,5 @@ Parameters marked `[TUNE]` in specs (reasonable default provided; calibration ta
 | 10 | runtime/policy-engine-spec.md | complete |
 | 11 | runtime/review-engine-spec.md | complete |
 | 12 | runtime/collaboration-spec.md | complete |
-| 13 | security/telemetry-spec.md | complete |
-| 14 | security/incident-response-spec.md | complete |
+| 13 | security/incident-response-spec.md | complete |
+| 14 | runtime/cli-spec.md | complete |

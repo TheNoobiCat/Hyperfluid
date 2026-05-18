@@ -8,3 +8,14 @@ rust-version.workspace = true
 description = "C10 Agent Runtime: Infinite agent loop, tool provision, system prompt assembly, handoff management"
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha3.workspace = true
+hex.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["full"] }
+thiserror.workspace = true
+rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
+toml = "0.8"
+tempfile = "3"
+chrono = { version = "0.4", features = ["serde"] }

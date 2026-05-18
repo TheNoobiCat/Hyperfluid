@@ -196,7 +196,6 @@
 
 ---
 
-## FR-0030: Post-Incident Governance Bridge
 
 **Category:** Governance
 

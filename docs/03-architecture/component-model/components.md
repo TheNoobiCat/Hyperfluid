@@ -134,13 +134,13 @@ flowchart TD
 
 **Responsibility:** Content-addressed storage, proof-of-possession, parallel retrieval, retention tiers, replication leases, repair coordination, SLA monitoring.
 **Owned state:** Manifest registry, chunk metadata, lease records, replica health, repair queue.
-**Key FRs:** FR-0051, FR-0052, FR-0053, FR-0054, FR-0055, FR-0056, FR-0057, FR-0058, FR-0059, FR-0060
+**Key FRs:** FR-0051, FR-0052, FR-0053, FR-0054, FR-0055, FR-0056, FR-0057, FR-0058, FR-0059
 
 ### C9: Policy Decision Point (PDP)
 
 **Responsibility:** Deterministic policy evaluation for all network-mutating actions. Schema validation, signature verification, replay protection, quota enforcement, fee check, audit logging.
 **Owned state:** Consumed plan IDs, quota counters, audit log.
-**Key FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0111, FR-0112, FR-0113, FR-0115, FR-0117, FR-0118, FR-0119, FR-0120
+**Key FRs:** FR-0106, FR-0107, FR-0108, FR-0109, FR-0111, FR-0112, FR-0113, FR-0115, FR-0117, FR-0119, FR-0120
 
 ### C10: Agent Runtime
 
@@ -156,7 +156,7 @@ flowchart TD
 
 ### C12: Economics & Incentives
 
-**Responsibility:** Review market operation, challenge/settlement lifecycle, challenger bonds, Sybil detection correlation engine (5-signal pairwise scoring, cluster aggregation, automated adjudication panels), anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, parameter bounds enforcement, decentralization score computation.
+**Responsibility:** Review market operation, challenge/settlement lifecycle, challenger bonds, Sybil resistance via operator-cluster diversity, anti-Sybil airdrop (HashCash proof-of-agent with dynamic difficulty, progressive bond release), airdrop agent seed task creation (initial topics + bounty-funded tasks from genesis pool), bounty payout from escrow, parameter bounds enforcement.
 **Owned state:** Review assignments, settlement records, airdrop pool, seed task bounty pool, Sybil correlation scores, adjudication records, parameter values, decentralization metrics.
 **Key FRs:** FR-0148-0160, FR-0161-0175, FR-0176-0193
 

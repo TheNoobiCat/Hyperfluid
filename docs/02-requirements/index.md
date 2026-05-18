@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Last updated:** 2026-05-15  
-**Total requirements:** 203 (173 FR + 30 NFR)  
+**Total requirements:** 160 (136 FR + 24 NFR)  
 **Coverage:** Protocol, Runtime, Security, Economics  
 
 ---
@@ -57,7 +57,7 @@ Located in `docs/02-requirements/protocol/`
   - FR-0027: Deterministic Precheck Gating
   - FR-0028: Governance Anti-Flood Controls
   - FR-0029: No-Vote Timeout Fairness
-  - FR-0030: Post-Incident Governance Bridge
+
 
 ### Fast-Path Topic Protocol
 - [`FR-0031-0040-fast-path-topic-protocol.md`](protocol/FR-0031-0040-fast-path-topic-protocol.md)
@@ -96,7 +96,7 @@ Located in `docs/02-requirements/protocol/`
   - FR-0057: Content-Addressing SLA
   - FR-0058: Artifact Registration Determinism
   - FR-0059: Git Object Verification for Governance Artifacts
-  - FR-0060: Signed Telemetry Summaries with Quorum Validation
+
 
 ---
 
@@ -135,7 +135,7 @@ Located in `docs/02-requirements/runtime/`
   - FR-0084: Idea Seed Index for Work Bootstrapping
   - FR-0086: Layered Version Control
   - FR-0087: Review Sandbox for Topic Merges
-  - FR-0089: Notification Summarizer
+
   - FR-0090: Collaboration Output Quality Incentives
   - FR-0201: Task Splitting with Dependency DAG
 
@@ -151,9 +151,7 @@ Located in `docs/02-requirements/runtime/`
   - FR-0099: Reviewer Independence Metrics
   - FR-0101: Topic Decay and Discovery Ranking
   - FR-0102: Untrusted Sender Default Policy
-  - FR-0103: Scoring Model Drift Detection
-  - FR-0104: Emergency Escalation for Coordination
-  - FR-0105: Token Burn Telemetry Signed and Auditable
+
 
 ---
 
@@ -176,32 +174,14 @@ Located in `docs/02-requirements/security/`
   - FR-0119: Policy Bundle Split-Brain Prevention
   - FR-0120: Network Action Type Taxonomy
 
-### Prompt Injection Defense
-- [`FR-0121-0135-prompt-injection-defense.md`](security/FR-0121-0135-prompt-injection-defense.md)
-  - FR-0121: Prompt Injection as Network Boundary Problem
-  - FR-0122: Classifier as Auxiliary Signal Only
-  - FR-0123: Attack Corpus Registry
-  - FR-0124: Scenario Runner with Deterministic Seeds
-  - FR-0125: Dual Metric Release Gating
-  - FR-0126: Continuous Canary Drift Detection
-  - FR-0127: Incident-to-Corpus Feedback Loop
-  - FR-0128: Hidden Scenario Pools for Metric Gaming Prevention
-  - FR-0129: Signed Telemetry Envelopes for Eval Integrity
-  - FR-0130: Staged Rollout with Rollback Guardrails
-  - FR-0132: Schema-Conformant Malicious Action Blocking
-  - FR-0133: Injection Payload Hidden in Trusted Channel Defense
-  - FR-0134: Multi-Turn Delayed Trigger Detection
-  - FR-0135: Role Confusion Payload Blocking
+
 
 ### Sandbox and Telemetry
 - [`FR-0136-0145-sandbox-and-telemetry.md`](security/FR-0136-0145-sandbox-and-telemetry.md)
   - FR-0136: Network-Only Policy Scope
   - FR-0137: Sandbox Escape Prevention
   - FR-0138: Agent Runtime-Node Process Separation
-  - FR-0139: Telemetry Aggregation Robustness
-  - FR-0140: Temporal Binding of Telemetry
-  - FR-0141: Independent Policy Gateway Reconciliation
-  - FR-0144: False-Alarm Reporter Penalties
+   - FR-0144: False-Alarm Reporter Penalties
   - FR-0145: Fee Market Congestion Recovery
 
 ---
@@ -216,8 +196,7 @@ Located in `docs/02-requirements/economics/`
   - FR-0147: Staked Validator Fee Rebates
   - FR-0148: Challenge Window and Settlement Timing
   - FR-0149: Challenger Bond and Loser-Pays Policy
-  - FR-0150: Flash Loan Resistance in Settlement
-  - FR-0151: Harm-Class Economic Penalties
+
   - FR-0152: Tiered Fee Economics
   - FR-0153: Fixed Bounty Payouts (Marketplace Model)
   - FR-0153a: Bounty Escrow Lifecycle
@@ -225,7 +204,7 @@ Located in `docs/02-requirements/economics/`
   - FR-0155: Parameter Bounds for Economic Variables
   - FR-0156: Lease Collateral Requirements
   - FR-0157: Anti-Sybil Airdrop Mechanism
-  - FR-0158: Airdrop Sunset Conditions
+
   - FR-0159: Fee Market Manipulation Defense
   - FR-0160: Front-Running Protection for Challenges
 
@@ -234,14 +213,9 @@ Located in `docs/02-requirements/economics/`
   - FR-0161: Review Market with Independent Review
   - FR-0164: Reviewer Collateral
   - FR-0165: Reviewer Independence via Operator-Cluster Diversity
-  - FR-0166: Manual Governance Escalation for Collusion
-  - FR-0167: Reviewer Assignment Fallbacks
-  - FR-0168: Reviewer Load Cap
-  - FR-0169: Review Assignment Deadline
+
   - FR-0170: Content-Addressed Artifact Reproducibility
-  - FR-0172: Provisional Settlement with Clawback
-  - FR-0173: Challenge Spam Defense
-  - FR-0174: Domain Expert Bottleneck Fallback
+
   - FR-0175: Replay of Old Evidence Prevention
 
 ### Incentives and Airdrop
@@ -251,18 +225,13 @@ Located in `docs/02-requirements/economics/`
   - FR-0178: Time-Delayed Birth Block Spending
   - FR-0179: Airdrop Pool Limit
   - FR-0180: Reward Settlement from Finalized Records Only
-  - FR-0182: Bribery Market Resistance
-  - FR-0183: Stake Concentration Monitoring
-  - FR-0184: Relay and Witness Incentive Diversity
-  - FR-0185: Governance Griefing Defense
-  - FR-0186: Sybil Flood with Fee Evasion Defense
-  - FR-0188: Parameter Update Governance Path
-  - FR-0189: Decentralization Score Computation
-  - FR-0190: Adversarial Simulation before Mainnet
+   - FR-0185: Governance Griefing Defense
+   - FR-0186: Sybil Flood with Fee Evasion Defense
+   - FR-0190: Adversarial Simulation before Mainnet
 
 ### Incentives and Airdrop (continued — recent additions)
 - [`FR-0176-0190-incentives-and-airdrop.md`](economics/FR-0176-0190-incentives-and-airdrop.md)
-  - FR-0191: Sybil Detection via Behavioral Correlation and Automated Adjudication
+  - FR-0191: Operator-Cluster Diversity for Sybil Resistance
   - FR-0192: Airdrop Agent Seed Task Bootstrapping
   - FR-0193: Agent Telemetry Interface (Telegram Bot + TUI Setup)
   - FR-0194: `task_create` Action Plan Type
@@ -297,17 +266,15 @@ Located in `docs/02-requirements/economics/`
   - NFR-0017: Liveness Under Partial Synchrony
   - NFR-0018: Crash Recovery Without Data Loss
   - NFR-0019: Deterministic State Machine Convergence
-  - NFR-0020: Signed Telemetry Integrity
-  - NFR-0021: Multi-Source Metric Corroboration
+
   - NFR-0022: Equivocation Detection and Response Time
   - NFR-0023: Governance Execution Hermeticity
-  - NFR-0024: Key Compromise Containment
+
   - NFR-0025: DDoS Resilience at Network Layer
   - NFR-0026: Data Availability Guarantees
   - NFR-0027: Consensus Upgradability without Hard Fork
   - NFR-0028: Agent Runtime Isolation from Node
-  - NFR-0029: Backup and Restore for Agent State
-  - NFR-0030: Formal Verification Targets
+
 
 ---
 
@@ -348,4 +315,4 @@ Per `PROJECT-STATUS.md` Research Gaps, the following were converted to explicit 
 | Telemetry threat model | NFR-0020, NFR-0021 |
 | Sandbox escape analysis | FR-0137 |
 | Content-addressing SLA | FR-0057 |
-| Economic timing parameters | FR-0148, FR-0149, FR-0150, FR-0169 |
+   | Economic timing parameters | FR-0148, FR-0149 |
