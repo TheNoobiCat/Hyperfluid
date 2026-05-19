@@ -1,6 +1,6 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) IN PROGRESS
 
-**Last updated:** 2026-05-18 (Bug Audit Round 6: 10 issues fixed across 7 crates + 7 process guards. All CI checks pass.)
+**Last updated:** 2026-05-19 (Traceability audit: 2 unscheduled must-have FRs documented. Decentralization score implemented in hyperfluid-economics. All CI checks pass.)
 **Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards deferred, BFT consensus deferred)
 **Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 complete, Week 3-4 complete, Week 5-6 ready)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
@@ -162,6 +162,13 @@ See `docs/01-research/_audit-bugs-2026-05-18-r2.md` for full report.
 | Slashing execution + reward distribution | MEDIUM | DEFERRED to Stage 03 |
 | Full soak test (24h) | MEDIUM | DEFERRED to Stage 03 |
 | Clatter network bridge for consensus gossip | MEDIUM | DEFERRED — TCP layer built; needs BFT protocol to generate gossip messages |
+| FR-0060 — Signed Telemetry Summaries (telemetry-spec.md) | MEDIUM | OPEN — no build task exists. KeyPrefix::TelemetryEnvelope reserved (unused), ArtifactClass::TelemetryArchive defined (no archiver). Zero implementation code. See GAP NOTE in stage-02-agent-runtime.md. |
+| FR-0183 — Stake Concentration Monitoring (governance nudges) | LOW | OPEN — decentralization_score() implemented and wired into epoch boundary. Governance-proposable parameter nudges when concentration exceeds thresholds remain unscheduled. |
+
+**RESOLVED GAPS (2026-05-19):**
+| Gap | Resolution |
+|-----|-----------|
+| FR-0183 — Stake Concentration Monitoring (decentralization score) | RESOLVED — `DecentralizationMetrics` + `compute_decentralization_metrics()` implemented in `hyperfluid-economics/src/lib.rs` with 6 tests (all integer-based, no floating point). Wired into epoch boundary in `consensus/src/driver.rs` via logging. All determinism checks pass. |
 
 **RESOLVED GAPS (2026-05-17c):**
 | Gap | Resolution |

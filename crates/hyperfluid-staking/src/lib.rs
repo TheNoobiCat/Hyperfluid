@@ -2,8 +2,6 @@
 //
 // Source: specs/protocol/staking-spec.md Sections 1-2
 
-pub mod graph;
-
 use serde::{Deserialize, Serialize};
 
 pub type Hash32 = [u8; 32];

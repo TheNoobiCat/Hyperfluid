@@ -131,56 +131,12 @@ pub struct QuotaState {
     pub window_start_height: u64,
 }
 
-/// Agent key binding used for signature verification and key rotation.
-/// Source: policy-engine-spec.md §3.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct KeyBinding {
-    pub agent_id: Hash32,
-    pub active_pubkey: Vec<u8>,
-    pub pending_pubkey: Option<Vec<u8>>,
-    pub rotation_height: Option<u64>,
-    pub grace_end_height: Option<u64>,
-}
-
-impl KeyBinding {
-    /// A key binding with no pending rotation (STABLE state).
-    pub fn stable(agent_id: Hash32, active_pubkey: Vec<u8>) -> Self {
-        Self {
-            agent_id,
-            active_pubkey,
-            pending_pubkey: None,
-            rotation_height: None,
-            grace_end_height: None,
-        }
-    }
-
-    /// Check whether a signature should be verified against the pending key
-    /// during the grace window.
-    pub fn in_grace_window(&self, current_height: u64) -> bool {
-        match (self.pending_pubkey.as_ref(), self.grace_end_height) {
-            (Some(_), Some(end)) => current_height < end,
-            _ => false,
-        }
-    }
-}
-
-/// Key rotation transaction submitted by an agent.
-/// Source: policy-engine-spec.md §3.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct KeyRotationTransaction {
-    pub agent_id: Hash32,
-    pub new_pubkey: Vec<u8>,
-    pub new_pubkey_hash: Hash32,
-    pub signature: Vec<u8>,
-    pub nonce: u64,
-}
-
 /// Context provided to the PDP for each evaluation.
 /// Contains all external state the PDP needs to make a deterministic decision.
 #[derive(Debug, Clone)]
 pub struct PdpContext {
     pub current_height: u64,
-    pub key_binding: Option<KeyBinding>,
+    pub key_binding: Option<()>, // placeholder for future signature verification
     pub agent_balance_attagx: u128,
     pub agent_nonce: u64,
     pub consumed_plan_ids: Vec<Hash32>,

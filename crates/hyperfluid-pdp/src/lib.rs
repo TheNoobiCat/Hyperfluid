@@ -8,7 +8,6 @@
 
 pub mod audit;
 pub mod error;
-pub mod key_rotation;
 pub mod quota;
 pub mod rule_chain;
 pub mod types;

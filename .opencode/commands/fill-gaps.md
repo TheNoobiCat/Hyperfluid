@@ -20,6 +20,8 @@ e. For each unscheduled must-have FR:
 f. If any unscheduled must-have FRs were found, output the full table and continue to step 1 below (gaps are now documented and will be filled by subsequent steps).
 g. If zero unscheduled must-have FRs found, log "Phase 0: all must-have requirements are scheduled" and proceed.
 
+h. **Vaporware scan:** For every enum variant and struct field in `crates/` that maps to a spec claim, verify at least one non-test production code path exercises it with non-default data. Output a VAPORWARE REGISTER of features that have types but zero behavior. Each entry is a gap to fill in subsequent steps.
+
 1. **Enumerate all GAP NOTES across all stage files:**
    Read every file in `docs/05-planning/stages/`. Extract every "GAP NOTE" section into a structured inventory:
    - `[stage, week, component, gap_description, blocks_what]`

@@ -65,6 +65,8 @@ Remaining work:
 2. **Slashing execution + reward distribution** — deferred to Stage 03 (Validation).
 3. **24-hour soak test** — deferred to Stage 03 (Validation).
 4. **Clatter network bridge for consensus gossip** — TCP sockets functional, but gossip needs BFT protocol messages to route.
+5. **FR-0060: Signed Telemetry Summaries** — must-have requirement with no build task. Zero implementation code exists. See GAP NOTE in stage-02-agent-runtime.md.
+6. **FR-0183: Governance parameter nudges** — decentralization score implemented and wired (2026-05-19). Governance nudges when concentration exceeds thresholds remain unscheduled.
 
 ---
 
@@ -248,10 +250,17 @@ Process improvements: 7 new generic guards added to `execute-build.md` `checkpoi
 - FeeMarket integrated into block production (EIP-1559 base fee adjusts per block).
 - 6 new driver-level integration tests cover full staking lifecycle through ConsensusDriver.
 
+**Traceability audit (2026-05-19):**
+- Phase 0 traceability audit: 2 unscheduled must-have FRs found (FR-0060, FR-0183).
+- FR-0183 decentralization score implemented in hyperfluid-economics (6 tests) and wired into ConsensusDriver.
+- FR-0060 telemetry remains open — GAP NOTE added to stage-02-agent-runtime.md.
+
 **Before Stage 03:**
 5. Complete slashing execution and reward distribution.
 6. Integrate Malachite BFT when crates are available.
 7. Build clatter network bridge for consensus gossip.
+8. Implement FR-0060 signed telemetry summaries.
+9. Implement FR-0183 governance nudges for stake concentration.
 
 **Stage 02 Week 1-2 (Governance + Fast-Path + PDP): COMPLETE (libraries built, wired into node)**
 **Stage 02 Week 3-4 (Agent Runtime + Sandbox + Operator Interface): READY TO START**
@@ -388,4 +397,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-18 (Bug Audit Round 5: 12 issues fixed across 6 crates + 2 specs. All CI checks pass.)*
+*Last updated: 2026-05-19 (Traceability audit: 2 unscheduled must-have FRs documented. Decentralization score implemented. All CI checks pass.)*

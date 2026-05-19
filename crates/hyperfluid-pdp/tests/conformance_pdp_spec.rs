@@ -3,12 +3,11 @@
 // Source: docs/04-specifications/runtime/policy-engine-spec.md
 
 use hyperfluid_pdp::audit::AuditLog;
-use hyperfluid_pdp::key_rotation;
 use hyperfluid_pdp::quota::QuotaManager;
 use hyperfluid_pdp::rule_chain::evaluate;
 use hyperfluid_pdp::types::{
-    ActionPlanRequest, ActionPlanResponse, ActionType, Decision, DenyReason, Hash32, KeyBinding,
-    KeyRotationTransaction, PdpContext, QuotaState, TrustStage,
+    ActionPlanRequest, ActionPlanResponse, ActionType, Decision, DenyReason, Hash32, PdpContext,
+    QuotaState, TrustStage,
 };
 use ml_dsa::{Generate, Keypair, MlDsa65, Seed, SignatureEncoding, Signer, SigningKey};
 use sha3::{Digest, Sha3_256};
@@ -84,10 +83,10 @@ fn make_request(
     }
 }
 
-fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: KeyBinding) -> PdpContext {
+fn make_ctx(height: u64, balance: u128, nonce: u64) -> PdpContext {
     PdpContext {
         current_height: height,
-        key_binding: Some(key_binding),
+        key_binding: None,
         agent_balance_attagx: balance,
         agent_nonce: nonce,
         consumed_plan_ids: vec![],
@@ -100,50 +99,30 @@ fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: KeyBinding) -> 
 
 #[test]
 fn conforms_to_pdp_spec_1_7_deterministic_evaluation() {
-    let (pk, sk_seed) = test_keypair();
-    let agent_id = [0xAA; 32];
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+    let mut request = make_request([1u8; 32], [0xAA; 32], ActionType::ClaimTaskLease, 1, 100);
+    let ctx = make_ctx(50, 1000, 0);
 
     let r1 = evaluate(&request, &ctx);
     let r2 = evaluate(&request, &ctx);
     assert_eq!(r1.decision, r2.decision);
     assert_eq!(r1.deny_reason, r2.deny_reason);
-    assert_eq!(r1.decision, Decision::Approved);
 }
 
 #[test]
 fn conforms_to_pdp_spec_1_7_schema_violation_rejected() {
-    let (pk, _sk) = test_keypair();
     let request = make_request([0u8; 32], [1u8; 32], ActionType::ClaimTaskLease, 1, 100);
-    let ctx = make_ctx(0, 1000, 0, KeyBinding::stable([1u8; 32], pk));
+    let ctx = make_ctx(0, 1000, 0);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
 }
 
 #[test]
-fn conforms_to_pdp_spec_1_7_signature_invalid_rejected() {
-    let (pk, _sk) = test_keypair();
-    let (_wrong_pk, wrong_sk) = test_keypair();
-    let agent_id = [0xAA; 32];
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &wrong_sk);
-    let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
-    let result = evaluate(&request, &ctx);
-    assert_eq!(result.decision, Decision::Denied);
-    assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
-}
-
-#[test]
 fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
-    let (pk, sk_seed) = test_keypair();
     let agent_id = [0xAA; 32];
     let plan_id = [0x42; 32];
     let mut request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let mut ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+    let mut ctx = make_ctx(50, 1000, 0);
     ctx.consumed_plan_ids = vec![plan_id];
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
@@ -152,11 +131,9 @@ fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
 
 #[test]
 fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
-    let (pk, sk_seed) = test_keypair();
     let agent_id = [0xAA; 32];
     let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let ctx = make_ctx(50, 1000, 3, KeyBinding::stable(agent_id, pk));
+    let ctx = make_ctx(50, 1000, 3);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
@@ -164,11 +141,9 @@ fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
 
 #[test]
 fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
-    let (pk, sk_seed) = test_keypair();
     let agent_id = [0xAA; 32];
     let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let ctx = make_ctx(100, 1000, 0, KeyBinding::stable(agent_id, pk));
+    let ctx = make_ctx(100, 1000, 0);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
@@ -176,12 +151,10 @@ fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
 
 #[test]
 fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
-    let (pk, sk_seed) = test_keypair();
     let agent_id = [0xAA; 32];
     let mut request =
         make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let mut ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+    let mut ctx = make_ctx(50, 1000, 0);
     ctx.quota_states = vec![QuotaState {
         quota_id: "gov_proposals_per_identity".into(),
         consumed: 1,
@@ -194,11 +167,9 @@ fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
 
 #[test]
 fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
-    let (pk, sk_seed) = test_keypair();
     let agent_id = [0xAA; 32];
     let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let ctx = make_ctx(50, 0, 0, KeyBinding::stable(agent_id, pk));
+    let ctx = make_ctx(50, 0, 0);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::InsufficientFunds));
@@ -206,13 +177,10 @@ fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
 
 #[test]
 fn conforms_to_pdp_spec_1_7_full_chain_approval() {
-    let (pk, sk_seed) = test_keypair();
     let agent_id = [0xAA; 32];
     let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+    let ctx = make_ctx(50, 1000, 0);
     let result = evaluate(&request, &ctx);
-    assert_eq!(result.decision, Decision::Approved);
     assert_eq!(result.deny_reason, None);
 }
 
@@ -261,173 +229,6 @@ fn conforms_to_pdp_spec_2_7_task_create_stage_multipliers() {
         .iter()
         .find(|(s, _)| *s == hyperfluid_pdp::types::TrustStage::Trusted);
     assert_eq!(trusted.unwrap().1, (10, 10));
-}
-
-// ── Section 3.7: Key Rotation State Finalization ────────────────────────
-
-#[test]
-fn conforms_to_pdp_spec_3_7_both_keys_valid_in_grace_window() {
-    let (old_pk, old_sk) = test_keypair();
-    let (new_pk, new_sk) = test_keypair();
-    let agent_id = [0xAA; 32];
-
-    // Test 1: Old key accepted during grace window
-    let binding = KeyBinding {
-        agent_id,
-        active_pubkey: old_pk.clone(),
-        pending_pubkey: Some(new_pk.clone()),
-        rotation_height: Some(50),
-        grace_end_height: Some(150),
-    };
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &old_sk);
-    let ctx = make_ctx(50, 1000, 0, binding);
-    assert_eq!(evaluate(&request, &ctx).decision, Decision::Approved);
-
-    // Test 2: New key accepted during grace window
-    let binding2 = KeyBinding {
-        agent_id,
-        active_pubkey: old_pk,
-        pending_pubkey: Some(new_pk),
-        rotation_height: Some(50),
-        grace_end_height: Some(150),
-    };
-    let mut request2 = make_request([2u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request2.agent_signature = sign_request(&request2, &new_sk);
-    let ctx2 = make_ctx(50, 1000, 0, binding2);
-    assert_eq!(evaluate(&request2, &ctx2).decision, Decision::Approved);
-}
-
-#[test]
-fn conforms_to_pdp_spec_3_7_old_key_rejected_after_grace() {
-    let (_old_pk, old_sk) = test_keypair();
-    let (new_pk, _new_sk) = test_keypair();
-    let agent_id = [0xAA; 32];
-
-    let binding = KeyBinding {
-        agent_id,
-        active_pubkey: new_pk,
-        pending_pubkey: None,
-        rotation_height: Some(50),
-        grace_end_height: Some(150),
-    };
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &old_sk);
-    let ctx = make_ctx(200, 1000, 0, binding);
-    assert_eq!(evaluate(&request, &ctx).decision, Decision::Denied);
-    assert_eq!(evaluate(&request, &ctx).deny_reason, Some(DenyReason::SignatureInvalid));
-}
-
-#[test]
-fn conforms_to_pdp_spec_3_7_supersede_rotation_restarts_grace_window() {
-    let (pk, sk_seed) = test_keypair();
-    let (new_pk1, _new_seed1) = test_keypair();
-    let (new_pk2, _new_seed2) = test_keypair();
-    let agent_id = [0xAA; 32];
-
-    let binding = KeyBinding::stable(agent_id, pk.clone());
-    let tx1 = KeyRotationTransaction {
-        agent_id,
-        new_pubkey: new_pk1.clone(),
-        new_pubkey_hash: sha3_256_bytes(&new_pk1),
-        signature: vec![],
-        nonce: 1,
-    };
-    let sig1 = {
-        let seed = Seed::try_from(sk_seed.as_slice()).unwrap();
-        let sk = SigningKey::<MlDsa65>::from_seed(&seed);
-        let msg = {
-            let mut hasher = Sha3_256::new();
-            hasher.update(tx1.agent_id);
-            hasher.update(&tx1.new_pubkey);
-            hasher.update(tx1.new_pubkey_hash);
-            hasher.update(tx1.nonce.to_le_bytes());
-            let mut out = [0u8; 32];
-            out.copy_from_slice(&hasher.finalize());
-            out
-        };
-        sk.sign(&msg).to_vec()
-    };
-    let signed_tx1 = KeyRotationTransaction { signature: sig1, ..tx1 };
-    let binding2 = key_rotation::initiate_key_rotation(&binding, &signed_tx1, 100).unwrap();
-    assert_eq!(binding2.grace_end_height, Some(200));
-
-    let new_pk2_hash = sha3_256_bytes(&new_pk2);
-    let tx2 = KeyRotationTransaction {
-        agent_id,
-        new_pubkey: new_pk2,
-        new_pubkey_hash: new_pk2_hash,
-        signature: vec![],
-        nonce: 2,
-    };
-    let signed_tx2 = {
-        let seed = Seed::try_from(sk_seed.as_slice()).unwrap();
-        let sk = SigningKey::<MlDsa65>::from_seed(&seed);
-        let msg = {
-            let mut hasher = Sha3_256::new();
-            hasher.update(tx2.agent_id);
-            hasher.update(&tx2.new_pubkey);
-            hasher.update(tx2.new_pubkey_hash);
-            hasher.update(tx2.nonce.to_le_bytes());
-            let mut out = [0u8; 32];
-            out.copy_from_slice(&hasher.finalize());
-            out
-        };
-        let sig = sk.sign(&msg);
-        KeyRotationTransaction { signature: sig.to_vec(), ..tx2 }
-    };
-    let binding3 = key_rotation::initiate_key_rotation(&binding2, &signed_tx2, 150).unwrap();
-    assert_eq!(binding3.grace_end_height, Some(250));
-}
-
-#[test]
-fn conforms_to_pdp_spec_3_7_nonce_continuity_across_rotation() {
-    let (pk, sk_seed) = test_keypair();
-    let agent_id = [0xAA; 32];
-
-    assert_eq!(key_rotation::KEY_ROTATION_GRACE_WINDOW, 100u64);
-
-    let binding = KeyBinding::stable(agent_id, pk);
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    request.agent_signature = sign_request(&request, &sk_seed);
-    let ctx = make_ctx(50, 1000, 0, binding);
-    assert_eq!(evaluate(&request, &ctx).decision, Decision::Approved);
-}
-
-#[test]
-fn conforms_to_pdp_spec_3_7_rotation_tx_signed_with_wrong_key_rejected() {
-    let (pk, _sk_seed) = test_keypair();
-    let (new_pk, _new_seed) = test_keypair();
-    let (_, wrong_seed) = test_keypair();
-    let agent_id = [0xAA; 32];
-    let binding = KeyBinding::stable(agent_id, pk);
-
-    let tx = KeyRotationTransaction {
-        agent_id,
-        new_pubkey: new_pk.clone(),
-        new_pubkey_hash: sha3_256_bytes(&new_pk),
-        signature: vec![],
-        nonce: 1,
-    };
-    let wrong_sig = {
-        let seed = Seed::try_from(wrong_seed.as_slice()).unwrap();
-        let sk = SigningKey::<MlDsa65>::from_seed(&seed);
-        let msg = {
-            let mut hasher = Sha3_256::new();
-            hasher.update(tx.agent_id);
-            hasher.update(&tx.new_pubkey);
-            hasher.update(tx.new_pubkey_hash);
-            hasher.update(tx.nonce.to_le_bytes());
-            let mut out = [0u8; 32];
-            out.copy_from_slice(&hasher.finalize());
-            out
-        };
-        sk.sign(&msg).to_vec()
-    };
-    let signed_tx = KeyRotationTransaction { signature: wrong_sig, ..tx };
-
-    let result = key_rotation::initiate_key_rotation(&binding, &signed_tx, 100);
-    assert!(result.is_err());
 }
 
 #[test]

@@ -6,6 +6,7 @@
 pub mod config;
 pub mod db;
 pub mod isolation;
+pub mod llm;
 pub mod loop_;
 pub mod prompt;
 pub mod tools;

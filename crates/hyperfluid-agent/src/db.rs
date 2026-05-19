@@ -404,6 +404,19 @@ impl Database {
     }
 }
 
+// ── First-Run Detection ──
+
+impl Database {
+    /// Returns true if this agent has never run before — no todos, no handoff,
+    /// no knowledge entries. Used to show the first-run onboarding prompt once.
+    pub fn is_first_run(&self) -> Result<bool, rusqlite::Error> {
+        let todos: usize = self.get_active_todos()?.len();
+        let handoff = self.get_latest_handoff()?.is_some();
+        let knowledge: usize = self.get_recent_knowledge(1)?.len();
+        Ok(todos == 0 && !handoff && knowledge == 0)
+    }
+}
+
 // ── Helpers ──
 
 fn now_secs() -> u64 {

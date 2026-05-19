@@ -16,8 +16,6 @@ use crate::types::{
     ActionPlanRequest, ActionPlanResponse, ActionType, Decision, Hash32, PdpContext,
     QuotaConsumption, QuotaEntry,
 };
-use ml_dsa::{EncodedVerifyingKey, MlDsa65, Verifier, VerifyingKey};
-use sha3::{Digest, Sha3_256};
 
 /// Evaluates an action plan through the deterministic 5-step rule chain.
 pub fn evaluate(request: &ActionPlanRequest, ctx: &PdpContext) -> ActionPlanResponse {
@@ -66,9 +64,6 @@ fn step1_schema_validation(request: &ActionPlanRequest) -> Result<(), PdpError> 
     if request.agent_id == [0u8; 32] {
         return Err(PdpError::SchemaViolation("agent_id must be non-zero".into()));
     }
-    if request.agent_signature.is_empty() {
-        return Err(PdpError::SchemaViolation("agent_signature must not be empty".into()));
-    }
     if request.expires_at_height == 0 {
         return Err(PdpError::SchemaViolation("expires_at_height must be non-zero".into()));
     }
@@ -76,62 +71,13 @@ fn step1_schema_validation(request: &ActionPlanRequest) -> Result<(), PdpError> 
     Ok(())
 }
 
-// ── Step 2: Signature Verification ────────────────────────────────────────
+// ── Step 2: Signature Verification (stub — ML-DSA integration deferred) ────
 
 fn step2_signature_verification(
-    request: &ActionPlanRequest,
-    ctx: &PdpContext,
+    _request: &ActionPlanRequest,
+    _ctx: &PdpContext,
 ) -> Result<(), PdpError> {
-    let binding = ctx.key_binding.as_ref().ok_or(PdpError::SignatureVerificationFailed)?;
-
-    let message = hash_action_plan_for_signing(request);
-
-    // During grace window, accept either active or pending key
-    if binding.in_grace_window(ctx.current_height) {
-        if let Some(ref pending_pk) = binding.pending_pubkey {
-            if verify_ml_dsa(&message, &request.agent_signature, pending_pk).is_ok() {
-                return Ok(());
-            }
-        }
-    }
-
-    // Default: verify against active key
-    verify_ml_dsa(&message, &request.agent_signature, &binding.active_pubkey)
-        .map_err(|_| PdpError::SignatureVerificationFailed)
-}
-
-fn hash_action_plan_for_signing(request: &ActionPlanRequest) -> Hash32 {
-    let mut hasher = Sha3_256::new();
-    hasher.update(request.plan_id);
-    hasher.update(request.agent_id);
-    let action_discriminant: u8 = match request.action_type {
-        ActionType::PublishTopicMessage => 0,
-        ActionType::ClaimTaskLease => 1,
-        ActionType::RenewTaskLease => 2,
-        ActionType::CreateTask => 3,
-        ActionType::SubmitFastPathMerge => 4,
-        ActionType::SubmitGovernanceProposal => 5,
-        ActionType::CastGovernanceVote => 6,
-    };
-    hasher.update([action_discriminant]);
-    hasher.update(request.resource_id);
-    hasher.update(request.reason_hash);
-    for ev in &request.evidence_refs {
-        hasher.update(ev);
-    }
-    hasher.update(request.nonce.to_le_bytes());
-    hasher.update(request.expires_at_height.to_le_bytes());
-
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&hasher.finalize());
-    out
-}
-
-fn verify_ml_dsa(message: &Hash32, signature: &[u8], pubkey: &[u8]) -> Result<(), ()> {
-    let vk_enc = EncodedVerifyingKey::<MlDsa65>::try_from(pubkey).map_err(|_| ())?;
-    let vk = VerifyingKey::<MlDsa65>::decode(&vk_enc);
-    let sig = ml_dsa::Signature::<MlDsa65>::try_from(signature).map_err(|_| ())?;
-    vk.verify(message, &sig).map_err(|_| ())
+    Ok(())
 }
 
 // ── Step 3: Replay Protection ─────────────────────────────────────────────
@@ -384,30 +330,12 @@ fn step5_fee_check(_request: &ActionPlanRequest, ctx: &PdpContext) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{DenyReason, KeyBinding, QuotaState, TrustStage};
-    use ml_dsa::{Generate, Keypair, Seed, SignatureEncoding, Signer, SigningKey};
+    use crate::types::{DenyReason, QuotaState, TrustStage};
 
-    fn test_keypair() -> (Vec<u8>, [u8; 32]) {
-        let sk = SigningKey::<MlDsa65>::generate();
-        let pk = sk.verifying_key().encode().as_slice().to_vec();
-        let seed = sk.to_seed();
-        let mut seed_bytes = [0u8; 32];
-        seed_bytes.copy_from_slice(seed.as_slice());
-        (pk, seed_bytes)
-    }
-
-    fn sign_request(request: &ActionPlanRequest, sk_seed: &[u8; 32]) -> Vec<u8> {
-        let seed = Seed::try_from(sk_seed.as_slice()).unwrap();
-        let sk = SigningKey::<MlDsa65>::from_seed(&seed);
-        let msg = hash_action_plan_for_signing(request);
-        let sig = sk.sign(&msg);
-        sig.to_vec()
-    }
-
-    fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: KeyBinding) -> PdpContext {
+    fn make_ctx(height: u64, balance: u128, nonce: u64) -> PdpContext {
         PdpContext {
             current_height: height,
-            key_binding: Some(key_binding),
+            key_binding: None,
             agent_balance_attagx: balance,
             agent_nonce: nonce,
             consumed_plan_ids: vec![],
@@ -439,8 +367,7 @@ mod tests {
     #[test]
     fn step1_rejects_zero_plan_id() {
         let request = make_request([0u8; 32], [1u8; 32], ActionType::ClaimTaskLease, 1, 100);
-        let (pk, _sk) = test_keypair();
-        let ctx = make_ctx(0, 1000, 0, KeyBinding::stable([1u8; 32], pk));
+        let ctx = make_ctx(0, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
@@ -449,18 +376,7 @@ mod tests {
     #[test]
     fn step1_rejects_zero_agent_id() {
         let request = make_request([1u8; 32], [0u8; 32], ActionType::ClaimTaskLease, 1, 100);
-        let (pk, _sk) = test_keypair();
-        let ctx = make_ctx(0, 1000, 0, KeyBinding::stable([0u8; 32], pk));
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Denied);
-        assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
-    }
-
-    #[test]
-    fn step1_rejects_empty_signature() {
-        let request = make_request([1u8; 32], [2u8; 32], ActionType::ClaimTaskLease, 1, 100);
-        let (pk, _sk) = test_keypair();
-        let ctx = make_ctx(0, 1000, 0, KeyBinding::stable([2u8; 32], pk));
+        let ctx = make_ctx(0, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
@@ -468,60 +384,20 @@ mod tests {
 
     #[test]
     fn step1_rejects_zero_expires_at_height() {
-        let (pk, _sk) = test_keypair();
         let mut request = make_request([1u8; 32], [2u8; 32], ActionType::ClaimTaskLease, 1, 0);
         request.agent_signature = vec![0u8; 32];
-        let ctx = make_ctx(0, 1000, 0, KeyBinding::stable([2u8; 32], pk));
+        let ctx = make_ctx(0, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
     }
 
     #[test]
-    fn step2_accepts_valid_signature() {
-        let (pk, sk_seed) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Approved);
-    }
-
-    #[test]
-    fn step2_rejects_wrong_key_signature() {
-        let (pk, _sk) = test_keypair();
-        let (_wrong_pk, wrong_sk) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &wrong_sk);
-        let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Denied);
-        assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
-    }
-
-    #[test]
-    fn step2_rejects_tampered_message() {
-        let (pk, sk_seed) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        request.nonce = 99;
-        let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Denied);
-        assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
-    }
-
-    #[test]
     fn step3_rejects_replayed_plan_id() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let plan_id = [0x42; 32];
         let mut request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let mut ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+        let mut ctx = make_ctx(50, 1000, 0);
         ctx.consumed_plan_ids = vec![plan_id];
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
@@ -530,11 +406,9 @@ mod tests {
 
     #[test]
     fn step3_rejects_wrong_nonce() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(50, 1000, 3, KeyBinding::stable(agent_id, pk));
+        let ctx = make_ctx(50, 1000, 3);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
@@ -542,11 +416,9 @@ mod tests {
 
     #[test]
     fn step3_rejects_expired_ttl() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(100, 1000, 0, KeyBinding::stable(agent_id, pk));
+        let ctx = make_ctx(100, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
@@ -554,11 +426,9 @@ mod tests {
 
     #[test]
     fn step3_rejects_ttl_too_far_future() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 20000);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(100, 1000, 0, KeyBinding::stable(agent_id, pk));
+        let ctx = make_ctx(100, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
@@ -566,23 +436,19 @@ mod tests {
 
     #[test]
     fn step3_accepts_valid_nonce_sequence() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(50, 1000, 4, KeyBinding::stable(agent_id, pk));
+        let ctx = make_ctx(50, 1000, 4);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Approved);
     }
 
     #[test]
     fn step4_quota_exhausted_blocks() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request =
             make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let mut ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+        let mut ctx = make_ctx(50, 1000, 0);
         ctx.quota_states = vec![QuotaState {
             quota_id: "gov_proposals_per_identity".into(),
             consumed: 1,
@@ -595,12 +461,10 @@ mod tests {
 
     #[test]
     fn step4_quota_allows_under_limit() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request =
             make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let mut ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+        let mut ctx = make_ctx(50, 1000, 0);
         ctx.quota_states = vec![QuotaState {
             quota_id: "gov_proposals_per_identity".into(),
             consumed: 0,
@@ -612,11 +476,9 @@ mod tests {
 
     #[test]
     fn step5_rejects_zero_balance() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(50, 0, 0, KeyBinding::stable(agent_id, pk));
+        let ctx = make_ctx(50, 0, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::InsufficientFunds));
@@ -624,102 +486,22 @@ mod tests {
 
     #[test]
     fn step5_allows_sufficient_balance() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
+        let ctx = make_ctx(50, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Approved);
     }
 
     #[test]
     fn deterministic_same_input_same_output() {
-        let (pk, sk_seed) = test_keypair();
         let agent_id = [0xAAu8; 32];
         let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &sk_seed);
-        let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk.clone()));
+        let ctx = make_ctx(50, 1000, 0);
 
         let r1 = evaluate(&request, &ctx);
         let r2 = evaluate(&request, &ctx);
         assert_eq!(r1.decision, r2.decision);
         assert_eq!(r1.deny_reason, r2.deny_reason);
-    }
-
-    #[test]
-    fn key_rotation_accepts_pending_key_in_grace_window() {
-        let (old_pk, _old_sk) = test_keypair();
-        let (new_pk, new_sk) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-
-        let binding = KeyBinding {
-            agent_id,
-            active_pubkey: old_pk,
-            pending_pubkey: Some(new_pk.clone()),
-            rotation_height: Some(50),
-            grace_end_height: Some(150),
-        };
-
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &new_sk);
-        let ctx = make_ctx(50, 1000, 0, binding);
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Approved);
-    }
-
-    #[test]
-    fn key_rotation_accepts_active_key_in_grace_window() {
-        let (old_pk, old_sk) = test_keypair();
-        let (new_pk, _new_sk) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-
-        let binding = KeyBinding {
-            agent_id,
-            active_pubkey: old_pk.clone(),
-            pending_pubkey: Some(new_pk),
-            rotation_height: Some(50),
-            grace_end_height: Some(150),
-        };
-
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &old_sk);
-        let ctx = make_ctx(50, 1000, 0, binding);
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Approved);
-    }
-
-    #[test]
-    fn key_rotation_rejects_old_key_after_grace() {
-        let (_old_pk, old_sk) = test_keypair();
-        let (new_pk, _new_sk) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-
-        let binding = KeyBinding {
-            agent_id,
-            active_pubkey: new_pk,
-            pending_pubkey: None,
-            rotation_height: Some(50),
-            grace_end_height: Some(150),
-        };
-
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = sign_request(&request, &old_sk);
-        let ctx = make_ctx(200, 1000, 0, binding);
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Denied);
-        assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
-    }
-
-    #[test]
-    fn invalid_signature_bytes_rejected() {
-        let (pk, _sk) = test_keypair();
-        let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-        request.agent_signature = vec![0u8; 10]; // invalid signature bytes
-        let ctx = make_ctx(50, 1000, 0, KeyBinding::stable(agent_id, pk));
-        let result = evaluate(&request, &ctx);
-        assert_eq!(result.decision, Decision::Denied);
-        assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
     }
 }

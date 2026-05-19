@@ -7,7 +7,7 @@
 pub mod replay;
 
 pub use hyperfluid_state::{
-    EscrowStatus, HeartbeatPayload, LeasePenaltyLevel, ShadowClaim, Task, TaskLease, TaskStatus,
-    TopicRecord, TopicStatus, TrustStageEnum, TrustStageRecord,
+    EscrowStatus, HeartbeatPayload, Task, TaskLease, TaskStatus, TopicRecord, TopicStatus,
+    TrustStageEnum, TrustStageRecord,
 };
 pub use replay::generate_nonce;

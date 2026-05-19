@@ -12,7 +12,7 @@
 //
 // Source: docs/05-planning/stages/stage-01-protocol-core.md Week 7-8
 
-use hyperfluid_consensus::types::{Committee, CommitteeMode, Hash32};
+use hyperfluid_consensus::types::{Committee, Hash32};
 use hyperfluid_fee_market::{compute_next_base_fee, compute_tx_fee, FeeConfig, FeeMarketState};
 use hyperfluid_state::state_machine::{ExecutionContext, ExecutionResult, StateMachine};
 use hyperfluid_state::Account;
@@ -344,29 +344,7 @@ fn e2e_13_commission_rate_constraints() {
     assert_eq!(r, ExecutionResult::Rejected);
 }
 
-// ─── 9. Committee Bootstrap ──────────────────────────────────
-
-/// Committee must handle bootstrap scaling for fewer validators.
-#[test]
-fn e2e_14_committee_bootstrap_scaling() {
-    // Bootstrap scaling: with 3 total validators, 3 active = Normal (100% active)
-    assert_eq!(Committee::committee_mode(3, 3), CommitteeMode::Normal);
-    // With 2 active and 5 total, scaled threshold makes it Emergency
-    assert_eq!(Committee::committee_mode(2, 5), CommitteeMode::Emergency);
-
-    // With 50 validators out of 100, Degraded mode
-    assert_eq!(Committee::committee_mode(50, 100), CommitteeMode::Degraded);
-
-    // With 67 validators, Normal mode
-    assert_eq!(Committee::committee_mode(67, 100), CommitteeMode::Normal);
-
-    // Verify can_produce
-    assert!(!Committee::can_produce(0, 100));
-    assert!(Committee::can_produce(50, 100));
-    assert!(Committee::can_produce(67, 100));
-}
-
-// ─── 10. Multi-Account Transfer → State Root Consistency ────
+// ─── 9. Multi-Account Transfer → State Root Consistency ────
 
 /// Execute multiple operations and verify state root consistency.
 #[test]

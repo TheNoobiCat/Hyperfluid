@@ -15,6 +15,7 @@ use sha3::{Digest, Sha3_256};
 
 use crate::config::{Config, LlmSection, TelegramSection};
 use crate::db::Database;
+use crate::llm::{self, LlmProvider};
 use crate::prompt;
 use crate::tools;
 use crate::types::*;
@@ -53,6 +54,9 @@ pub enum AgentError {
 
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("LLM provider error: {0}")]
+    Llm(#[from] crate::llm::LlmError),
 }
 
 // === AgentRuntime ===
@@ -66,6 +70,7 @@ pub struct AgentRuntime {
     pub db: Database,
     pub working_dir: PathBuf,
     pub shutdown: Arc<AtomicBool>,
+    pub provider: Box<dyn LlmProvider>,
 }
 
 // ── Constructor ──
@@ -128,6 +133,9 @@ impl AgentRuntime {
             std::fs::create_dir_all(working_dir)?;
         }
 
+        // Create LLM provider from config
+        let provider = llm::provider_from_config(&config.llm);
+
         Ok(Self {
             config,
             agent_config,
@@ -137,6 +145,7 @@ impl AgentRuntime {
             db,
             working_dir: working_dir.to_path_buf(),
             shutdown: Arc::new(AtomicBool::new(false)),
+            provider,
         })
     }
 }
@@ -192,20 +201,57 @@ impl AgentRuntime {
                 self.trigger_handoff()?;
             }
 
-            // 4. [LLM call — stubbed]
-            let llm_response = LlmResponse {
-                content: String::new(),
-                tokens_used: 10,
-                finish_reason: "stub".to_string(),
+            // 4. Build messages for LLM
+            let recent_msgs: Vec<LlmMessage> = self
+                .db
+                .get_recent_messages(1000)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(role, content, _timestamp)| LlmMessage { role, content })
+                .collect();
+
+            // 5. Call the LLM provider
+            let llm_request = LlmRequest {
+                system_prompt: _system_prompt,
+                messages: recent_msgs,
+                max_tokens: 4096,
             };
+            let llm_response = self.provider.complete(&llm_request)?;
+
             self.state.total_tokens_used =
                 self.state.total_tokens_used.saturating_add(llm_response.tokens_used as u64);
             self.db.insert_message("assistant", &llm_response.content)?;
 
-            // 5. Parse tool calls (stub — empty)
-            let tool_calls: Vec<ToolCall> = Vec::new();
+            // 6. Parse tool calls from LLM response (if any)
+            // The LLM should output JSON like: [{"tool_name": "bash", "arguments": {...}}, ...]
+            // or plain text with no tool calls. Invalid JSON = no tool calls.
+            let tool_calls: Vec<ToolCall> = if llm_response.content.trim().is_empty() {
+                Vec::new()
+            } else if let Some(start) = llm_response.content.find('[') {
+                let end = llm_response.content[start..].find(']').map(|e| start + e + 1);
+                match end {
+                    Some(end) => serde_json::from_str(&llm_response.content[start..end])
+                        .unwrap_or_default(),
+                    None => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            };
 
-            // 6. Execute each tool call
+            // 6b. Run-forever guard: if no tool calls and no active work, nudge the agent
+            if tool_calls.is_empty() {
+                let active_todos = self.db.get_active_todos().unwrap_or_default();
+                if active_todos.is_empty() && self.state.iteration > 0 {
+                    self.db.insert_message(
+                        "system",
+                        "You had no actions this iteration. This loop runs forever — you \
+                         must find something productive: explore the codebase, browse seeds, \
+                         create a task, or plan your next move."
+                    )?;
+                }
+            }
+
+            // 7. Execute each tool call
             for tc in &tool_calls {
                 if let Err(e) = tools::validate_tool_input(&tc.tool_name, &tc.arguments) {
                     let now = unix_timestamp_now();
@@ -380,6 +426,12 @@ impl AgentRuntime {
     /// Creates a handoff record capturing the current todos snapshot
     /// and serialized state summary, persists it to the database,
     /// and updates `last_handoff_height`.
+    ///
+    /// The handoff reflection prompt (HANDOFF_REFLECTION_PROMPT from prompt.rs)
+    /// SHOULD be injected into the LLM conversation before calling this function.
+    /// When the LLM stub is replaced with a real provider, the LLM response
+    /// to that prompt should be saved as the handoff summary instead of the
+    /// internal state JSON currently used as fallback.
     pub fn trigger_handoff(&mut self) -> Result<(), AgentError> {
         let now = unix_timestamp_now();
 
@@ -397,8 +449,15 @@ impl AgentRuntime {
         // Capture current todos snapshot
         let todos_snapshot = self.db.get_active_todos()?;
 
-        // Generate summary: serialized state info
-        let summary = serde_json::to_vec(&self.state).unwrap_or_default();
+        // Inject handoff reflection prompt and capture LLM summary
+        // (stub: uses internal state JSON until LLM provider is wired)
+        self.db.insert_message("user", prompt::HANDOFF_REFLECTION_PROMPT)?;
+        let summary: Vec<u8> = {
+            // TODO: replace with LLM call using HANDOFF_REFLECTION_PROMPT
+            // The LLM response text should be saved as the summary.
+            // Current fallback: serialized agent state (not useful to the LLM).
+            serde_json::to_vec(&self.state).unwrap_or_default()
+        };
 
         let record = HandoffRecord {
             session_id,
@@ -511,6 +570,10 @@ impl AgentRuntime {
             std::fs::create_dir_all(working_dir)?;
         }
 
+        // Stub provider for tests
+        use crate::llm::StubProvider;
+        let provider = Box::new(StubProvider);
+
         Ok(Self {
             config,
             agent_config,
@@ -520,6 +583,7 @@ impl AgentRuntime {
             db,
             working_dir: working_dir.to_path_buf(),
             shutdown: Arc::new(AtomicBool::new(false)),
+            provider,
         })
     }
 }

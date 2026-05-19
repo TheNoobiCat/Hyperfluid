@@ -27,9 +27,8 @@ pub enum KeyPrefix {
     ReviewAssignment = 0x0D,
     Delegation = 0x0E,
     TaskLease = 0x0F,
-    ShadowClaim = 0x10,
-    Topic = 0x11,
-    ConsumedNonce = 0x12,
+    Topic = 0x10,
+    ConsumedNonce = 0x11,
 }
 
 impl KeyPrefix {
@@ -54,9 +53,8 @@ impl KeyPrefix {
             0x0D => Some(KeyPrefix::ReviewAssignment),
             0x0E => Some(KeyPrefix::Delegation),
             0x0F => Some(KeyPrefix::TaskLease),
-            0x10 => Some(KeyPrefix::ShadowClaim),
-            0x11 => Some(KeyPrefix::Topic),
-            0x12 => Some(KeyPrefix::ConsumedNonce),
+            0x10 => Some(KeyPrefix::Topic),
+            0x11 => Some(KeyPrefix::ConsumedNonce),
             _ => None,
         }
     }
@@ -116,6 +114,7 @@ pub enum TaskStatus {
     Open,
     Claimed,
     InProgress,
+    InReview,
     Done,
     Decomposed,
 }
@@ -139,15 +138,6 @@ pub struct TaskLease {
     pub expires_at_height: u64,
     pub last_heartbeat_height: u64,
     pub heartbeats_received: u32,
-    pub timeout_count: u32,
-    pub penalty: LeasePenaltyLevel,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub enum LeasePenaltyLevel {
-    Warning,
-    BudgetReduction,
-    SevereReduction,
 }
 
 /// Heartbeat payload (submitted via consensus tx). Source: collaboration-spec.md §1.3
@@ -160,15 +150,23 @@ pub struct HeartbeatPayload {
     pub signature: Vec<u8>,
 }
 
-/// Shadow claim (on-chain state). Source: collaboration-spec.md §1.3
+/// Binary verdict from a reviewer on a completed task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+pub enum ReviewVerdict {
+    Accept,
+    Reject,
+}
+
+/// Review submission record tracked in the state machine.
+/// Stored temporarily until majority verdict reached, then settled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-pub struct ShadowClaim {
-    pub claim_id: Hash32,
+pub struct ReviewRecord {
     pub task_id: Hash32,
-    pub claimant_id: Hash32,
-    pub trust_score: u32,
-    pub submitted_at_height: u64,
+    pub review_task_id: Hash32,     // the task that pays the reviewer
+    pub reviewer_id: Hash32,
+    pub verdict: ReviewVerdict,
     pub evidence_hash: Hash32,
+    pub submitted_at_height: u64,
 }
 
 /// Trust stage record (on-chain state under prefix 0x09)
@@ -212,7 +210,7 @@ mod tests {
 
     #[test]
     fn key_prefix_roundtrip() {
-        for b in 0x01u8..=0x12 {
+        for b in 0x01u8..=0x11 {
             let kp = KeyPrefix::from_byte(b).unwrap();
             assert_eq!(kp.byte(), b);
         }

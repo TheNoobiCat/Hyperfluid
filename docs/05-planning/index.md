@@ -64,10 +64,10 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 
 | Stage | Specs Included |
 |-------|---------------|
-| 01 | consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md, stake-graph-analysis-spec.md |
+| 01 | consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md |
 | 02 | governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, telemetry-spec.md, incident-response-spec.md |
-| 03 | All 15 specs (conformance) |
-| 04 | All 15 specs (operations) |
+| 03 | All 14 specs (conformance) |
+| 04 | All 14 specs (operations) |
 
 ---
 

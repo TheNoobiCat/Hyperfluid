@@ -16,8 +16,8 @@ use tokio::task::JoinHandle;
 
 use hyperfluid_fee_market::{compute_next_base_fee, FeeConfig, FeeMarketState};
 use hyperfluid_staking::SystemParameters;
-use hyperfluid_state::state_machine::{ExecutionContext, StateMachine};
-use hyperfluid_state::{Account, HeartbeatPayload, TaskStatus, TrustStageEnum};
+use hyperfluid_state::state_machine::{ExecutionContext, SplitChildSpec, StateMachine};
+use hyperfluid_state::{Account, HeartbeatPayload, ReviewVerdict, TaskStatus, TrustStageEnum};
 
 use hyperfluid_fastpath::lifecycle::FastPathEngine;
 use hyperfluid_fastpath::types::{FastPathChallengeTx, FastPathParams, FastPathProposal};
@@ -25,7 +25,6 @@ use hyperfluid_governance::proposal::GovernanceEngine;
 use hyperfluid_governance::types::{GovernanceParams, GovernanceVote, VoteOption};
 use hyperfluid_pdp::rule_chain;
 use hyperfluid_pdp::types::{ActionPlanRequest, ActionType, Decision, PdpContext, TrustStage};
-
 use crate::genesis::GenesisConfig;
 use crate::types::{
     Block, BlockHeader, DelegationAction, GovernanceAction, Hash32, StakingAction,
@@ -142,12 +141,30 @@ struct SubmitTaskPayload {
     agent_id: Hash32,
 }
 
-/// Payload format for ShadowClaimTx transactions.
+/// Payload format for SplitTaskTx transactions.
+/// Encodes parent task + caller + list of child specifications.
 #[derive(Encode, Decode)]
-struct ShadowClaimPayload {
+struct SplitTaskPayload {
+    parent_task_id: Hash32,
+    caller_id: Hash32,
+    children: Vec<SplitChildPayload>,
+}
+
+#[derive(Encode, Decode)]
+struct SplitChildPayload {
     task_id: Hash32,
-    claimant_id: Hash32,
-    trust_score: u32,
+    bounty_share_pct: u8,
+    depends_on: Vec<Hash32>,
+    required_skills_hash: Hash32,
+}
+
+/// Payload format for SubmitReviewTx transactions.
+#[derive(Encode, Decode)]
+struct SubmitReviewPayload {
+    review_task_id: Hash32,
+    reviewer_id: Hash32,
+    verdict_accept: bool,    // true = Accept, false = Reject
+    evidence_hash: Hash32,
 }
 
 /// Consensus driver that coordinates block production, transaction execution,
@@ -269,7 +286,18 @@ impl ConsensusDriver {
             self.state_machine.run_lease_expiry(task_id, new_height);
         }
 
-        // 2b. Run trust promotion and topic decay at epoch boundaries
+        // 2b. Check review window expiry for all InReview tasks
+        let in_review: Vec<Hash32> = self
+            .state_machine
+            .tasks_iter()
+            .filter(|t| matches!(t.status, TaskStatus::InReview))
+            .map(|t| t.task_id)
+            .collect();
+        for task_id in &in_review {
+            self.state_machine.run_review_expiry(task_id, new_height);
+        }
+
+        // 2c. Run trust promotion and topic decay at epoch boundaries
         let new_epoch = new_height / self.epoch_length;
         if new_height > 0 && new_height.is_multiple_of(self.epoch_length) {
             self.state_machine.run_trust_promotion();
@@ -619,16 +647,44 @@ impl ConsensusDriver {
                     self.state_machine.execute_submit_completion(
                         payload.task_id,
                         payload.agent_id,
+                        ctx.height,
                         ctx,
                     );
                 }
             }
-            TxType::ShadowClaimTx => {
-                if let Ok(payload) = ShadowClaimPayload::decode(&mut &tx.tx_payload[..]) {
-                    self.state_machine.execute_register_shadow(
-                        payload.task_id,
-                        payload.claimant_id,
-                        payload.trust_score,
+            TxType::SubmitReviewTx => {
+                if let Ok(payload) = SubmitReviewPayload::decode(&mut &tx.tx_payload[..]) {
+                    let verdict = if payload.verdict_accept {
+                        ReviewVerdict::Accept
+                    } else {
+                        ReviewVerdict::Reject
+                    };
+                    self.state_machine.execute_submit_review(
+                        payload.review_task_id,
+                        payload.reviewer_id,
+                        verdict,
+                        payload.evidence_hash,
+                        ctx.height,
+                        ctx,
+                    );
+                }
+            }
+            TxType::SplitTaskTx => {
+                if let Ok(payload) = SplitTaskPayload::decode(&mut &tx.tx_payload[..]) {
+                    let children: Vec<SplitChildSpec> = payload
+                        .children
+                        .into_iter()
+                        .map(|c| SplitChildSpec {
+                            task_id: c.task_id,
+                            bounty_share_pct: c.bounty_share_pct,
+                            depends_on: c.depends_on,
+                            required_skills_hash: c.required_skills_hash,
+                        })
+                        .collect();
+                    self.state_machine.execute_split_task(
+                        payload.parent_task_id,
+                        payload.caller_id,
+                        children,
                         ctx.height,
                         ctx,
                     );

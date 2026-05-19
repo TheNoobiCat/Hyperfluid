@@ -12,8 +12,8 @@ use parity_scale_codec::{Decode, Encode};
 
 use crate::smt::SparseMerkleTree;
 use crate::{
-    state_key, Account, EscrowStatus, Hash32, HeartbeatPayload, KeyPrefix, LeasePenaltyLevel,
-    ShadowClaim, Task, TaskLease, TaskStatus, TopicRecord, TopicStatus, TrustStageEnum,
+    state_key, Account, EscrowStatus, Hash32, HeartbeatPayload, KeyPrefix, ReviewRecord,
+    ReviewVerdict, Task, TaskLease, TaskStatus, TopicRecord, TopicStatus, TrustStageEnum,
     TrustStageRecord,
 };
 
@@ -40,8 +40,6 @@ pub struct StateMachine {
     tasks: HashMap<Hash32, Task>,
     /// Active leases (key = lease_id)
     leases: HashMap<Hash32, TaskLease>,
-    /// Shadow claims (key = task_id)
-    shadow_claims: HashMap<Hash32, Vec<ShadowClaim>>,
     /// Trust stage records (key = agent_id)
     trust_stages: HashMap<Hash32, TrustStageRecord>,
     /// Topic lifecycle records (key = topic_id)
@@ -52,6 +50,10 @@ pub struct StateMachine {
     delegations: HashMap<(Hash32, Hash32), DelegationState>,
     /// Validator records: validator_id -> ValidatorTracker
     validators: HashMap<Hash32, ValidatorTracker>,
+    /// Open review verdicts: work_task_id -> Vec<ReviewRecord>
+    review_records: HashMap<Hash32, Vec<ReviewRecord>>,
+    /// Review tasks map: review_task_id -> work_task_id (lookup for claim enforcement)
+    review_task_map: HashMap<Hash32, Hash32>,
 }
 
 /// In-memory delegation state tracked by the state machine.
@@ -76,6 +78,15 @@ pub struct ValidatorTracker {
     pub state: ValidatorLifecycleState,
 }
 
+/// Specification for a single child task in a split operation.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct SplitChildSpec {
+    pub task_id: Hash32,
+    pub bounty_share_pct: u8,         // percentage of parent bounty (sum must = 100)
+    pub depends_on: Vec<Hash32>,      // child task_ids that must complete first
+    pub required_skills_hash: Hash32,
+}
+
 /// Four-state validator lifecycle. Source: staking-spec.md Section 1.3
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 pub enum ValidatorLifecycleState {
@@ -83,6 +94,33 @@ pub enum ValidatorLifecycleState {
     Paused,
     Unbonding,
     Withdrawn,
+}
+
+/// Detect cycles in a dependency DAG via depth-first search.
+/// Each element is (node_id, [depends_on_ids]). Returns true if any cycle exists.
+fn has_cycle(graph: &[(Hash32, Vec<Hash32>)]) -> bool {
+    use std::collections::HashMap as H;
+    let node_indices: H<Hash32, usize> =
+        graph.iter().enumerate().map(|(i, (id, _))| (*id, i)).collect();
+    for i in 0..graph.len() {
+        let mut visited = vec![false; graph.len()];
+        let mut stack = vec![i];
+        while let Some(cur) = stack.pop() {
+            if visited[cur] {
+                continue;
+            }
+            visited[cur] = true;
+            for dep in &graph[cur].1 {
+                if let Some(&dep_idx) = node_indices.get(dep) {
+                    if dep_idx == i {
+                        return true;
+                    }
+                    stack.push(dep_idx);
+                }
+            }
+        }
+    }
+    false
 }
 
 impl Default for StateMachine {
@@ -98,12 +136,13 @@ impl StateMachine {
             consumed_plans: HashSet::new(),
             tasks: HashMap::new(),
             leases: HashMap::new(),
-            shadow_claims: HashMap::new(),
             trust_stages: HashMap::new(),
             topic_records: HashMap::new(),
             consumed_nonces: HashSet::new(),
             delegations: HashMap::new(),
             validators: HashMap::new(),
+            review_records: HashMap::new(),
+            review_task_map: HashMap::new(),
         }
     }
 
@@ -265,6 +304,111 @@ impl StateMachine {
             escrow_status: EscrowStatus::Locked,
         };
         self.tasks.insert(task_id, task);
+
+        ExecutionResult::Success
+    }
+
+    /// Split a task into child subtasks forming a dependency DAG.
+    ///
+    /// Only the `funder` (if the task is Open) or the `primary_owner`
+    /// (if Claimed/InProgress) may split. The parent's bounty is
+    /// redistributed in full to children. Children are created as
+    /// independent tasks with their allocated escrow, parent is
+    /// marked Decomposed.
+    ///
+    /// Validates: caller authorised, child share sum == 100%, dependency
+    /// graph acyclic (simple DFS). Atomic: all children created or none.
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute_split_task(
+        &mut self,
+        parent_task_id: Hash32,
+        caller_id: Hash32,
+        children: Vec<SplitChildSpec>,
+        current_height: u64,
+        _ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        // 1. Validate parent exists and caller is authorised
+        let parent = match self.tasks.get(&parent_task_id) {
+            Some(p) => {
+                let authorised = match p.status {
+                    TaskStatus::Open => p.funder == caller_id,
+                    TaskStatus::Claimed | TaskStatus::InProgress => p.primary_owner == caller_id,
+                    _ => false,
+                };
+                if !authorised {
+                    return ExecutionResult::Rejected;
+                }
+                p
+            }
+            None => return ExecutionResult::Rejected,
+        };
+
+        if children.is_empty() {
+            return ExecutionResult::Rejected;
+        }
+
+        // 2. Validate share sum == 100%
+        let share_sum: u32 = children.iter().map(|c| c.bounty_share_pct as u32).sum();
+        if share_sum != 100 {
+            return ExecutionResult::Rejected;
+        }
+
+        // 3. Validate acyclic dependency graph (simple DFS)
+        let graph: Vec<(Hash32, Vec<Hash32>)> = children
+            .iter()
+            .map(|c| (c.task_id, c.depends_on.clone()))
+            .collect();
+        if has_cycle(&graph) {
+            return ExecutionResult::Rejected;
+        }
+
+        // 4. Check no child task_id duplicates existing tasks
+        for child in &children {
+            if self.tasks.contains_key(&child.task_id) {
+                return ExecutionResult::Rejected;
+            }
+        }
+
+        // 5. Atomic execution: create children, mark parent Decomposed
+        let parent_bounty = parent.bounty_agx;
+        let parent_metadata = parent.metadata_hash;
+        let parent_seed = parent.seed_ref;
+        let parent_topic = parent.topic_id;
+        let parent_sponsor = parent.sponsor_id;
+        let parent_funder = parent.funder;
+        // Drop parent immutable borrow before mutating self.tasks
+        drop(parent);
+
+        for child in &children {
+            let child_bounty =
+                (parent_bounty as u128 * child.bounty_share_pct as u128) / 100u128;
+            let child_task = Task {
+                task_id: child.task_id,
+                topic_id: parent_topic,
+                seed_ref: parent_seed,
+                parent_task_id,
+                depends_on: child.depends_on.clone(),
+                funder: if parent_bounty > 0 { parent_funder } else { caller_id },
+                primary_owner: [0u8; 32],
+                status: TaskStatus::Open,
+                bounty_agx: child_bounty,
+                created_at_height: current_height,
+                lease_expires_height: current_height,
+                required_skills_hash: child.required_skills_hash,
+                metadata_hash: parent_metadata,
+                sponsor_id: parent_sponsor,
+                requester_pubkey: [0u8; 32],
+                escrow_status: EscrowStatus::Locked,
+            };
+            self.tasks.insert(child.task_id, child_task);
+        }
+
+        // Mark parent as Decomposed with redistributed escrow
+        if let Some(parent) = self.tasks.get_mut(&parent_task_id) {
+            parent.status = TaskStatus::Decomposed;
+            parent.escrow_status = EscrowStatus::BountyRedistributed;
+            parent.bounty_agx = 0;
+        }
 
         ExecutionResult::Success
     }
@@ -642,6 +786,13 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
 
+        // Review tasks are restricted to trusted agents only
+        if self.review_task_map.contains_key(&task_id)
+            && !matches!(trust_stage, TrustStageEnum::Trusted)
+        {
+            return ExecutionResult::Rejected;
+        }
+
         let min_collateral = 10_000_000_000_000_000_000u128.max(task.bounty_agx * 5 / 1000);
         if collateral < min_collateral {
             return ExecutionResult::Rejected;
@@ -663,8 +814,6 @@ impl StateMachine {
             expires_at_height: task.lease_expires_height,
             last_heartbeat_height: current_height,
             heartbeats_received: 0,
-            timeout_count: 0,
-            penalty: LeasePenaltyLevel::Warning,
         };
         self.leases.insert(lease_id, lease);
         ExecutionResult::Success
@@ -730,11 +879,15 @@ impl StateMachine {
         ExecutionResult::Success
     }
 
-    /// Submit completed task for review. Transitions InProgress → Done.
+    /// Submit completed task for review. Flips work task to InReview and
+    /// creates review tasks in the open pool — one per reviewer slot.
+    /// Review tasks have zero bounty (paid from work task escrow on settlement)
+    /// and are only claimable by trusted agents.
     pub fn execute_submit_completion(
         &mut self,
         task_id: Hash32,
         agent_id: Hash32,
+        current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let task = match self.tasks.get_mut(&task_id) {
@@ -744,43 +897,210 @@ impl StateMachine {
         if !matches!(task.status, TaskStatus::InProgress) {
             return ExecutionResult::Rejected;
         }
-        task.status = TaskStatus::Done;
+
+        // Extract needed data before creating review tasks
+        let work_bounty = task.bounty_agx;
+        let task_topic = task.topic_id;
+        let task_seed = task.seed_ref;
+        let task_funder = task.funder;
+        let task_metadata = task.metadata_hash;
+        let task_sponsor = task.sponsor_id;
+        let task_id_copy = task.task_id;
+        task.status = TaskStatus::InReview;
+        // Drop mutable borrow before accessing self.tasks again
+        drop(task);
+
+        // Create 2 review tasks (each worth 5% of work bounty)
+        let review_count: u64 = 2;
+        for i in 0..review_count {
+            let review_task_id = crate::sha3_256(
+                &[task_id_copy.as_slice(), &(i as u64).to_le_bytes()].concat(),
+            );
+            // Avoid collision with existing tasks
+            if self.tasks.contains_key(&review_task_id) {
+                continue;
+            }
+            let review_task = Task {
+                task_id: review_task_id,
+                topic_id: task_topic,
+                seed_ref: task_seed,
+                parent_task_id: task_id,
+                depends_on: vec![],
+                funder: task_funder,
+                primary_owner: [0u8; 32],
+                status: TaskStatus::Open,
+                bounty_agx: work_bounty * 5 / 100,
+                created_at_height: current_height,
+                lease_expires_height: current_height,
+                required_skills_hash: [0u8; 32],
+                metadata_hash: task_metadata,
+                sponsor_id: task_sponsor,
+                requester_pubkey: [0u8; 32],
+                escrow_status: EscrowStatus::Locked,
+            };
+            self.tasks.insert(review_task_id, review_task);
+            self.review_task_map.insert(review_task_id, task_id);
+        }
+
         ExecutionResult::Success
     }
 
-    /// Register a shadow claim on an actively leased task.
-    pub fn execute_register_shadow(
+    /// Submit a review verdict for a work task. Only the agent who
+    /// holds the active lease on the review task may submit.
+    /// After N verdicts collected, the review is tallied and settled.
+    pub fn execute_submit_review(
         &mut self,
-        task_id: Hash32,
-        claimant_id: Hash32,
-        trust_score: u32,
+        review_task_id: Hash32,
+        reviewer_id: Hash32,
+        verdict: ReviewVerdict,
+        evidence_hash: Hash32,
         current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
-        match self.tasks.get(&task_id) {
-            Some(t) if matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress) => {}
+        let work_task_id = match self.review_task_map.get(&review_task_id).copied() {
+            Some(id) => id,
+            None => return ExecutionResult::Rejected,
+        };
+
+        // Reviewer must be the primary owner of the review task
+        let _review_task = match self.tasks.get(&review_task_id) {
+            Some(t) if t.primary_owner == reviewer_id
+                && matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress) => t,
             _ => return ExecutionResult::Rejected,
+        };
+
+        let record = ReviewRecord {
+            task_id: work_task_id,
+            review_task_id,
+            reviewer_id,
+            verdict,
+            evidence_hash,
+            submitted_at_height: current_height,
+        };
+
+        // Store verdict
+        self.review_records.entry(work_task_id).or_default().push(record);
+        // Mark review task done
+        if let Some(rt) = self.tasks.get_mut(&review_task_id) {
+            rt.status = TaskStatus::Done;
+        }
+        // Release review task lease
+        self.leases.retain(|_, l| l.task_id != review_task_id);
+        self.review_task_map.remove(&review_task_id);
+
+        // Tally: if we have enough verdicts (2), settle
+        let verdicts = self.review_records.get(&work_task_id).map(|v| v.len()).unwrap_or(0);
+        if verdicts >= 2 {
+            self.settle_review(work_task_id, current_height);
         }
 
-        let claim_id = crate::sha3_256(
-            &[task_id.as_slice(), claimant_id.as_slice(), &current_height.to_le_bytes()].concat(),
-        );
-        let claim = ShadowClaim {
-            claim_id,
-            task_id,
-            claimant_id,
-            trust_score,
-            submitted_at_height: current_height,
-            evidence_hash: [0u8; 32],
-        };
-        self.shadow_claims.entry(task_id).or_default().push(claim);
         ExecutionResult::Success
     }
 
-    /// Check lease expiry for a task. If lease expired:
-    /// - Increment timeout counter on lease
-    /// - Promote best shadow claimant if available, else return to Open.
-    ///   Called at every block boundary, not as a transaction.
+    /// Tally review verdicts and settle the work task's escrow.
+    /// Majority accept → 90% to worker, 10% split among reviewers.
+    /// Majority reject → task returns to Open, reviewers still paid.
+    fn settle_review(&mut self, work_task_id: Hash32, current_height: u64) {
+        let verdicts = match self.review_records.remove(&work_task_id) {
+            Some(v) if !v.is_empty() => v,
+            _ => return,
+        };
+
+        let accept_count = verdicts.iter().filter(|v| matches!(v.verdict, ReviewVerdict::Accept)).count();
+        let reject_count = verdicts.len() - accept_count;
+        let accepted = accept_count > reject_count;
+
+        if let Some(task) = self.tasks.get_mut(&work_task_id) {
+            let total_bounty = task.bounty_agx;
+            let review_pool = total_bounty * 10 / 100; // 10% for reviewers
+            let per_reviewer = review_pool / verdicts.len() as u128;
+
+            if accepted {
+                // Worker gets 90%
+                let worker_payout = total_bounty - review_pool;
+                let worker_id = task.primary_owner;
+                if worker_id != [0u8; 32] {
+                    if let Some(acct) = self.accounts.get_mut(&worker_id) {
+                        acct.balance = acct.balance.saturating_add(worker_payout);
+                    }
+                }
+                // Also reward worker with trust advancement
+                // (accepted_work_count handled by caller)
+                task.status = TaskStatus::Done;
+                task.escrow_status = EscrowStatus::Released;
+            } else {
+                // Task back to Open for retry
+                task.status = TaskStatus::Open;
+                task.primary_owner = [0u8; 32];
+                task.lease_expires_height = current_height;
+                // Don't refund escrow — it stays locked for the next attempt
+            }
+
+            // Pay reviewers regardless of accept/reject — they did the work
+            for record in &verdicts {
+                if let Some(acct) = self.accounts.get_mut(&record.reviewer_id) {
+                    acct.balance = acct.balance.saturating_add(per_reviewer);
+                }
+                // Remove any leftover review task associated with this verdict
+                if let Some(rt) = self.tasks.get_mut(&record.review_task_id) {
+                    if matches!(rt.status, TaskStatus::Claimed | TaskStatus::InProgress) {
+                        rt.status = TaskStatus::Done;
+                    }
+                }
+                self.leases.retain(|_, l| l.task_id != record.review_task_id);
+            }
+        }
+    }
+
+    /// Run review window expiry: if a review task lease has expired
+    /// without a verdict being submitted, return the work task to Open.
+    pub fn run_review_expiry(&mut self, work_task_id: &Hash32, current_height: u64) -> bool {
+        let verdicts = self.review_records.get(work_task_id).map(|v| v.len()).unwrap_or(0);
+        if verdicts >= 2 {
+            return false;
+        }
+
+        // Check if review tasks have expired
+        let expired_review_tasks: Vec<Hash32> = self
+            .tasks
+            .iter()
+            .filter(|(_, t)| {
+                t.parent_task_id == *work_task_id
+                    && matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress)
+                    && t.lease_expires_height <= current_height
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        if expired_review_tasks.is_empty() {
+            return false;
+        }
+
+        for rid in &expired_review_tasks {
+            if let Some(rt) = self.tasks.get_mut(rid) {
+                rt.status = TaskStatus::Open;
+                rt.primary_owner = [0u8; 32];
+            }
+            self.leases.retain(|_, l| l.task_id != *rid);
+        }
+
+        // If not enough verdicts after expiry, return work task to Open
+        let remaining = self.review_records.get(work_task_id).map(|v| v.len()).unwrap_or(0);
+        if remaining < 2 {
+            if let Some(task) = self.tasks.get_mut(work_task_id) {
+                if matches!(task.status, TaskStatus::InReview) {
+                    task.status = TaskStatus::Open;
+                    task.primary_owner = [0u8; 32];
+                    task.lease_expires_height = current_height;
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Check lease expiry for a task. If lease expired, return task to Open pool.
+    /// Called at every block boundary, not as a transaction.
     pub fn run_lease_expiry(&mut self, task_id: &Hash32, current_height: u64) -> bool {
         let should_expire = self.tasks.get(task_id).is_some_and(|t| {
             matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress)
@@ -798,53 +1118,10 @@ impl StateMachine {
             .collect();
 
         for lid in &expired_ids {
-            if let Some(lease) = self.leases.get_mut(lid) {
-                lease.timeout_count += 1;
-                lease.penalty = match lease.timeout_count {
-                    0 | 1 => LeasePenaltyLevel::Warning,
-                    2 => LeasePenaltyLevel::BudgetReduction,
-                    _ => LeasePenaltyLevel::SevereReduction,
-                };
-            }
             self.leases.remove(lid);
         }
 
-        // Promote best shadow claim if eligible
-        let promoted = self.shadow_claims.remove(task_id).and_then(|mut claims| {
-            claims.sort_by_key(|c| (std::cmp::Reverse(c.trust_score), c.submitted_at_height));
-            claims.into_iter().find(|c| c.submitted_at_height + 48 <= current_height)
-        });
-
-        if let Some(ref claim) = promoted {
-            if let Some(task) = self.tasks.get_mut(task_id) {
-                task.primary_owner = claim.claimant_id;
-                task.lease_expires_height = current_height + 120;
-                task.status = TaskStatus::Claimed;
-                let lease_id = crate::sha3_256(
-                    &[
-                        task_id.as_slice(),
-                        claim.claimant_id.as_slice(),
-                        &current_height.to_le_bytes(),
-                    ]
-                    .concat(),
-                );
-                self.leases.insert(
-                    lease_id,
-                    TaskLease {
-                        lease_id,
-                        task_id: *task_id,
-                        owner_id: claim.claimant_id,
-                        collateral: 0,
-                        started_at_height: current_height,
-                        expires_at_height: current_height + 120,
-                        last_heartbeat_height: current_height,
-                        heartbeats_received: 0,
-                        timeout_count: 0,
-                        penalty: LeasePenaltyLevel::Warning,
-                    },
-                );
-            }
-        } else if let Some(task) = self.tasks.get_mut(task_id) {
+        if let Some(task) = self.tasks.get_mut(task_id) {
             task.primary_owner = [0u8; 32];
             task.status = TaskStatus::Open;
         }
@@ -1042,13 +1319,6 @@ impl StateMachine {
         for (lease_id, lease) in &self.leases {
             let key = state_key(KeyPrefix::TaskLease, lease_id);
             tree.insert(key, lease.encode());
-        }
-
-        for claims in self.shadow_claims.values() {
-            for claim in claims {
-                let key = state_key(KeyPrefix::ShadowClaim, &claim.claim_id);
-                tree.insert(key, claim.encode());
-            }
         }
 
         for (agent_id, record) in &self.trust_stages {

@@ -1,7 +1,7 @@
 # Protocol Spec: Consensus Engine & State Machine
 
 **Components:** C1 Consensus Engine, C2 State Machine & SMT
-**Source ADRs:** ADR-0007 (Committee BFT with VDF), ADR-0005 (Content-Addressed SMT)
+**Source ADRs:** ADR-0007 (Committee BFT Seed), ADR-0005 (Content-Addressed SMT)
 **Covered FRs:** FR-0001, FR-0002, FR-0003, FR-0004, FR-0005, FR-0006, FR-0007, FR-0008, FR-0009, FR-0010, FR-0194, FR-0020a
 **Dependencies:** Malachite BFT library, clatter PQ-Noise secure channels, ML-DSA-65 signature scheme
 
@@ -17,11 +17,7 @@ Define the committee-based Byzantine Fault Tolerant consensus protocol from gene
 
 - The system MUST use committee BFT with a rotating epoch committee of exactly 100 validators.
 - The system MUST sample committees via stake-weighted draw from the active validator set. Effective weight for committee selection is `self_bond + total_delegated` per validator (see `staking-spec.md` for delegation mechanics).
-- Committee influence is stake-proportional. Correlated validator keys detected via stake-graph analysis (see `stake-graph-analysis-spec.md`) MUST be treated as a single entity for committee weight computation.
-- Committee liveness operation is tiered by active validator count:
-  - **Normal (67-100):** Full consensus, all transaction types permitted.
-  - **Degraded (50-66):** Block production continues. Only critical transaction types permitted: `TransferTx`, `StakingTx(Bond)`, `StakingTx(Renew)`, `StakingTx(Unbond)`, `StakingTx(Withdraw)`, `EvidenceTx`. Governance and fast-path transactions are queued until normal mode resumes.
-  - **Emergency (0-49):** Block production halts. After K=500 idle blocks (~83 minutes), an emergency epoch transition is triggered: seed = previous VDF output, new committee sampled from ALL validators in `active` or `paused` states (not `unbonding`/`withdrawn`). New committee starts at full target size.
+- Committee influence is stake-proportional.
 - Committee selection MUST be fully deterministic given the same epoch seed and validator pool.
 - The system MUST use Malachite BFT (or protocol-equivalent) for consensus message passing.
 
@@ -93,12 +89,11 @@ enum GovernanceAction {
 ### 1.4 State Transitions
 
 **Epoch lifecycle:** Each epoch spans 8,192 blocks (approximately 1 day). At epoch boundary:
-1. Validators submit hashed commitments in the last k blocks of epoch N.
-2. Reveal phase occurs in first k blocks of epoch N+1 (k = 10% of epoch length, rounded up).
-3. VDF evaluated over concatenated reveal preimages + prior seed.
-4. New committee sampled from active validator pool using VDF-derived seed.
-5. At most 20% overlap between consecutive committees (80% minimum rotation).
-6. A validator MUST NOT serve on the committee for more than 2 consecutive epochs. After 2 consecutive epochs, the validator is ineligible for 1 epoch.
+1. Validators MAY submit hash preimages (SHA3-256 commitments) in the last k blocks of epoch N for anti-grinding entropy.
+2. New committee seed computed via `Committee::compute_committee_seed()` — SHA3-256 of sorted revealed preimages + epoch number. If insufficient reveals (<33% of committee), seed falls back to SHA3-256(previous_seed || epoch).
+3. New committee sampled from active validator pool using the derived seed.
+4. At most 20% overlap between consecutive committees (80% minimum rotation).
+5. A validator MUST NOT serve on the committee for more than 2 consecutive epochs. After 2 consecutive epochs, the validator is ineligible for 1 epoch.
 
 **Block production:**
 1. Proposer selected from committee via round-robin weighted by stake.
@@ -107,22 +102,10 @@ enum GovernanceAction {
 4. Committee members validate and vote. Block committed on 2f+1 weighted votes.
 5. Block height increments. Finality: single-block (no additional confirmations needed).
 
-**Liveness tiers** (see §1.2 for action restrictions per tier):
-
-| Tier | Validator Range | Behavior |
-|------|----------------|----------|
-| Normal | 67-100 | Full block production |
-| Degraded | 50-66 | Block production continues, critical txs only |
-| Emergency | 0-49 | Block production halts, auto-recovery after K=500 idle blocks via emergency epoch |
-
-Degraded mode resumes normal mode when validator count returns to >= 67 (new validators bond, or paused validators resume). Emergency mode transitions to normal mode at the next epoch boundary after the emergency cycle.
-
 ### 1.5 Failure Behavior
 
-- **Committee stall:** If committee drops below 50 validators, block production halts. After 500 idle blocks, emergency epoch transition triggers automatically using remaining `active` and `paused` validators. No governance override possible during stall — recovery is automatic via the emergency cycle or next epoch boundary.
 - **Equivocation:** Two conflicting votes from same validator for same height/round triggers automatic evidence-based slash. See `staking-spec.md` Section 1.
 - **Partition:** Network partition isolating >33% of committee causes liveness failure. Block production resumes on partition heal at next epoch boundary. No rollback needed.
-- **VDF failure:** If insufficient reveals available (less than 33% of committee committed), seed falls back to `SHA3-256(previous_vdf_output || hash_of_all_block_headers_in_epoch_N-1 || epoch_number || concatenated_valid_reveals)`. The fallback uses only finalized/historical entropy (previous epoch's VDF output and block headers) plus any valid reveals that arrived. No current-epoch malleable data is used. Proposers cannot grind this fallback.
 
 ### 1.6 Versioning and Compatibility
 
@@ -135,13 +118,8 @@ Degraded mode resumes normal mode when validator count returns to >= 67 (new val
 
 - Verify genesis block initializes committee BFT with 100 validators and defined safety threshold.
 - Verify TxType enum accepts all transaction types and dispatches correctly by action sub-enum.
-- Verify that correlated validator keys are correctly clustered by stake-graph analysis and treated as a single entity for committee weight computation.
 - Verify committee rotation produces at most 20% overlap between consecutive epochs.
 - Verify no validator serves on more than 2 consecutive committees.
-- Verify VDF-based seed is deterministic from same inputs.
-- Verify block production halts when active committee < 50 (emergency) and resumes via emergency epoch or epoch boundary.
-- Verify degraded mode (50-66) allows critical transactions and blocks governance/fast-path.
-- Verify emergency auto-recovery triggers after 500 idle blocks with correct seed (previous VDF output).
 - Verify 10-second median block time under normal load (p95 finality < 3 seconds).
 - Verify transaction ordering is deterministic.
 
@@ -156,9 +134,6 @@ Degraded mode resumes normal mode when validator count returns to >= 67 (new val
 - Network liveness under partial synchrony
   - Justification: BFT safety holds; liveness requires eventual message delivery (GST model).
   - Trust-minimised alternative: None — all BFT consensus requires partial synchrony assumption.
-- VDF correct sequential computation
-  - Justification: Committee randomness depends on VDF being truly sequential (no parallel shortcuts).
-  - Trust-minimised alternative: Multiple independent VDF constructions with cross-verification.
 
 ---
 

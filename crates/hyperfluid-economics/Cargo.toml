@@ -8,3 +8,4 @@ rust-version.workspace = true
 description = "C12 Economics & Incentives: Review markets, quality scoring, anti-Sybil, rewards, circuit-breakers"
 
 [dependencies]
+hyperfluid-staking = { path = "../hyperfluid-staking" }

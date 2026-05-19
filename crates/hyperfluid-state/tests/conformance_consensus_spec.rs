@@ -64,13 +64,21 @@ fn conforms_to_consensus_spec_2_7_2_inclusion_proof_wrong_value_fails() {
 
 #[test]
 fn conforms_to_consensus_spec_2_7_2_exclusion_proof() {
-    // Non-existent key must produce no proof or proof of non-inclusion.
+    // True SMT produces an exclusion proof for non-existent keys:
+    // proving the leaf at the key's bit-path position contains the default value.
     let mut tree = SparseMerkleTree::new();
     tree.insert(state_key(KeyPrefix::Account, &[1u8; 32]), vec![1]);
+    let root = tree.root();
 
     let missing_key = state_key(KeyPrefix::Account, &[2u8; 32]);
     let proof = tree.prove(&missing_key);
-    assert!(proof.is_none(), "non-existent key must return None proof");
+    assert!(proof.is_some(), "true SMT must produce exclusion proof for non-existent key");
+    let proof = proof.unwrap();
+    assert!(proof.value.is_empty(), "exclusion proof value must be empty");
+    assert!(
+        SparseMerkleTree::verify_proof(&proof, root),
+        "exclusion proof must verify against root"
+    );
 }
 
 #[test]

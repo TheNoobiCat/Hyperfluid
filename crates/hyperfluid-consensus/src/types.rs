@@ -17,14 +17,6 @@ fn hash_bytes(data: &[u8]) -> Hash32 {
     out
 }
 
-/// Committee liveness mode per three-tier stall model. Source: consensus-spec.md Section 1.2
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommitteeMode {
-    Normal,
-    Degraded,
-    Emergency,
-}
-
 /// Epoch committee. Source: consensus-spec.md Section 1.3
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Committee {
@@ -35,98 +27,45 @@ pub struct Committee {
 }
 
 impl Committee {
-    /// Normal threshold: 67+ validators for full consensus.
-    pub const NORMAL_THRESHOLD: u64 = 67;
-
-    /// Degraded threshold: 50-66 validators for critical txs only.
-    pub const DEGRADED_THRESHOLD: u64 = 50;
-
     /// Maximum committee size.
     pub const COMMITTEE_SIZE: u64 = 100;
 
-    /// Emergency idle blocks before auto-recovery triggers.
-    pub const EMERGENCY_IDLE_BLOCKS: u64 = 500;
-
-    /// Determine committee mode from active validator count and total pool size.
+    /// Compute the committee seed for an epoch from revealed preimages.
     ///
-    /// SPEC_DEVIATION: Bootstrap scaling (IMPLEMENTED). When total_validators < COMMITTEE_SIZE,
-    /// thresholds are scaled proportionally so the chain can bootstrap from
-    /// fewer than 50 validators. Without this, a single-node testnet or early
-    /// network would enter Emergency mode immediately. Formal spec revision
-    /// of consensus-spec.md §1.2 still pending. See docs/08-handoff/latest/open-questions.md#Q1.
-    pub fn committee_mode(active_count: u64, total_validators: u64) -> CommitteeMode {
-        if active_count == 0 {
-            return CommitteeMode::Emergency;
-        }
-        let (normal, degraded) = Self::scaled_thresholds(total_validators);
-        if active_count >= normal {
-            CommitteeMode::Normal
-        } else if active_count >= degraded {
-            CommitteeMode::Degraded
-        } else {
-            CommitteeMode::Emergency
-        }
-    }
-
-    /// Block production is possible in Normal and Degraded modes.
-    /// Only Emergency mode halts production entirely.
+    /// Commit-reveal scheme with deterministic fallback:
+    /// - Normal case: seed = SHA3-256(concat(sorted valid_reveals) || epoch)
+    /// - Fallback (<33% of committee revealed): seed = SHA3-256(previous_seed || epoch)
     ///
-    /// SPEC_DEVIATION: Uses scaled DEGRADED_THRESHOLD for bootstrap (IMPLEMENTED).
-    pub fn can_produce(active_count: u64, total_validators: u64) -> bool {
-        if active_count == 0 {
-            return false;
-        }
-        let (_, degraded) = Self::scaled_thresholds(total_validators);
-        active_count >= degraded
-    }
-
-    /// Scale NORMAL_THRESHOLD and DEGRADED_THRESHOLD proportionally
-    /// when the total validator pool is below COMMITTEE_SIZE. This allows
-    /// the chain to bootstrap with a small validator set.
-    fn scaled_thresholds(total_validators: u64) -> (u64, u64) {
-        if total_validators >= Self::COMMITTEE_SIZE {
-            return (Self::NORMAL_THRESHOLD, Self::DEGRADED_THRESHOLD);
-        }
-        let n = total_validators as u128;
-        let total = Self::COMMITTEE_SIZE as u128;
-        let normal = ((Self::NORMAL_THRESHOLD as u128 * n).div_ceil(total)).min(n) as u64;
-        let degraded = ((Self::DEGRADED_THRESHOLD as u128 * n).div_ceil(total))
-            .min(n.saturating_sub(1)) as u64;
-        (normal, std::cmp::max(degraded, 1))
-    }
-
-    /// Compute VDF fallback seed when <33% of committee reveals.
-    /// Uses only finalized/historical entropy — no current-epoch malleable data.
-    ///
-    /// Formula: SHA3-256(previous_vdf_output || epoch_N-1_headers_hash || epoch_number || valid_reveals)
-    pub fn compute_vdf_fallback(
-        previous_vdf_output: &Hash32,
-        epoch_headers_hash: &Hash32,
-        epoch_number: u64,
-        valid_reveals: &[Hash32],
-    ) -> Hash32 {
-        let mut hasher = Sha3_256::new();
-        hasher.update(previous_vdf_output);
-        hasher.update(epoch_headers_hash);
-        hasher.update(epoch_number.to_le_bytes());
-        for reveal in valid_reveals {
-            hasher.update(reveal);
-        }
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&hasher.finalize());
-        out
-    }
-
-    /// Emergency epoch transition: sample a new committee from ALL validators
-    /// in active or paused states (not unbonding/withdrawn). Used when
-    /// the committee stalls for EMERGENCY_IDLE_BLOCKS.
-    pub fn emergency_transition(
+    /// Sort ensures determinism regardless of reveal arrival order.
+    /// The fallback uses only historical entropy (previous seed) plus epoch number —
+    /// no current-epoch malleable data.
+    pub fn compute_committee_seed(
         epoch: u64,
-        seed: Hash32,
-        validators: &[Hash32],
-        stakes: &[u128],
-    ) -> Self {
-        Self::sample(epoch, seed, validators, stakes, Self::COMMITTEE_SIZE as usize, &[])
+        reveals: &[Hash32],
+        previous_seed: &Hash32,
+        committee_size: u64,
+    ) -> Hash32 {
+        let min_reveals = (committee_size * 33).div_ceil(100);
+        let mut sorted_reveals: Vec<Hash32> = Vec::from(reveals);
+        sorted_reveals.sort();
+
+        if (sorted_reveals.len() as u64) >= min_reveals {
+            let mut hasher = Sha3_256::new();
+            for reveal in &sorted_reveals {
+                hasher.update(reveal);
+            }
+            hasher.update(epoch.to_le_bytes());
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&hasher.finalize());
+            out
+        } else {
+            let mut hasher = Sha3_256::new();
+            hasher.update(previous_seed);
+            hasher.update(epoch.to_le_bytes());
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&hasher.finalize());
+            out
+        }
     }
 
     /// Deterministically sample a committee from the validator pool.
@@ -331,7 +270,8 @@ pub enum TxType {
     HeartbeatTx,
     ReleaseTaskTx,
     SubmitTaskTx,
-    ShadowClaimTx,
+    SplitTaskTx,
+    SubmitReviewTx,
 }
 
 /// Staking sub-actions. Source: consensus-spec.md Section 1.3
@@ -401,9 +341,10 @@ mod tests {
             TxType::HeartbeatTx,
             TxType::ReleaseTaskTx,
             TxType::SubmitTaskTx,
-            TxType::ShadowClaimTx,
+            TxType::SplitTaskTx,
+            TxType::SubmitReviewTx,
         ];
-        assert_eq!(types.len(), 19);
+        assert_eq!(types.len(), 20);
     }
 
     #[test]

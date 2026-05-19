@@ -2,7 +2,7 @@
 //
 // Source: docs/04-specifications/protocol/consensus-spec.md Section 1.7
 
-use hyperfluid_consensus::types::{BlockHeader, Committee, CommitteeMode, Hash32};
+use hyperfluid_consensus::types::{BlockHeader, Committee, Hash32};
 
 fn make_header(height: u64, parent_hash: Hash32, state_root: Hash32) -> BlockHeader {
     BlockHeader {
@@ -169,110 +169,4 @@ fn conforms_to_consensus_spec_1_7_two_epoch_recency_edge_case() {
     }
 }
 
-#[test]
-fn conforms_to_consensus_spec_1_7_committee_three_tier_stall() {
-    // Full-size pool (100 total): raw thresholds apply
-    assert_eq!(Committee::committee_mode(100, 100), CommitteeMode::Normal);
-    assert!(Committee::can_produce(100, 100));
 
-    // 67 active of 100 total → Normal
-    assert_eq!(Committee::committee_mode(67, 100), CommitteeMode::Normal);
-    assert!(Committee::can_produce(67, 100));
-
-    // Bootstrap: 10 total validators, scaled degraded = ceil(50*10/100) = 5
-    assert_eq!(Committee::committee_mode(10, 10), CommitteeMode::Normal);
-    assert!(Committee::can_produce(10, 10));
-    assert!(Committee::can_produce(5, 10));
-    assert!(!Committee::can_produce(4, 10));
-
-    // Bootstrap: 3 total, scaled normal=3, degraded=2
-    assert_eq!(Committee::committee_mode(3, 3), CommitteeMode::Normal);
-    assert_eq!(Committee::committee_mode(2, 3), CommitteeMode::Degraded);
-    assert_eq!(Committee::committee_mode(1, 3), CommitteeMode::Emergency);
-
-    // Bootstrap: 1 total → scaled normal=1, degraded=1
-    assert_eq!(Committee::committee_mode(1, 1), CommitteeMode::Normal);
-    assert!(Committee::can_produce(1, 1));
-
-    // Zero active → Emergency regardless of pool size
-    assert_eq!(Committee::committee_mode(0, 10), CommitteeMode::Emergency);
-    assert!(!Committee::can_produce(0, 10));
-}
-
-#[test]
-fn conforms_to_consensus_spec_1_7_emergency_idle_blocks_constants() {
-    assert_eq!(Committee::NORMAL_THRESHOLD, 67);
-    assert_eq!(Committee::DEGRADED_THRESHOLD, 50);
-    assert_eq!(Committee::EMERGENCY_IDLE_BLOCKS, 500);
-}
-
-#[test]
-fn conforms_to_consensus_spec_1_7_vdf_fallback_deterministic() {
-    let previous_vdf_output = [0xAAu8; 32];
-    let epoch_headers_hash = [0xBBu8; 32];
-    let epoch_number = 42u64;
-    let valid_reveals: Vec<Hash32> = vec![[0x11u8; 32], [0x22u8; 32]];
-
-    let hash1 = Committee::compute_vdf_fallback(
-        &previous_vdf_output,
-        &epoch_headers_hash,
-        epoch_number,
-        &valid_reveals,
-    );
-    let hash2 = Committee::compute_vdf_fallback(
-        &previous_vdf_output,
-        &epoch_headers_hash,
-        epoch_number,
-        &valid_reveals,
-    );
-    assert_eq!(hash1, hash2);
-    assert_ne!(hash1, [0u8; 32]);
-}
-
-#[test]
-fn conforms_to_consensus_spec_1_7_vdf_fallback_changes_with_input() {
-    let previous_vdf_output = [0xAAu8; 32];
-    let epoch_headers_hash = [0xBBu8; 32];
-    let valid_reveals: Vec<Hash32> = vec![[0x11u8; 32]];
-
-    let hash1 = Committee::compute_vdf_fallback(
-        &previous_vdf_output,
-        &epoch_headers_hash,
-        42,
-        &valid_reveals,
-    );
-    let hash2 = Committee::compute_vdf_fallback(
-        &previous_vdf_output,
-        &epoch_headers_hash,
-        43,
-        &valid_reveals,
-    );
-    assert_ne!(hash1, hash2);
-}
-
-#[test]
-fn conforms_to_consensus_spec_1_7_vdf_fallback_empty_reveals() {
-    let previous_vdf_output = [0xAAu8; 32];
-    let epoch_headers_hash = [0xBBu8; 32];
-    let valid_reveals: Vec<Hash32> = vec![];
-
-    let hash = Committee::compute_vdf_fallback(
-        &previous_vdf_output,
-        &epoch_headers_hash,
-        1,
-        &valid_reveals,
-    );
-    assert_ne!(hash, [0u8; 32]);
-}
-
-#[test]
-fn conforms_to_consensus_spec_1_7_emergency_transition() {
-    let seed = [0xDEu8; 32];
-    let validator_ids: Vec<Hash32> = (0..200u8).map(|i| [i; 32]).collect();
-    let stakes: Vec<u128> = vec![1000u128; 200];
-
-    let committee = Committee::emergency_transition(5, seed, &validator_ids, &stakes);
-    assert_eq!(committee.members.len(), 100);
-    assert_eq!(committee.epoch, 5);
-    assert_eq!(committee.seed, seed);
-}

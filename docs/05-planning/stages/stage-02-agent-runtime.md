@@ -12,7 +12,7 @@
 - C9 Policy Decision Point: 5-step deterministic rule chain (schema → signature → replay → quota → fee), append-only audit log.
 - C10 Agent Runtime: infinite agent loop, system prompt loader, core tool set, handoff mechanism, resource limits, process isolation, crash recovery via handoff replay, Telegram bot dashboard (optional), TUI setup wizard.
 - C11 Collaboration & Inbox: task board, soft leases, single-agent task execution with dependency DAG and split, task submission with sponsorship (task_create action plan, PDP validation, gossip/DHT discovery), inbox routing, trust ladder (2 stages, promotion thresholds), bounty escrow mechanism, idea seed index with airdrop agent bootstrapping.
-- C12 Economics & Review: two-phase quality pipeline (review → challenge), reviewer independence via operator-cluster diversity, settlement, Sybil detection correlation engine, automated adjudication.
+- C12 Economics & Review: review-as-task pipeline — workers submit, trusted agents claim review tasks from open pool, 2-reviewer majority verdict, 90/10 payout settlement.
 - Telemetry: signed envelopes, aggregation pipeline, reconciliation, outlier detection.
 - Incident Response: basic incident logging only. No circuit-breaker hierarchy — EIP-1559 base fee is sole congestion mechanism.
 - Full agent lifecycle: join (0 AGX) → claim task → execute with tools → submit action_plan → PDP evaluates → reviewers attest → settlement → trust promotion.
@@ -23,11 +23,11 @@
 - [ ] PDP: 5-step rule chain produces identical decisions on all nodes for identical inputs. Audit log is append-only and content-addressed.
 - [ ] Agent Runtime: agent joins as `untrusted`, runs infinite loop, claims up to 2 tasks, submits action plans, progresses to `trusted` after 10 accepted tasks. TUI setup wizard writes valid config.toml. Telegram bot serves dashboard and /send commands (when configured).
 - [ ] Collaboration: task board visible across nodes, soft leases prevent double-claim, bounty escrow locks funds on task creation and releases on completion after challenge window, all tasks reference valid seed_ref, `hyperfluid task submit` CLI creates tasks through PDP → state machine → gossip pipeline, `TaskCreated` events propagate via gossip/DHT to subscribed agents, inbox routes messages correctly.
-- [ ] Review: 2-phase review pipeline (review → challenge) with 3 reviewers per task, fixed payout on majority approval, operator-cluster independence constraint. Sybil detection correlation engine flags suspicious identity pairs; automated adjudication confirms/rejects clusters.
+- [ ] Review: review-as-task pipeline — completed work creates 2 review tasks in the pool, trusted agents claim review tasks, binary verdict (accept/reject), majority acceptance releases 90/10 payout, rejection returns task to Open. Reviewers paid regardless of verdict.
 - [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
 - [ ] EIP-1559 base fee: verified to adjust correctly under load, no protocol-level circuit-breaker.
-- [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and trust-stage update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests. Sybil detection engine flags known-correlated identity pair.
-- [ ] All 15 specs pass their conformance test hooks (Section X.7).
+- [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and trust-stage update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests.
+- [ ] All 14 specs pass their conformance test hooks (Section X.7).
 - [ ] Risks documented and acceptable.
 - [ ] Next stage inputs prepared.
 
@@ -94,6 +94,8 @@
 10. Anti-collusion: operator-cluster diversity enforcement — stake-graph funding-edge analysis at epoch boundary prevents same-cluster reviewer assignments. No multi-signal correlation engine.
 11. Clawback: settlement reversed if collusion detected within governance-defined window. Funds clawed back to escrow pool.
 12. Exit checkpoint: 3-agent collaborative task completes with review pipeline; bounty escrow/payout lifecycle works end-to-end; operator-cluster diversity enforced; trust ladder promotes agent.
+
+**GAP NOTE (Traceability — FR-0060):** FR-0060 (Signed Telemetry Summaries with Quorum Validation) is a must-have requirement mapped to telemetry-spec.md but has no explicit build task in any week. Telemetry is listed in stage outputs ("signed envelopes, aggregation pipeline, reconciliation, outlier detection") but Week 5-6 tasks (C11, C12), Week 7-8 tasks, and Week 9-10 tasks do not include telemetry implementation. Must be absorbed into an existing week or given a new build slot.
 
 ### Week 7–8: Incident Response + Integration
 1. Incident Response: basic incident logging only. Congestion handled by EIP-1559 base fee — no FSM, no emergency mode, no recovery ramp-up.

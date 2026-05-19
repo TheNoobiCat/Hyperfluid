@@ -29,4 +29,5 @@
 - When the same logic (quota check, state serialization, validation) is implemented in two different code locations, verify both are kept in sync or refactor to a single source of truth with shared calls. Grep for duplicated `Vec<QuotaEntry>` or `fn compute_` definitions.
 - Verify that API keys, tokens, private keys, and other secrets are not persisted in plaintext to databases (SQLite, state KV), log output, or serialised state. Redact sensitive fields before any persistent storage path.
 - For any `AtomicBool`/`Atomic*` used for cross-thread signaling (shutdown, cancellation, pause), verify the load uses at least `Ordering::Acquire` and the store uses at least `Ordering::Release`. `Ordering::Relaxed` provides no happens-before guarantee across threads.
+- **Vaporware guard:** After adding a new `TxType` variant, `TaskStatus` variant, or struct field that claims to implement a spec feature, grep its name across `crates/*/src/` (excluding tests). Zero non-test production code paths = VAPORWARE. Either implement the behavior or remove the type before continuing.
 - File as `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md`.

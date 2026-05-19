@@ -6,7 +6,7 @@
 - External: Malachite BFT library, clatter PQ-Noise library, ml-dsa crate, Blake3 crate, SQLite via `rusqlite`, content-addressed storage via gix.
 
 ## Outputs
-- C1 Consensus Engine: committee BFT integration (Malachite), VDF-based committee rotation, block production, SMT root commitment.
+- C1 Consensus Engine: committee BFT integration (Malachite), commit-reveal seed for committee rotation, block production, SMT root commitment.
 - C2 State Machine & SMT: sparse Merkle tree state, transaction execution, block finalisation, deterministic state transitions.
 - C3 Staking & Validator Manager: four-state validator lifecycle (active, paused, unbonding, withdrawn), bonding/unbonding, slashing conditions, downtime tracking.
 - C5 Fee Market: EIP-1559 base fee, validator rebates, front-running protection, fee adjustment formula.
@@ -42,7 +42,7 @@
 ### Week 1–2: Consensus + State Machine (C1 + C2) — **PARTIALLY COMPLETE (2026-05-05)**
 1. Integrate Malachite BFT via core-library approach (ADR-0018): add `arc-malachitebft-core-*` crates to workspace, implement `SigningScheme` for ML-DSA-65, implement `Context` for Hyperfluid, build effect handler that routes Malachite effects to clatter network + tokio timers + state machine. (deferred: Malachite integration pending external dep)
 2. Implement SMT-backed state: key-value state store, transaction execution, block finalisation, SMT root hash computation. — **DONE**
-3. VDF-based committee rotation: deterministic committee from epoch seed (initially seeded from genesis; full VDF integration and tuning in Stage 03 (Validation)). — **DONE (deterministic SHA3-256 sampling; full VDF deferred)**
+3. Commit-reveal committee seed: deterministic committee from epoch seed via SHA3-256(reveals || epoch) with fallback to SHA3-256(previous_seed || epoch) when <33% of committee reveals. — **DONE (deterministic SHA3-256 sampling; full commit-reveal on-chain deferred)**
 4. Transaction types: `TransferTx`, `StakeBondTx`, `UnbondRequestTx`, `WithdrawUnbondedTx`, `TaskCreateTx`, `GovernanceProposeTx`, `GovernanceVoteTx`, `EvidenceTx`, etc. — **DONE (7 base types with action sub-enums)**
 5. Unit tests for state transitions; integration test for single-node block production. — **DONE (56 workspace tests)**
 6. Exit checkpoint: `cargo test` passes for C1 and C2 crates; single-node testnet produces blocks. — **DONE (see checkpoint-2026-05-05d.md)**
@@ -68,6 +68,8 @@ Total new code: ~1,500 lines. No Malachite fork required.
 7. Exit checkpoint: validators bond/unbond correctly; fees adjust to load; slashing fires on detected byzantine behavior.
 
 **GAP NOTE (Partially resolved 2026-05-17 — Validator lifecycle wired; slashing/rewards deferred):** C3 staking types and stake-graph clustering are implemented, but the staking lifecycle execution (bond/unbond/withdraw) lives in C2's state machine, not C3. No slashing execution, no reward distribution, no liveness tracking. C5 fee market algorithms are real pure functions but not integrated into block production. The 3-validator integration test in step 6 has not been run (no multi-node harness exists). **Resolution 2026-05-17b:** Validator lifecycle (bond/unbond/withdraw/renew) fully implemented in StateMachine (13 tests). StakingTx (Bond/Unbond/Withdraw/Renew) and DelegationTx (Delegate/Undelegate/WithdrawDelegation/SetCommission) fully dispatched in ConsensusDriver. FeeMarket integrated into block production (EIP-1559 base fee adjusts per block, FeeMarketState tracked on driver). 6 new integration tests exercise full lifecycle through ConsensusDriver. **Outstanding:** Slashing execution, reward distribution, and liveness tracking remain deferred to Stage 03 (Validation).
+
+**GAP NOTE (Partially resolved 2026-05-19 — decentralization_score implemented, epoch-boundary wired):** FR-0183 (Stake Concentration Monitoring) is a must-have requirement. Anti-split detection via stake-graph analysis is implemented (pending change #4, `staking/src/graph.rs`). Decentralization scoring is now implemented in `hyperfluid-economics/src/lib.rs` (`DecentralizationMetrics`, `compute_decentralization_metrics()`, 6 tests) and wired into the epoch boundary in `consensus/driver.rs`. Two acceptance criteria remain: (2) governance-proposable parameter nudges when concentration exceeds thresholds — no build task exists for this.
 
 ### Week 5–6: P2P Networking + Artifact Storage (C7 + C8) — **PARTIALLY COMPLETE (2026-05-08)**
 1. Peer discovery: bootstrap nodes, Kademlia DHT for validator discovery, connection state machine (outbound/inbound, keepalive, backoff).
