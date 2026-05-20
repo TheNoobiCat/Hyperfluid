@@ -465,7 +465,7 @@ fn build_shell_command(command: &str) -> Command {
     #[cfg(not(target_os = "windows"))]
     {
         let mut cmd = Command::new("sh");
-        cmd.args(&["-c", command]);
+        cmd.args(["-c", command]);
         cmd
     }
 }
