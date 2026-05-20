@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 Week 3-4 Agent Runtime C10 library COMPLETE 2026-05-18. Stage 02 ready for Week 5-6.) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 Week 3-4 Agent Runtime C10 library COMPLETE 2026-05-18. Stage 02 Week 5-6 COMPLETE 2026-05-20 — 27 conformance tests + P2P TCP transport + mempool + PDP context state wired into node.) |
 
 ---
 
@@ -57,16 +57,15 @@ Key fixes:
 
 ## Blockers
 
-**All previous CRITICAL/HIGH blockers resolved 2026-05-17.** Malachite type-level integration (SigningScheme + Context) implemented 2026-05-17c (410 lines, 13 tests). Bug Audit Round 5 (2026-05-18) resolved 12 new issues across 6 crates.
+**All previous CRITICAL/HIGH blockers resolved 2026-05-17.** Malachite type-level integration (SigningScheme + Context) implemented 2026-05-17c (410 lines, 13 tests). Bug Audit Round 5 (2026-05-18) resolved 12 new issues across 6 crates. Overengineering cleanup (2026-05-19) removed ~1,300 lines of stub code, 7 deleted docs, and closed 8 requirements as not needed. P2P+Mempool+PDP wired into node binary 2026-05-20 (checkpoint-2026-05-20-p2p-mempool-pdp-wiring.md).
 
 Remaining work:
 
 1. **Malachite BFT protocol wiring** — SigningScheme + Context implemented (malachite.rs). Effect handler, network bridge, host actor deferred (~1,100 lines remaining). Not blocking Stage 02 — ConsensusDriver produces blocks.
 2. **Slashing execution + reward distribution** — deferred to Stage 03 (Validation).
 3. **24-hour soak test** — deferred to Stage 03 (Validation).
-4. **Clatter network bridge for consensus gossip** — TCP sockets functional, but gossip needs BFT protocol messages to route.
-5. **FR-0060: Signed Telemetry Summaries** — must-have requirement with no build task. Zero implementation code exists. See GAP NOTE in stage-02-agent-runtime.md.
-6. **FR-0183: Governance parameter nudges** — decentralization score implemented and wired (2026-05-19). Governance nudges when concentration exceeds thresholds remain unscheduled.
+4. ~~P2P not wired into node binary~~ **RESOLVED 2026-05-20** — `TcpTransport::accept_loop()` started in `main()` with real Identity + Clatter handshake.
+5. ~~Mempool not wired into `produce_block()`~~ **RESOLVED 2026-05-20** — fee-ordered mempool with `submit_tx()`, empty txs trigger mempool selection.
 
 ---
 
@@ -132,7 +131,7 @@ Systemic patterns identified: SMT root completeness gap (new entity added but ro
 
 | Change | Summary | Docs Affected |
 |--------|---------|---------------|
-| C10 Agent Runtime | Full agent runtime library: infinite loop, 9 core tools (bash, todo, remember, forget, read, edit, write, apply_patch), system prompt assembly, SQLite persistence (WAL mode, 6 tables), handoff + crash recovery, failure guard, resource limits + sandbox validation, config.toml parsing. 87 tests (64 unit + 23 conformance). | `hyperfluid-agent/` |
+| C10 Agent Runtime | Full agent runtime library: infinite loop, 9 core tools (bash, todo, remember, forget, read, edit, write, apply_patch), system prompt assembly, SQLite persistence (WAL mode, 6 tables), handoff + crash recovery, failure guard, resource limits + sandbox validation, config.toml parsing, **LLM providers integrated** (OpenAI-compatible + Ollama + stub). 87 tests (64 unit + 23 conformance). TUI wizard + Telegram bot → Week 9-10. | `hyperfluid-agent/` |
 | CLI_SPEC embedded | `hyperfluid task submit` specification embedded statically in system prompt | `hyperfluid-agent/src/prompt.rs` |
 
 ## Recent Design Changes (2026-05-17c) — Malachite BFT Type-Level Integration
@@ -238,49 +237,12 @@ Process improvements: 7 new generic guards added to `execute-build.md` `checkpoi
 
 ## Next Actions
 
-**Stage 02 Week 3-4 (Agent Runtime): COMPLETE (2026-05-18) — C10 library built, 87 tests**
+**Stage 02 Week 5-6 (P2P + Mempool + PDP Wire-Up): COMPLETE (2026-05-20) — P2P TCP transport + mempool + PDP context state wired into node**
 
-**Stage 02 Week 5-6 (Collaboration + Review + Economics + Sybil Detection): READY (2026-05-18)**
-- C11 collaboration crate foundation (task board types, inbox with quotas, trust ladder, topic lifecycle, replay protection) built — 38 tests
-- Remaining: review engine integration, economics crate, Sybil detection, gossip/DHT task discovery wiring
-
-**Recent resolution (2026-05-17b):**
-- Validator lifecycle (bond/unbond/withdraw/renew) implemented in StateMachine with 13 tests.
-- StakingTx (4 actions) and DelegationTx (4 actions) dispatched in ConsensusDriver.
-- FeeMarket integrated into block production (EIP-1559 base fee adjusts per block).
-- 6 new driver-level integration tests cover full staking lifecycle through ConsensusDriver.
-
-**Traceability audit (2026-05-19):**
-- Phase 0 traceability audit: 2 unscheduled must-have FRs found (FR-0060, FR-0183).
-- FR-0183 decentralization score implemented in hyperfluid-economics (6 tests) and wired into ConsensusDriver.
-- FR-0060 telemetry remains open — GAP NOTE added to stage-02-agent-runtime.md.
-
-**Before Stage 03:**
-5. Complete slashing execution and reward distribution.
-6. Integrate Malachite BFT when crates are available.
-7. Build clatter network bridge for consensus gossip.
-8. Implement FR-0060 signed telemetry summaries.
-9. Implement FR-0183 governance nudges for stake concentration.
-
-**Stage 02 Week 1-2 (Governance + Fast-Path + PDP): COMPLETE (libraries built, wired into node)**
-**Stage 02 Week 3-4 (Agent Runtime + Sandbox + Operator Interface): READY TO START**
-5. ~~Bug audit (code) completed.~~
-2. ~~Bug audit (code) completed.~~
-3. ~~Pre-Stage-01 amendment: Agent tools expanded 5→9, seed index created at `/ideas/`, ADR-0013.~~
-4. ~~Seed-centric model + user-task-submission pipeline propagated through L2-L5.~~
-5. ~~Documentation-layer bug audit completed.~~
-6. ~~Stage 01 Week 1-2 (C1 + C2): Consensus Engine + State Machine & SMT.~~
-7. ~~Architecture amendments (2026-05-06): 15% cap removed, overlap 33%→20%, VDF fallback hardened, stake-graph spec created, committee stall tiered, delegation spec'd.~~
-8. ~~5 pending code changes applied: overlap+two-epoch guard, VDF fallback, stall thresholds, stake-graph clustering, delegation subsystem.~~
-9. ~~Stage 01 Week 3-4 (C3 + C5): Staking base & Fee Market implemented. See `checkpoint-2026-05-06-code.md`.~~
-10. ~~Stage 01 Week 5-6 (C7 + C8): P2P Networking + Artifact Storage.~~ COMPLETE (2026-05-08)
-11. ~~Bug audit (2026-05-08) completed.~~
-12. ~~Stage 01 Week 7-8: Integration, soak test, polish.~~ COMPLETE (2026-05-14)
-13. ~~clatter+ml-dsa Secure Channel Implementation~~ — COMPLETE (2026-05-15). Wire clatter `HybridHandshakeCore` + ml-dsa identity keys into `hyperfluid-p2p` SecureChannel. See ADR-0016.
-14. **NEXT: Stage 02 (Agent Runtime):** Layer agent behavior, PDP, collaboration, review, governance, fast-path on top of the chain.
-14. Stage 03 (Validation): Full conformance matrix, adversarial test suite, load testing, security audit, parameter calibration.
-15. Stage 04 (Mainnet Prep): SLOs, monitoring, runbooks, private testnet soak, incident drill, launch checklist.
-16. Freeze all 15 specs before Stage 01 implementation continues. Post-freeze spec changes require governance proposals.
+**Stage 02 Week 7-8 (BFT Consensus Integration): NEXT**
+- Malachite BFT wiring: effect handler, clatter network bridge, Host actor
+- Disable local block production; enable BFT-driven block production
+- Byzantine validation tests, state sync integration
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -288,9 +250,8 @@ Process improvements: 7 new generic guards added to `execute-build.md` `checkpoi
 |------|----------------------|--------|
 | `runtime/agent-runtime-spec.md` | C10 Agent Runtime (FR-0061-0075, FR-0193, FR-0199, FR-0200 — CLI + sponsored submission added) | complete |
 | `runtime/policy-engine-spec.md` | C9 Policy Decision Point (FR-0106-0120) | complete |
-| `runtime/review-engine-spec.md` | C12 Economics - review markets, Sybil adjudication (FR-0161-0175, FR-0191 — Section 2 added) | complete |
-| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox, bounty escrow (FR-0076-0105, FR-0153b, FR-0194-0198, FR-0176-0190 — Section 3 incentives, FR-0194 task_create) | complete |
-| `security/telemetry-spec.md` | Telemetry integrity (FR-0060, FR-0139-0141, NFR-0020-0021) | complete |
+| `runtime/review-engine-spec.md` | C12 Economics - review markets (FR-0161-0175) | complete |
+| `runtime/collaboration-spec.md` | C11 Collaboration & Inbox, bounty escrow (FR-0076-0105, FR-0153b, FR-0176-0190, FR-0194-0198, FR-0201) | complete |
 | `security/incident-response-spec.md` | Incident response & recovery (FR-0142-0145) | complete |
 | `protocol/fee-market-spec.md` | C5 Fee Market (FR-0146-0160) | complete |
 | `protocol/consensus-spec.md` | C1 Consensus Engine, C2 State Machine (FR-0001-0010, FR-0194 — TaskCreateTx) | complete (amended 2026-05-06) |
@@ -397,4 +358,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-19 (Traceability audit: 2 unscheduled must-have FRs documented. Decentralization score implemented. All CI checks pass.)*
+*Last updated: 2026-05-20 (Stage 02 Week 5-6 conformance tests complete. 27 new tests for collaboration + review specs. All 6 CI checks pass.)*

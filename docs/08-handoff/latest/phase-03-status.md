@@ -35,9 +35,6 @@ docs/04-specifications/runtime/agent-runtime-spec.md
 docs/04-specifications/runtime/policy-engine-spec.md
 docs/04-specifications/runtime/review-engine-spec.md
 docs/04-specifications/runtime/collaboration-spec.md
-docs/04-specifications/security/telemetry-spec.md
-docs/04-specifications/security/incident-response-spec.md
-```
 
 ---
 
@@ -48,17 +45,16 @@ docs/04-specifications/security/incident-response-spec.md
 | 1 | consensus-spec.md | 2 | FR-0001-0010 | Committee BFT, VDF randomness, SMT state, transaction types |
 | 2 | staking-spec.md | 2 | FR-0011-0020 | Validator lifecycle, slashing, governance voting eligibility |
 | 3 | governance-spec.md | 2 | FR-0021-0030 | git:head governance, sandbox review, anti-flood |
-| 4 | p2p-wire-spec.md | 2 | FR-0041-0050 | Discovery, gossip, relays, mempool lanes |
+| 4 | p2p-wire-spec.md | 2 | FR-0041-0050 | Discovery, gossip, relays, fee-ordered mempool |
 | 5 | fastpath-spec.md | 1 | FR-0031-0040 | Topic merges, quorum certs, challenge windows, promotion |
 | 6 | fee-market-spec.md | 2 | FR-0146, FR-0147, FR-0159-0160 | EIP-1559 fees, validator rebates, manipulation defense |
 | 7 | state-sync-spec.md | 1 | FR-0010, NFR-0009 | Snap sync, full sync, crash recovery |
 | 8 | artifact-availability-spec.md | 2 | FR-0051-0060 | Content-addressed storage, PoP, retention, repair |
 | 9 | agent-runtime-spec.md | 4 | FR-0061-0075 | Agent loop, tools, system prompt, isolation |
 | 10 | policy-engine-spec.md | 2 | FR-0106-0120 | 10-step PDP, risk step-up, quota matrix |
-| 11 | review-engine-spec.md | 1 | FR-0161-0175 | 3-phase quality, reviewer independence, settlement |
+| 11 | review-engine-spec.md | 1 | FR-0161-0175 | Review-as-task pipeline, trusted-agent review, 90/10 payout |
 | 12 | collaboration-spec.md | 3 | FR-0076-0105, 0091-0105 | Task board, inbox, trust ladder, reputation |
-| 13 | telemetry-spec.md | 2 | FR-0060, FR-0139-0141 | Signed envelopes, aggregation, reconciliation |
-| 14 | incident-response-spec.md | 2 | FR-0142-0145 | Incident FSM, emergency mode, recovery |
+| 13 | incident-response-spec.md | 2 | FR-0142-0145 | Incident FSM, emergency mode, recovery |
 
 ---
 

@@ -1,5 +1,15 @@
 # Session 2026-05-14 — Open Questions
 
+## Q4: Stage 02 Week 5-6 scope mismatch (2026-05-20)
+
+**Spec section:** `stage-02-agent-runtime.md` Week 5-6
+
+**What is missing:** The stage file describes Week 5-6 as "P2P + Mempool + PDP Wire-Up (Critical Path)" but these tasks were absorbed into Stage 01 integration gap filling (2026-05-17). The PROJECT-STATUS re-maps Week 5-6 to "Collaboration + Review + Economics + Sybil Detection."
+
+**Status:** **RESOLVED** — Conformance tests for collaboration-spec and review-engine-spec completed (27 tests) on 2026-05-20 checkpoint. P2P TCP transport, fee-ordered mempool, and PDP context state wired into node binary on 2026-05-20 (checkpoint-2026-05-20-p2p-mempool-pdp-wiring.md). Sybil detection (FR-0191) and gossip/DHT task discovery remain deferred.
+
+---
+
 ## Q1: Ockam replacement — clatter+ml-dsa secure channel stack (2026-05-14)
 
 **Status:** **RESOLVED** — ADR-0016 accepted. Ockam superseded by clatter v2.2.0 (Noise hybrid XX, X25519 + ML-KEM-768) + ml-dsa v0.1.0-rc.11 (ML-DSA-65, FIPS 204). Specs amended. See `docs/03-architecture/decisions/ADR-0016-clatter-ml-dsa-secure-channel.md` and `docs/01-research/stack-evaluations/clatter-vs-ockam-secure-channel.md`.

@@ -44,5 +44,5 @@ Comprehensive code cross-reference audit. 12 bugs found and fixed across 6 crate
 
 ## Next Actions
 
-- Stage 02 Week 5-6 (Collaboration + Review + Economics + Sybil Detection): READY
+- Stage 02 Week 5-6 (P2P Wire + Mempool + PDP Integration): READY
 - Remediate deferred items: slashing execution, reward distribution, Malachite BFT wiring

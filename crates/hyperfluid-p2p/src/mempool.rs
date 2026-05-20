@@ -44,6 +44,8 @@ pub struct MempoolTx {
     pub base_fee: u128,
     /// Maximum total fee the sender is willing to pay.
     pub max_fee_per_tx: u128,
+    /// Serialized transaction payload (opaque bytes for the driver to decode).
+    pub tx_data: Vec<u8>,
 }
 
 impl MempoolTx {
@@ -223,6 +225,7 @@ mod tests {
             priority_fee: prio,
             base_fee: base,
             max_fee_per_tx: max_fee,
+            tx_data: vec![hash],
         }
     }
 

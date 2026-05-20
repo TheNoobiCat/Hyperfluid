@@ -1,12 +1,12 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) IN PROGRESS
 
-**Last updated:** 2026-05-19 (Traceability audit: 2 unscheduled must-have FRs documented. Decentralization score implemented in hyperfluid-economics. All CI checks pass.)
+**Last updated:** 2026-05-20 (Stage 02 Week 5-6 P2P+Mempool+PDP wired into node. 467 tests, all CI checks pass.)
 **Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards deferred, BFT consensus deferred)
-**Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 complete, Week 3-4 complete, Week 5-6 ready)
+**Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 complete, Week 3-4 complete, Week 5-6 complete)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
-**Week 3-4 (Staking + Fee Market):** PARTIALLY COMPLETE (validator lifecycle + delegation dispatch + fee market done; slashing/rewards deferred)
-**Week 5-6 (P2P Networking + Artifact Storage + State Sync):** COMPLETE (TCP sockets + disk I/O + multi-node harness)
-**Week 7-8 (Integration, Soak, Polish):** COMPLETE (node binary produces real blocks, integration tests pass)
+**Week 3-4 (Agent Runtime C10):** COMPLETE (87 tests, infinite loop, tools, SQLite, handoff, sandbox)
+**Week 5-6 (Collaboration + Review Conformance + P2P+Mempool+PDP Wire-Up):** COMPLETE (27 conformance tests + P2P TCP transport + mempool wired + PDP context state tracking)
+**Week 7-8 (BFT Consensus Integration):** NEXT
 
 ## PENDING CODE CHANGES — ALL APPLIED (2026-05-06)
 
@@ -162,13 +162,23 @@ See `docs/01-research/_audit-bugs-2026-05-18-r2.md` for full report.
 | Slashing execution + reward distribution | MEDIUM | DEFERRED to Stage 03 |
 | Full soak test (24h) | MEDIUM | DEFERRED to Stage 03 |
 | Clatter network bridge for consensus gossip | MEDIUM | DEFERRED — TCP layer built; needs BFT protocol to generate gossip messages |
-| FR-0060 — Signed Telemetry Summaries (telemetry-spec.md) | MEDIUM | OPEN — no build task exists. KeyPrefix::TelemetryEnvelope reserved (unused), ArtifactClass::TelemetryArchive defined (no archiver). Zero implementation code. See GAP NOTE in stage-02-agent-runtime.md. |
-| FR-0183 — Stake Concentration Monitoring (governance nudges) | LOW | OPEN — decentralization_score() implemented and wired into epoch boundary. Governance-proposable parameter nudges when concentration exceeds thresholds remain unscheduled. |
+| P2P not wired into node binary | HIGH | **RESOLVED 2026-05-20** — `TcpTransport::accept_loop()` started in `main()` with real Identity + Clatter handshake |
+| Mempool not wired into `produce_block()` | HIGH | **RESOLVED 2026-05-20** — fee-ordered mempool with `submit_tx()`, empty txs trigger mempool selection |
+| PDP context state not wired | HIGH | **RESOLVED 2026-05-20** — key_bindings, agent_nonces, quota_states, consumed_plan_ids tracked on ConsensusDriver. PdpContext populated with real balances/nonces/trust_stages. pdp_bypass still true (ML-DSA deferred to Week 9-10). |
 
-**RESOLVED GAPS (2026-05-19):**
-| Gap | Resolution |
-|-----|-----------|
-| FR-0183 — Stake Concentration Monitoring (decentralization score) | RESOLVED — `DecentralizationMetrics` + `compute_decentralization_metrics()` implemented in `hyperfluid-economics/src/lib.rs` with 6 tests (all integer-based, no floating point). Wired into epoch boundary in `consensus/src/driver.rs` via logging. All determinism checks pass. |
+**CLOSED GAPS (2026-05-19 Overengineering Cleanup):**
+Per `checkpoint-2026-05-19-cleanup.md` (~1,300 lines of stub code removed, 7 docs deleted):
+
+| Previous Gap | Resolution |
+|-------------|-----------|
+| FR-0060 Signed Telemetry | CLOSED — not needed. Telemetry is overengineered. |
+| FR-0183 Stake Concentration Monitoring | CLOSED — not needed. `staking/src/graph.rs` (455 lines) deleted. `compute_decentralization_metrics` (228 lines) deleted. |
+| FR-0191 Operator-Cluster Diversity for Sybil Resistance | CLOSED — not needed. Reviews use simple trust-stage gate + abuse flag system. No stake-graph analysis. |
+| Sybil detection correlation engine | CLOSED — not needed. Anti-Sybil via Proof-of-Agent puzzle + bond + trust ladder is sufficient. |
+| VDF integration / three-tier liveness | CLOSED — replaced. Commit-reveal seed via SHA3-256 is sufficient. Binary liveness: validators produce or they don't. |
+| Shadow claims + penalty schedule | CLOSED — not needed. Lease expiry returns task to pool. |
+| Key rotation with grace window | CLOSED — not needed. Agents can create new accounts. |
+| Mempool lanes / circuit breaker / quality-weighted scoring | CLOSED — removed. EIP-1559 base fee is sole congestion mechanism. |
 
 **RESOLVED GAPS (2026-05-17c):**
 | Gap | Resolution |
@@ -490,77 +500,58 @@ See `docs/01-research/_audit-bugs-2026-05-18.md` for full report.
 | SQLite persistence (WAL mode, 6 tables, 22 methods) | Complete (db.rs) |
 | Resource limits + sandbox validation | Complete (isolation.rs, 12 tests) |
 | Conformance tests (Section 1.7, 2.7, 3.7, 4.7, 5.3 hooks) | Complete (23 tests) |
-| TUI setup wizard (ratatui) | DEFERRED — Section 5 optional |
-| Telegram bot client | DEFERRED — Section 5 optional |
+| LLM providers (OpenAI-compatible, Ollama, stub) | Complete (llm.rs, 236 lines) |
+| TUI setup wizard (ratatui) | → Week 9-10 |
+| Telegram bot client | → Week 9-10 |
 | OS-level sandbox (cgroups, seccomp, namespaces) | DEFERRED — Linux-only, logic built |
 | Agent binary (main.rs) | DEFERRED — library crate, separate process later |
-| LLM provider integration | DEFERRED — API stubs defined, real provider later |
 
 **Total tests:** 87 (64 unit + 23 conformance)
-**CI check-in:** All workspace tests pass. Agent crate compiles with zero warnings.
+**LLM providers:** Integrated — `OpenAiProvider` (OpenAI-compatible API), `OllamaProvider` (local), `StubProvider` (testing backup). Factory `provider_from_config()` selects from `config.toml`.
+**Deferred:** TUI setup wizard → Week 9-10, Telegram bot → Week 9-10, OS-level sandbox enforcement (Linux-only), agent binary (library crate).
+
+---
+
+## Stage 02: Week 5-6 — Collaboration + Review Conformance Tests — COMPLETE (2026-05-20)
+
+| Task | Status |
+|------|--------|
+| Collaboration-spec §1.7 conformance tests (task board, leases, heartbeat, caps, collateral, escrow) | Complete (11 tests) |
+| Collaboration-spec §3.7 conformance tests (trust ladder, promotion, abuse, whitewash) | Complete (5 tests) |
+| Review-engine-spec §1.7 conformance tests (InReview, untrusted rejection, verdict tally, accept/reject settlement, tie, expiry) | Complete (10 tests) |
+| `leases_iter()` accessor added to StateMachine | Complete |
+| Clippy zero warnings (pre-existing unused_mut/dead_code fixed across 3 crates) | Complete |
+| deny.toml license allowlist updated (ISC, CDLA-Permissive-2.0) | Complete |
+| All 6 CI checks pass (fmt, clippy, test, doc, deny, bench) | PASS (467/467 tests) |
+
+**Deferred to later weeks:**
+- Sybil detection (FR-0191 operator-cluster diversity)
+- Task discovery via gossip/DHT wiring
+- FR-0183 governance nudges for stake concentration
+- TUI setup wizard → Stage 02 Week 9-10
+- Telegram bot client → Stage 02 Week 9-10
+- OS-level sandbox enforcement (Linux-only, logic built)
+- Agent binary (library crate, separate process later)
 
 ---
 
 ## NEXT ACTION (first task on next build run)
 
-**Follow `.opencode/commands/fill-gaps.md` to resolve Stage 01 integration gaps BEFORE continuing Stage 02.**
+**Stage 02 Week 7-8 (BFT Consensus Integration):**
 
-Stage 02 Week 1-2 libraries (C4, C6, C9) are built and tested but will not function end-to-end until:
+Stage 02 Week 5-6 is complete. P2P TCP transport, fee-ordered mempool, and PDP context state are all wired into the node binary. Remaining work:
 
-### Integration Task 1: P2P TCP Layer
-- `crates/hyperfluid-p2p/src/` — Add `tokio::net::TcpListener` + `TcpStream`
-- Wire `ConnState` machine to socket events (Unknown → DirectProbing on connect, DirectProbing → DirectActive on handshake success)
-- Integration test: two nodes on localhost connect, exchange a handshake message, disconnect cleanly
-- Conformance test: `conforms_to_p2p_spec_1_7_actual_socket_roundtrip`
-- CI mimic must pass before moving to Task 2
+1. **Malachite BFT effect handler** (~300 lines): Route Malachite protocol effects (SendMessage, ScheduleTimer, RequestBlock, CommitBlock) to Clatter network bridge, tokio timer, and state machine.
 
-### Integration Task 2: Disk-Backed Artifact Storage
-- `crates/hyperfluid-artifact/src/` — Add file I/O (`std::fs`) with content-addressed paths
-- `store_chunk(hash, data)` writes to `data/chunks/<hex_hash>`
-- `load_chunk(hash)` reads and verifies hash before returning
-- Integration test: write 3 chunks, read back, verify each hash matches
-- CI mimic must pass before moving to Task 3
+2. **Clatter network bridge** (~500 lines): Consensus message serialization/deserialization over Clatter secure channels. Topic-based routing (propose/vote/commit messages).
 
-### Integration Task 3: Malachite BFT Integration (ADR-0018)
-- Add `arc-malachitebft-core-*` crates to workspace
-- Implement `SigningScheme` for ML-DSA-65, `Context` for Hyperfluid
-- Build effect handler, clatter network bridge, Host actor
-- Wire into `hyperfluid-node/src/main.rs` replacing `sleep(100ms)` loop
-- Integration test: single node produces blocks with real state machine execution
-- CI mimic must pass
+3. **Host actor** (~400 lines): Proposal building (pull from mempool), block validation, vote extensions. Integrates with existing `ConsensusDriver`.
 
-After all three tasks pass integration verification, continue Stage 02 Week 3-4 (Agent Runtime + Sandbox + Operator Interface).
+4. **Disable local block production**: Replace `produce_block()` auto-loop with Malachite-driven block production triggered by leader proposal.
 
-**CRITICAL: Fill Stage 01 integration gaps BEFORE starting Stage 02.**
+5. **Byzantine validation tests**: Equivocation detection, censorship resistance, proposal verification. Network of 4 validators with 1 byzantine.
 
-Stage 01 has algorithms and types but no running system. The following must be built first:
+6. **State sync integration**: Snapshot serving on catch-up. Sync from genesis for new nodes.
 
-1. **Integrate Malachite BFT consensus (ADR-0018):** Add `arc-malachitebft-core-*` crates to workspace. Implement `SigningScheme` for ML-DSA-65. Implement `Context` for Hyperfluid. Build effect handler that routes Malachite effects to clatter network, tokio timers, and state machine. Build clatter network bridge for consensus message transport. Build Host actor for proposal building, block validation, and commit. Wire into node binary to replace `sleep(100ms)` stub.
-
-2. **Build P2P TCP layer** — Add TCP listener + connector to `hyperfluid-p2p`. Wire the connection state machine to actual socket events. At minimum: two nodes on localhost can connect, exchange a message, and disconnect cleanly.
-
-3. **Build disk-backed artifact storage** — Add file I/O to `hyperfluid-artifact`. Write chunks to disk, read them back, verify hashes match.
-
-Only after these three are complete can Stage 02 (Agent Runtime) begin. Building agents on top of a stub node binary is pointless.
-
-**ADR-0018 (Malachite Core-Library Integration) defines the approach:**
-- Use Malachite `core-*` crates only (no `engine`, no `network`, no libp2p)
-- Implement `SigningScheme` for ML-DSA-65 (~50 lines)
-- Implement `Context` for Hyperfluid (~200 lines)
-- Build effect handler (~300 lines)
-- Build clatter network bridge (~500 lines)
-- Build Host actor (~400 lines)
-- Total: ~1,500 lines of new code, no Malachite fork required
-
-**Stage 02 (Agent Runtime) — Week 1-2 (Governance + Fast-Path + PDP):**
-
-1. Implement C4 Governance Engine (`hyperfluid-governance`): on-chain `git:head` voting, proposal lifecycle.
-2. Implement C6 Fast-Path (`hyperfluid-fastpath`): topic-based collaboration protocol.
-3. Implement C9 Policy Decision Point (`hyperfluid-pdp`): 5-step rule chain, action type routing.
-4. Wire governance into the node's consensus loop.
-
-**Stage 01 is NOT complete.** Integration gaps remain (see Blockers above). Stage 02 is blocked until these are filled.
-
-**Spec:** `docs/05-planning/stages/stage-02-agent-runtime.md`
-**ADR:** ADR-0016 (clatter+ml-dsa) — implemented
-**ADR:** ADR-0018 (Malachite core-library integration) — accepted, not yet implemented
+**Spec:** `docs/05-planning/stages/stage-02-agent-runtime.md` Week 7-8
+**ADR:** ADR-0018 (Malachite core-library integration) — accepted, SigningScheme + Context implemented

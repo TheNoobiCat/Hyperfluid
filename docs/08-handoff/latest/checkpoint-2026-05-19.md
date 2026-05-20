@@ -1,5 +1,7 @@
 # Checkpoint 2026-05-19 — Traceability Audit + Decentralization Score
 
+**Note (2026-05-20):** The work in this checkpoint was superseded by `checkpoint-2026-05-19-cleanup.md` (same date), which deleted `staking/src/graph.rs`, `compute_decentralization_metrics`, and closed FR-0060, FR-0183, and FR-0191 as overengineered. The decentralization score code and the GAP NOTEs for FR-0060/FR-0183 no longer exist on disk.
+
 ## Summary
 
 Ran Phase 0 traceability audit per fill-gaps.md. Found 2 unscheduled must-have FRs. Implemented FR-0183 decentralization score. Documented FR-0060 telemetry gap.

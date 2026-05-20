@@ -13,8 +13,8 @@
 
 use crate::error::PdpError;
 use crate::types::{
-    ActionPlanRequest, ActionPlanResponse, ActionType, Decision, Hash32, PdpContext,
-    QuotaConsumption, QuotaEntry,
+    ActionPlanRequest, ActionPlanResponse, ActionType, Decision, PdpContext, QuotaConsumption,
+    QuotaEntry,
 };
 
 /// Evaluates an action plan through the deterministic 5-step rule chain.
@@ -330,7 +330,7 @@ fn step5_fee_check(_request: &ActionPlanRequest, ctx: &PdpContext) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{DenyReason, QuotaState, TrustStage};
+    use crate::types::{DenyReason, Hash32, QuotaState, TrustStage};
 
     fn make_ctx(height: u64, balance: u128, nonce: u64) -> PdpContext {
         PdpContext {
@@ -396,7 +396,7 @@ mod tests {
     fn step3_rejects_replayed_plan_id() {
         let agent_id = [0xAAu8; 32];
         let plan_id = [0x42; 32];
-        let mut request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
+        let request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
         let mut ctx = make_ctx(50, 1000, 0);
         ctx.consumed_plan_ids = vec![plan_id];
         let result = evaluate(&request, &ctx);
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn step3_rejects_wrong_nonce() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
         let ctx = make_ctx(50, 1000, 3);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn step3_rejects_expired_ttl() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
         let ctx = make_ctx(100, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
@@ -427,7 +427,7 @@ mod tests {
     #[test]
     fn step3_rejects_ttl_too_far_future() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 20000);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 20000);
         let ctx = make_ctx(100, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn step3_accepts_valid_nonce_sequence() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
         let ctx = make_ctx(50, 1000, 4);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Approved);
@@ -446,7 +446,7 @@ mod tests {
     #[test]
     fn step4_quota_exhausted_blocks() {
         let agent_id = [0xAAu8; 32];
-        let mut request =
+        let request =
             make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
         let mut ctx = make_ctx(50, 1000, 0);
         ctx.quota_states = vec![QuotaState {
@@ -462,7 +462,7 @@ mod tests {
     #[test]
     fn step4_quota_allows_under_limit() {
         let agent_id = [0xAAu8; 32];
-        let mut request =
+        let request =
             make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
         let mut ctx = make_ctx(50, 1000, 0);
         ctx.quota_states = vec![QuotaState {
@@ -477,7 +477,7 @@ mod tests {
     #[test]
     fn step5_rejects_zero_balance() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(50, 0, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
@@ -487,7 +487,7 @@ mod tests {
     #[test]
     fn step5_allows_sufficient_balance() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(50, 1000, 0);
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Approved);
@@ -496,7 +496,7 @@ mod tests {
     #[test]
     fn deterministic_same_input_same_output() {
         let agent_id = [0xAAu8; 32];
-        let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+        let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(50, 1000, 0);
 
         let r1 = evaluate(&request, &ctx);

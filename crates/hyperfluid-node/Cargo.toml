@@ -15,6 +15,7 @@ path = "src/main.rs"
 hyperfluid-consensus = { path = "../hyperfluid-consensus" }
 hyperfluid-state = { path = "../hyperfluid-state" }
 hyperfluid-staking = { path = "../hyperfluid-staking" }
+hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 serde.workspace = true
 serde_json.workspace = true
 hex.workspace = true
@@ -25,6 +26,5 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
 hyperfluid-artifact = { path = "../hyperfluid-artifact" }
-hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 sha3.workspace = true
 parity-scale-codec.workspace = true

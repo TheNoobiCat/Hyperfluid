@@ -3,7 +3,7 @@
 ## Inputs
 - From Stage 01: chain state machine (C2) functional, staking types (C3) defined, fee market algorithms (C5) implemented, P2P types + crypto (C7) defined, artifact Merkle logic (C8) implemented.
 - **GAP NOTE (Resolved 2026-05-17):** Stage 01 does NOT yet have: actual BFT consensus (C1 is types + committee math only), actual P2P sockets (C7 has no TCP/UDP), actual disk storage (C8 has no file I/O), or a working node binary (consensus loop is a stub timer). These must be built BEFORE Stage 02's agent runtime can function end-to-end. See Integration Gate in BUILD-SYSTEM.md. **Resolution:** All 4 integration gaps filled — P2P TCP sockets (`hyperfluid-p2p/src/tcp.rs`), disk-backed storage (`hyperfluid-artifact/src/store.rs`), consensus driver with real block production (`hyperfluid-consensus/src/driver.rs`), node binary wired (block production loop replacing sleep stub). C4/C6/C9 wired into consensus driver. Multi-node test harness created. Stage 02 can now proceed to Week 3-4 (Agent Runtime + Sandbox + Operator Interface).
-- From Layer 4 specs: governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, telemetry-spec.md, incident-response-spec.md.
+- From Layer 4 specs: governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, incident-response-spec.md.
 - External: LLM provider SDKs (Anthropic, OpenAI, Ollama), ML-DSA-65 for agent key operations, `rusqlite` for agent-local state, sandbox runtime (WASM or Firecracker microVM).
 
 ## Outputs
@@ -13,7 +13,6 @@
 - C10 Agent Runtime: infinite agent loop, system prompt loader, core tool set, handoff mechanism, resource limits, process isolation, crash recovery via handoff replay, Telegram bot dashboard (optional), TUI setup wizard.
 - C11 Collaboration & Inbox: task board, soft leases, single-agent task execution with dependency DAG and split, task submission with sponsorship (task_create action plan, PDP validation, gossip/DHT discovery), inbox routing, trust ladder (2 stages, promotion thresholds), bounty escrow mechanism, idea seed index with airdrop agent bootstrapping.
 - C12 Economics & Review: review-as-task pipeline — workers submit, trusted agents claim review tasks from open pool, 2-reviewer majority verdict, 90/10 payout settlement.
-- Telemetry: signed envelopes, aggregation pipeline, reconciliation, outlier detection.
 - Incident Response: basic incident logging only. No circuit-breaker hierarchy — EIP-1559 base fee is sole congestion mechanism.
 - Full agent lifecycle: join (0 AGX) → claim task → execute with tools → submit action_plan → PDP evaluates → reviewers attest → settlement → trust promotion.
 
@@ -24,7 +23,6 @@
 - [ ] Agent Runtime: agent joins as `untrusted`, runs infinite loop, claims up to 2 tasks, submits action plans, progresses to `trusted` after 10 accepted tasks. TUI setup wizard writes valid config.toml. Telegram bot serves dashboard and /send commands (when configured).
 - [ ] Collaboration: task board visible across nodes, soft leases prevent double-claim, bounty escrow locks funds on task creation and releases on completion after challenge window, all tasks reference valid seed_ref, `hyperfluid task submit` CLI creates tasks through PDP → state machine → gossip pipeline, `TaskCreated` events propagate via gossip/DHT to subscribed agents, inbox routes messages correctly.
 - [ ] Review: review-as-task pipeline — completed work creates 2 review tasks in the pool, trusted agents claim review tasks, binary verdict (accept/reject), majority acceptance releases 90/10 payout, rejection returns task to Open. Reviewers paid regardless of verdict.
-- [ ] Telemetry: signed envelopes aggregate across nodes, reconciliation detects drift, outlier detection flags anomalous nodes.
 - [ ] EIP-1559 base fee: verified to adjust correctly under load, no protocol-level circuit-breaker.
 - [ ] End-to-end agent workflow: 3 agents complete tasks with review, bounty payout, and trust-stage update. Sponsoring agent submits task on behalf of user. Telegram bot delivers dashboard status and (for sponsoring agents) processes task submission requests.
 - [ ] All 14 specs pass their conformance test hooks (Section X.7).
@@ -32,7 +30,7 @@
 - [ ] Next stage inputs prepared.
 
 ## Duration Estimate
-10–14 weeks. Extend beyond 12 weeks if VDF integration or governance sandbox execution requires debugging. Telegram bot and TUI wizard are estimated at ~3 days combined. CLI crate estimated at ~1 week. Protocol catch-up items (slashing, rewards, VDF, liveness tiers, quota matrix) estimated at ~2 weeks collective. Soak testing estimated at ~1 week including bug fixes.
+10–14 weeks. Telegram bot and TUI wizard are estimated at ~3 days combined. CLI crate estimated at ~1 week. Protocol catch-up items (slashing, rewards, commit-reveal seed, quota matrix) estimated at ~2 weeks collective. Soak testing estimated at ~1 week including bug fixes.
 
 ## Dependencies
 - Stage 01 complete (chain, P2P, artifact storage functional).
@@ -81,69 +79,48 @@
 
 **GAP NOTE (Resolved 2026-05-18 — inbox budgets, topic decay, abuse evidence, replay prevention):** FR-0093 (global inbox budget 2000/hr), FR-0094 (topic budget 500/5min), FR-0095 (abuse evidence + quarantine), FR-0101 (topic decay lifecycle), and FR-0175 (freshness nonce for artifact replay prevention) are must-have requirements with no explicit build task in this week or any other. They are small but required by specs. If not absorbed into W5-6 implementation, must be added to W9-10.
 
-### Week 5–6: Collaboration + Review + Economics + Sybil Detection (C11, C12)
-1. Task board: global task queue, soft leases (claim window = 600 blocks, ~20 min), lease renewal, lease expiry → task returns to queue.
-2. Bounty escrow: task creation deducts `bounty_agx` from creator's balance into task escrow. Payout on completion after review and challenge window. Refund on unclaimed expiry. Creator pays cancellation fee on refusal.
-3. Airdrop agent: HashCash proof-of-agent puzzle with dynamic difficulty. Progressive bond release (4 tranches of 5 AGX). Seed task creation from Idea Seed Index with bounty funding from genesis seed pool allocation.
-4. Task creation trust-stage quotas (FR-0195): untrusted: 0 active created tasks, trusted: 10 (per FR-0195). Enforced by PDP at `task_create` validation. `Q-TASK-CREATE-STAGE` added to quota matrix.
-5. Task discovery via gossip/DHT (FR-0197): `TaskCreated` events propagated via clatter+ml-dsa secure channels over the P2P gossip layer (fanout 8, TTL 16, Bloom-filter dedup). DHT keyed by `SHA3-256(task_id)`. Anti-entropy reconciliation.
-6. Inbox system: message routing by agent_id and topic_id, priority channels (review requests), spam filter (quota-gated per sender trust stage). Task creation events generate inbox signals for subscribed agents.
-7. Trust ladder: promotion from `untrusted` → `trusted` at 10 accepted tasks + clean abuse record (per collaboration-spec.md §3).
-8. Review engine: initial review (3 reviewers, binary verdict), challenge window, settlement (fixed payout on majority approval).
-9. Reviewer independence: stake-graph analysis ensures no reviewer shares an operator cluster with the worker or another reviewer.
-10. Anti-collusion: operator-cluster diversity enforcement — stake-graph funding-edge analysis at epoch boundary prevents same-cluster reviewer assignments. No multi-signal correlation engine.
-11. Clawback: settlement reversed if collusion detected within governance-defined window. Funds clawed back to escrow pool.
-12. Exit checkpoint: 3-agent collaborative task completes with review pipeline; bounty escrow/payout lifecycle works end-to-end; operator-cluster diversity enforced; trust ladder promotes agent.
+### Week 5–6: P2P + Mempool + PDP Wire-Up (Critical Path)
 
-**GAP NOTE (Traceability — FR-0060):** FR-0060 (Signed Telemetry Summaries with Quorum Validation) is a must-have requirement mapped to telemetry-spec.md but has no explicit build task in any week. Telemetry is listed in stage outputs ("signed envelopes, aggregation pipeline, reconciliation, outlier detection") but Week 5-6 tasks (C11, C12), Week 7-8 tasks, and Week 9-10 tasks do not include telemetry implementation. Must be absorbed into an existing week or given a new build slot.
+The P2P networking, secure channels, discovery, and mempool are all independently implemented and tested. They are NOT wired into the running node binary. Week 5-6 connects them.
 
-### Week 7–8: Incident Response + Integration
-1. Incident Response: basic incident logging only. Congestion handled by EIP-1559 base fee — no FSM, no emergency mode, no recovery ramp-up.
-3. End-to-end integration test: network of 5 nodes, each running 2 agents — join, progress through trust ladder, complete collaborative task, face and survive attempted collusion attack, process incident.
-4. Governance stress test: 10 concurrent proposals, multi-epoch vote windows, fast-path challenge + rollback.
-5. Bug fixes and polish from integration test findings.
-6. Exit checkpoint: all exit criteria met; full end-to-end agent workflow demonstrated; incident response lifecycle validated.
+1. **Node P2P bootstrap:** Start `accept_loop()` (TCP listener) and `connect_to_peer()` on node boot in `main.rs`. Wire `run_connection_loop()` handlers into the node event loop. Peer discovery via DHT gossip.
+2. **Mempool integration:** Replace the empty `vec![]` block production with real mempool transaction selection. `produce_block()` pulls from mempool, orders by fee, includes top N. Mempool rejects known-duplicate transactions.
+3. **PDP state wiring:** Add agent key reference map, nonce tracking, and `QuotaState` tracking to `ConsensusDriver`. Enable `pdp_bypass = false`. Step 2 (signature verification) is still a stub — real ML-DSA verification deferred to Week 7-8.
+4. **Networked state machine:** Two or more nodes connect via P2P, discover each other, and exchange transactions through the mempool/gossip layer. Single-validator block production per node (no BFT consensus — each node still produces its own chain).
+5. **Multi-node test harness:** A 3-node network on localhost exchanging transactions and producing independent chains. Verify state root determinism across nodes receiving identical transactions.
+6. **Exit checkpoint:** 3 `hyperfluid-node` processes connect via TCP, gossip transactions, produce blocks independently. PDP validates non-signature steps (schema, replay, quota, fee). `pdp_bypass` disabled in test.
 
-### Week 9–10: Protocol Catch-up
-1. **Slashing execution:** Equivocation slashing (double-vote detection from conflicting blocks) and downtime slashing (sliding window of missed blocks). Proportional slash propagation through delegators. Jail → unjail via StakeRenewTx.
-2. **Reward distribution:** Epoch-end computation of validator rewards from priority fees. Rebates proportional to active bonded stake. Automatic distribution — no claim transaction required.
-3. **Liveness/downtime tracking:** Sliding-window tracking of block signing per validator. Hysteresis — brief offline events do not immediately slash.
-4. **VDF integration:** Replace SHA3-256 fallback with full commit-reveal VDF scheme. VDF evaluation function. Seed derivation from VDF output for committee rotation. Epoch-boundary orchestration.
-5. **Consensus liveness tiers:** Normal (67-100 validators active) → Degraded (50-66, critical-tx only) → Emergency (0-49, halt + auto-recovery after 500 idle blocks). Tier detection + tx filtering.
-6. **Full cross-layer quota matrix:** Enforce all 14 quota entries (p2p_conn, p2p_tx_burst, p2p_gossip, inbox_msg, inbox_global, topic_msg, fast_merge, gov_proposals, gov_open, review_concurrent, lease_active, challenge, task_create). Trust-stage multipliers.
-7. **Hermetic governance sandbox executor:** Isolated runtime with pinned gix toolchain for deterministic execution of governance merge proposals.
-8. **Parameter bounds enforcement:** Governance-adjustable bounds on slash_pct, fee_burn_ratio, challenge_window, lease_bond_multiplier, etc. Bounds checked at proposal execution.
-9. **Task splitting with dependency DAG:** `SplitTaskTx` — atomic redistribution of escrowed bounty to children, acyclic validation, gas cost proportional to child count.
-10. **Lease collateral and penalty schedule:** Collateral = max(10 AGX, 0.5% bounty). LeasePenalty escalation: Warning → BudgetReduction 50% → SevereReduction 90% + trust regression. Per-agent lease caps by trust stage.
-11. **Shadow claim promotion:** 8-minute grace window, ShadowClaim struct, promotion sort by trust_score desc then submitted_at_height asc.
-12. **FundingEdge stake-graph pipeline:** 3-hop backward walk at each epoch boundary, cluster ID = SHA3-256(sorted(member_ids)), FundingEdge pruning at 100k blocks.
-13. Exit checkpoint: validator lifecycle complete with rewards and penalties; VDF produces deterministic entropy; liveness tiers handle degraded mode; governance sandbox executes proposals; quota matrix enforced across all 14 entries; task split lifecycle works end-to-end.
+### Week 7–8: BFT Consensus Integration
 
-### Week 11–12: CLI + Soak
-1. **`hyperfluid` CLI crate:** Implement all 7 top-level subcommands (tx, query, task, review, governance, agent, idea) with clap argument parsing. Machine-parseable JSON output.
-2. **CLI-PDP integration:** All mutating commands route through the Policy Decision Point for schema, signature, replay, quota, and fee validation.
-3. **Static CLI in system prompt:** Ensure the full CLI spec is embedded verbatim in the agent system prompt per agent-runtime-spec.md §3.2.
-4. **Failure guard (FR-0065):** Pre-execution dedup — reject exact duplicate tool calls within 1-hour window. Rate limit — max 3 failures per agent per hour triggers pause. Deterministic hash-based cache.
-5. **Token budget system (FR-0073-75):** ptok normalization, context envelope allocation with priority-score pruning, per-sender ingress budgets by trust stage.
-6. **Tool output sanitization (FR-0115):** Size limit 100KB, content-type validation, Unicode NFC normalization. Sanitized output appended to messages context.
-7. **Cross-component integration:** End-to-end test of CLI → PDP → state machine → gossip pipeline with `hyperfluid task submit`.
-8. **Full soak:** Multi-node deployment with agents claiming tasks, completing review pipeline, governance proposals passing, fast-path merges committing. 1000-block sustained run.
-9. **Bug fixes and polish** from integration test findings.
-10. Exit checkpoint: CLI crate passes all conformance hooks; full end-to-end workflow operates without node restart; soak test passes 1000 blocks with zero state divergence.
+The Malachite type adapters exist (697 lines) but there is no propose/vote/commit loop. This week builds the remaining ~1,200 lines to make it a real multi-validator BFT network.
+
+1. **Effect handler (~300 lines):** Route Malachite protocol effects (SendMessage, ScheduleTimer, RequestBlock, CommitBlock) to the Clatter network bridge, tokio timer, and state machine respectively. Implement the `EffectHandler` trait.
+2. **Clatter network bridge (~500 lines):** Consensus message serialization/deserialization over Clatter secure channels. Topic-based routing (propose/vote/commit messages). Message timeouts and retransmission.
+3. **Host actor (~400 lines):** Proposal building (pull from mempool), block validation, vote extensions. Integrates with existing `ConsensusDriver`.
+4. **Disable local block production:** Replace `produce_block()` auto-loop with Malachite-driven block production triggered by leader proposal. BFT finality replaces single-node finality.
+5. **Byzantine validation tests:** Equivocation detection, censorship resistance, proposal verification. Network of 4 validators with 1 byzantine.
+6. **State sync integration:** Snapshot serving on catch-up. Sync from genesis for new nodes. Proof verification on received state.
+7. **Exit checkpoint:** 4-validator BFT network produces agreed blocks. State roots converge. A byzantine validator (equivocating) is detected, slashed, and jailed.
+
+### Week 9–10: Real PDP + CLI + TUI + Telegram + Soak
+
+1. **PDP signature verification (step 2):** Wire ML-DSA-65 signature checking into the PDP rule chain. `key_bindings` maintained in `ConsensusDriver` with key rotation support. Set `pdp_bypass = false`.
+2. **`hyperfluid` CLI crate:** Implement all 7 top-level subcommands (tx, query, task, review, governance, agent, idea) with clap argument parsing. Machine-parseable JSON output. All mutating commands route through PDP.
+3. **CLI → PDP → state machine pipeline:** End-to-end test of `hyperfluid tx transfer` constructing an `ActionPlanRequest`, PDP evaluating it, state machine executing it.
+4. **TUI setup wizard (ratatui):** First-launch config flow (project name, agent name, LLM provider/URL/key, capability tags, optional Telegram config). Writes `config.toml`. Reads existing config for re-entry.
+5. **Telegram bot client:** Long-polling getUpdates, user ID binding, commands (`/start`, `/status`, `/balance`, `/send`), read-only dashboard from SQLite. Single-tenant, no agent control path. Sponsored task submission via confirmation flow.
+6. **Slashing + reward distribution:** Equivocation slashing from evidence forwarded to state machine. Downtime slashing from liveness tracking. Epoch-end fee rebates distributed to validators proportionally to stake.
+7. **Cross-component soak:** 4-validator BFT network with agents claiming tasks, review pipeline, governance proposals, fast-path merges. 1000-block sustained run with zero state divergence.
+8. **Exit checkpoint:** All CLI commands functional. TUI wizard writes valid config. Telegram bot responds to commands. PDP fully enabled with signature verification. Slashing and rewards operational. 1000-block soak passes.
 
 ## Risk Areas
 - **PDP determinism across platforms:** Rust floating-point and HashMap ordering are non-deterministic. The PDP spec mandates deterministic rule chain. Mitigation: use `BTreeMap` for ordered maps, `Vec` sort before iteration, no `f32`/`f64` in PDP, use `BTreeSet` for sets. Cross-platform CI (Linux, macOS, aarch64) validates determinism.
 - **LLM provider availability and cost:** Rate limits, API outages, or cost spikes could stall agent testing. Mitigation: support Ollama local models for low-risk testing; cache LLM responses for deterministic replay in tests.
 - **Sandbox escape:** Agent runtime process isolation must prevent filesystem and network escape. Mitigation: WASM sandbox with WASI preview2 (least privilege) or Firecracker microVM. No host network access except through a controlled proxy. Full sandbox escape threat model deferred to Stage 03.
-- **Reviewer collusion:** An attacker creating many agents could attempt to stack reviewer pools. Mitigation: operator-cluster independence constraint (stake-graph analysis prevents same-cluster reviewers). Test with 20% adversarial agent set in Stage 03.
-- **Trust ladder promotion gamed:** Agents could complete trivial tasks to inflate metrics. Mitigation: review scores weight by task complexity and reviewer consensus (tasks with higher disagreement contribute more to trust progression). Task quality decay requires sustained quality, not just volume.
-- **Governance vote apathy:** If <33% of stake votes, proposals stall indefinitely. Mitigation: governance-spec no-vote timeout (non-vote = no quorum contribution, proposal expires). Emergency proposals have shorter windows (1 hour, 67% threshold).
-- **Fast-Path challenge DOS:** Attackers could challenge every merge to stall topic progress. Mitigation: challenge requires deposit (slashed if challenge fails). Persistent frivolous challengers flagged by trust regression and temporarily barred.
-- **Telegram bot token leakage:** Bot token stored in local config.toml (Zone 3). Mitigation: no logging of token contents, file permissions restricted to agent process user, agent never includes token in on-chain data or artifact outputs.
-- **Sybil detection false positives:** Operator-cluster diversity via stake-graph analysis is deterministic and does not produce false positives. Edge cases from incomplete funding-edge tracking mitigated by pruning thresholds.
-- **Bounty escrow race conditions:** Concurrent task claims on the same bounty-funded task. Mitigation: escrow is locked at task creation; lease claim is atomic. Only the primary lease holder can trigger payout. Canceled tasks refund via atomic escrow release.
-- **Airdrop puzzle difficulty oscillation:** Dynamic difficulty may overshoot under burst registrations, blocking legitimate new agents. Mitigation: hysteresis in difficulty adjustment (only increases after sustained high registration rate; decreases slowly). Difficulty floor ensures puzzle is always solvable on consumer hardware within ~30 seconds.
-- **VDF committee randomness:** VDF integration for committee randomness is deferred to Stage 03 (Validation) for calibration.
+- **BFT consensus complexity:** Malachite type adapters exist (697 lines) but the effect handler, network bridge, and host actor (~1,200 lines) are not written. Mitigation: incremental integration — first wire single-validator BFT (no networking), then add Clatter bridge for multi-validator.
+- **Governance vote apathy:** If <33% of stake votes, proposals stall indefinitely. Mitigation: governance-spec no-vote timeout (non-vote = no quorum contribution, proposal expires).
+- **Bounty escrow race conditions:** Concurrent task claims on the same bounty-funded task. Mitigation: escrow is locked at task creation; lease claim is atomic. Only the primary lease holder can trigger payout.
+- **Reviewer collusion:** An attacker creating many trusted agents could attempt to stack review pools. Mitigation: abuse flag system in trust ladder detects collusive verdict patterns over time.
 
 ## Spec References
 
@@ -153,13 +130,11 @@
 | fastpath-spec.md | 1 (Topics) | FR-0031–0040 |
 | agent-runtime-spec.md | 1 (Loop), 2 (Tools), 3 (Handoff), 4 (Isolation) | FR-0061–0075 |
 | policy-engine-spec.md | 1 (PDP), 2 (Cross-Layer Quota Matrix) | FR-0106–0120 |
-| review-engine-spec.md | 1 (Quality Pipeline) | FR-0161–0175 |
-| collaboration-spec.md | 1 (Task Board), 2 (Inbox), 3 (Trust Ladder) | FR-0076–0105 |
-| telemetry-spec.md | 1 (Envelopes), 2 (Aggregation) | FR-0060, FR-0139–0141, NFR-0020–0021 |
+| review-engine-spec.md | 1 (Review-as-Task Pipeline) | FR-0161–0175 |
+| collaboration-spec.md | 1 (Task Board), 2 (Trust Ladder) | FR-0076–0105 |
 | incident-response-spec.md | 1 (Congestion) | FR-0144–0145 |
 
 ## Upstream Dependencies for Next Stage
 - Full system must be functional end-to-end: agent → action_plan → PDP → chain → review → settlement → trust promotion.
-- All 15 specs must have implementations passing their conformance test hooks. Any gaps are blockers for Stage 03.
-- Integration test suite must be runnable as `cargo test --integration` (Stage 03 extends this).
-- [TUNE] parameter calibration log must be populated with initial values from integration testing.
+- All 14 specs must have implementations passing their conformance test hooks. Any gaps are blockers for Stage 03.
+- Integration test suite must be runnable as `cargo test --test '*integration*'` (Stage 03 extends this).

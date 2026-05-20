@@ -2,13 +2,13 @@
 
 ## Inputs
 - From Stage 03: validated full system, conformance matrix passing, calibrated [TUNE] parameters, security audit clean, load/adversarial test results.
-- From Layer 4 specs: all 15 specs, particularly incident-response-spec.md and telemetry-spec.md for operations integration.
+- From Layer 4 specs: all 14 specs, particularly incident-response-spec.md for operations integration.
 - External: monitoring stack (Prometheus + Grafana or equivalent), alerting platform (PagerDuty or equivalent), deployment orchestration (Docker Compose for genesis, Kubernetes for production), key management HSM integration.
 
 ## Outputs
 - SLO definitions: uptime, block finality latency, transaction inclusion latency, artifact availability, review pipeline latency.
-- Monitoring dashboards: chain health (block height, finality, validator set), agent metrics (active agents, trust stage distribution, task throughput), economics (fee market, staking distribution, reward distribution), security (telemetry reconciliation drift).
-- Alerting rules: alerts for block stall (>10s without block), validator churn spike (>20% in epoch), telemetry reconciliation drift >1%.
+- Monitoring dashboards: chain health (block height, finality, validator set), agent metrics (active agents, trust stage distribution, task throughput), economics (fee market, staking distribution, reward distribution).
+- Alerting rules: alerts for block stall (>10s without block), validator churn spike (>20% in epoch).
 - Runbooks: genesis ceremony, validator onboarding, validator offboarding, incident response (per incident-response-spec.md), state sync recovery, artifact repair, key rotation, governance emergency upgrade.
 - Launch checklist: genesis block ceremony, initial validator set bootstrapping, airdrop challenge distribution, monitoring verification, smoke test, public announcement.
 - Private testnet: 20+ node simulated mainnet with realistic geography (latency emulation), 7-day pre-launch soak.

@@ -272,8 +272,16 @@ Good luck. Build something.\
 ";
 
 /// Priority order for context window pruning (highest first).
-pub const PRUNING_PRIORITY: &[&str] =
-    &["identity", "concepts", "todos", "instructions", "knowledge", "cli_spec", "handoff", "seed_requirement"];
+pub const PRUNING_PRIORITY: &[&str] = &[
+    "identity",
+    "concepts",
+    "todos",
+    "instructions",
+    "knowledge",
+    "cli_spec",
+    "handoff",
+    "seed_requirement",
+];
 
 // ── Prompt assembly ──
 
@@ -398,8 +406,13 @@ pub fn assemble_system_prompt(
 /// The `priority_order` parameter is accepted for future pruning use but is not
 /// consumed in this simple allocation.
 pub fn assemble_context_envelope(prompt: &str, _priority_order: &[&str]) -> ContextEnvelope {
-    let identity_headers: &[&str] =
-        &["# Agent Identity", "# Current Todos", "# Working Directory", "# Your Task", "# What Hyperfluid Is"];
+    let identity_headers: &[&str] = &[
+        "# Agent Identity",
+        "# Current Todos",
+        "# Working Directory",
+        "# Your Task",
+        "# What Hyperfluid Is",
+    ];
     let messages_headers: &[&str] = &["# Knowledge Base", "# Last Handoff"];
     let tool_headers: &[&str] = &["# CLI Command Reference"];
 
@@ -595,10 +608,7 @@ mod tests {
 
         assert!(prompt.contains("hyperfluid task submit"), "prompt should contain CLI spec");
         assert!(prompt.contains("--bounty <atto-agx>"), "CLI spec should include bounty argument");
-        assert!(
-            prompt.contains("--seed-ref <seed>"),
-            "CLI spec should include seed-ref argument"
-        );
+        assert!(prompt.contains("--seed-ref <seed>"), "CLI spec should include seed-ref argument");
     }
 
     #[test]

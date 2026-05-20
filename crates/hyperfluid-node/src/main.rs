@@ -1,12 +1,16 @@
 // === Hyperfluid Node Binary ===
 //
 // Full node binary: genesis boot, config loading, real block production loop
-// via ConsensusDriver, clean shutdown on signal.
+// via ConsensusDriver, P2P TCP transport, clean shutdown on signal.
 //
 // Source: docs/05-planning/stages/stage-01-protocol-core.md
 
 use hyperfluid_consensus::driver::ConsensusDriver;
 use hyperfluid_consensus::genesis::GenesisConfig;
+use hyperfluid_p2p::transport::PeerCache;
+use hyperfluid_p2p::types::{DiscoveryConfig, Hash32};
+use hyperfluid_p2p::{identity::Identity, tcp::TcpTransport};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -119,6 +123,35 @@ async fn main() {
     });
 
     let block_interval = Duration::from_secs(config.block_interval_secs);
+
+    // ── P2P TCP transport startup ──
+    let p2p_bind_addr: SocketAddr = "127.0.0.1:0".parse().expect("invalid P2P bind address");
+    let p2p_config = DiscoveryConfig::default();
+    let peer_cache = Arc::new(tokio::sync::RwLock::new(PeerCache::new()));
+    let tcp_transport = Arc::new(TcpTransport::new(p2p_config, Arc::clone(&peer_cache)));
+    let local_identity = Arc::new(Identity::generate());
+    let local_peer_id = *local_identity.peer_id();
+
+    {
+        let listener = tokio::net::TcpListener::bind(p2p_bind_addr)
+            .await
+            .expect("failed to bind P2P TCP listener");
+        let actual_addr = listener.local_addr().expect("failed to get P2P listener address");
+        tracing::info!(
+            "P2P TCP listener started on {} (peer_id: {})",
+            actual_addr,
+            hex::encode(local_peer_id),
+        );
+
+        let transport = Arc::clone(&tcp_transport);
+        let identity = Arc::clone(&local_identity);
+        let r_p2p = running.clone();
+        let key_provider = Arc::new(|_peer_id: &Hash32| -> Option<([u8; 32], Vec<u8>)> { None });
+        tokio::spawn(async move {
+            TcpTransport::accept_loop(listener, identity, key_provider, transport).await;
+            r_p2p.store(false, Ordering::Release);
+        });
+    }
 
     tracing::info!("Node entering consensus loop (live block production)");
 

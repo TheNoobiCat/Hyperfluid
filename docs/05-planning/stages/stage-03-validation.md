@@ -1,18 +1,18 @@
 # Stage 03: Validation
 
 ## Inputs
-- From Stage 02: full system implementation — chain, agents, PDP, review, governance, telemetry, incident response.
-- From Layer 4 specs: all 15 specs, conformance test hooks (Section X.7 of each spec).
+- From Stage 02: full system implementation — chain, agents, PDP, review, governance, incident response.
+- From Layer 4 specs: all 14 specs, conformance test hooks (Section X.7 of each spec).
 - External: adversarial testing tools (custom Rust harnesses), load generation tools, security audit tooling (cargo-audit, cargo-deny, fuzz harnesses, MIRI for unsafe code audit).
 
 ## Outputs
 - Conformance matrix: every FR/NFR tested, results recorded per spec Section X.7 hook. Traceable FR → spec → test → result.
-- Adversarial scenario suite: Byzantine validator (equivocation, censorship, proposal withholding), Sybil agent cluster, colluding reviewers, fast-path challenger flood, governance vote manipulation attempts.
+- Adversarial scenario suite: Byzantine validator (equivocation, censorship, proposal withholding), colluding reviewers, fast-path challenger flood, governance vote manipulation attempts.
 - Load & stress tests: target throughput (100 tx/s per committee), latency (2s block time sustained), memory/disk stability under sustained load, recovery after partition heal.
 - Security hardening: sandbox escape test suite, injection attack vectors (prompt injection, action plan forging, replay), key compromise response validation.
 - Performance benchmark report: block propagation time, SMT root computation, PDP evaluation cost, review pipeline latency, state sync time, artifact storage throughput.
 - [TUNE] parameter calibration report: each [TUNE] parameter from specs measured under load; recommended production values derived.
-- All 15 spec conformance test hooks pass. All FR-0190 adversarial scenarios executed.
+- All 14 spec conformance test hooks pass. All adversarial scenarios executed.
 
 ## Exit Criteria
 - [ ] Conformance matrix: 201/201 FR/NFR have passing conformance tests. Zero failing tests.

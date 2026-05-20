@@ -82,8 +82,8 @@ pub struct ValidatorTracker {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct SplitChildSpec {
     pub task_id: Hash32,
-    pub bounty_share_pct: u8,         // percentage of parent bounty (sum must = 100)
-    pub depends_on: Vec<Hash32>,      // child task_ids that must complete first
+    pub bounty_share_pct: u8, // percentage of parent bounty (sum must = 100)
+    pub depends_on: Vec<Hash32>, // child task_ids that must complete first
     pub required_skills_hash: Hash32,
 }
 
@@ -354,10 +354,8 @@ impl StateMachine {
         }
 
         // 3. Validate acyclic dependency graph (simple DFS)
-        let graph: Vec<(Hash32, Vec<Hash32>)> = children
-            .iter()
-            .map(|c| (c.task_id, c.depends_on.clone()))
-            .collect();
+        let graph: Vec<(Hash32, Vec<Hash32>)> =
+            children.iter().map(|c| (c.task_id, c.depends_on.clone())).collect();
         if has_cycle(&graph) {
             return ExecutionResult::Rejected;
         }
@@ -376,12 +374,11 @@ impl StateMachine {
         let parent_topic = parent.topic_id;
         let parent_sponsor = parent.sponsor_id;
         let parent_funder = parent.funder;
-        // Drop parent immutable borrow before mutating self.tasks
-        drop(parent);
+        // Release parent immutable borrow before mutating self.tasks
+        let _ = parent;
 
         for child in &children {
-            let child_bounty =
-                (parent_bounty as u128 * child.bounty_share_pct as u128) / 100u128;
+            let child_bounty = (parent_bounty * child.bounty_share_pct as u128) / 100u128;
             let child_task = Task {
                 task_id: child.task_id,
                 topic_id: parent_topic,
@@ -907,15 +904,14 @@ impl StateMachine {
         let task_sponsor = task.sponsor_id;
         let task_id_copy = task.task_id;
         task.status = TaskStatus::InReview;
-        // Drop mutable borrow before accessing self.tasks again
-        drop(task);
+        // Release mutable borrow before accessing self.tasks again
+        let _ = task;
 
         // Create 2 review tasks (each worth 5% of work bounty)
         let review_count: u64 = 2;
         for i in 0..review_count {
-            let review_task_id = crate::sha3_256(
-                &[task_id_copy.as_slice(), &(i as u64).to_le_bytes()].concat(),
-            );
+            let review_task_id =
+                crate::sha3_256(&[task_id_copy.as_slice(), &i.to_le_bytes()].concat());
             // Avoid collision with existing tasks
             if self.tasks.contains_key(&review_task_id) {
                 continue;
@@ -964,8 +960,12 @@ impl StateMachine {
 
         // Reviewer must be the primary owner of the review task
         let _review_task = match self.tasks.get(&review_task_id) {
-            Some(t) if t.primary_owner == reviewer_id
-                && matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress) => t,
+            Some(t)
+                if t.primary_owner == reviewer_id
+                    && matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress) =>
+            {
+                t
+            }
             _ => return ExecutionResult::Rejected,
         };
 
@@ -1006,7 +1006,8 @@ impl StateMachine {
             _ => return,
         };
 
-        let accept_count = verdicts.iter().filter(|v| matches!(v.verdict, ReviewVerdict::Accept)).count();
+        let accept_count =
+            verdicts.iter().filter(|v| matches!(v.verdict, ReviewVerdict::Accept)).count();
         let reject_count = verdicts.len() - accept_count;
         let accepted = accept_count > reject_count;
 
@@ -1259,6 +1260,10 @@ impl StateMachine {
 
     pub fn tasks_iter(&self) -> impl Iterator<Item = &Task> {
         self.tasks.values()
+    }
+
+    pub fn leases_iter(&self) -> impl Iterator<Item = &TaskLease> {
+        self.leases.values()
     }
 
     pub fn trust_stages_iter(&self) -> impl Iterator<Item = &TrustStageRecord> {

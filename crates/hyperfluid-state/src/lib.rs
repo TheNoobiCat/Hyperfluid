@@ -162,7 +162,7 @@ pub enum ReviewVerdict {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct ReviewRecord {
     pub task_id: Hash32,
-    pub review_task_id: Hash32,     // the task that pays the reviewer
+    pub review_task_id: Hash32, // the task that pays the reviewer
     pub reviewer_id: Hash32,
     pub verdict: ReviewVerdict,
     pub evidence_hash: Hash32,

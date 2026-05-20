@@ -12,6 +12,7 @@ use hyperfluid_pdp::types::{
 use ml_dsa::{Generate, Keypair, MlDsa65, Seed, SignatureEncoding, Signer, SigningKey};
 use sha3::{Digest, Sha3_256};
 
+#[allow(dead_code)]
 fn sha3_256_bytes(data: &[u8]) -> Hash32 {
     let mut hasher = Sha3_256::new();
     hasher.update(data);
@@ -20,6 +21,7 @@ fn sha3_256_bytes(data: &[u8]) -> Hash32 {
     out
 }
 
+#[allow(dead_code)]
 fn test_keypair() -> (Vec<u8>, [u8; 32]) {
     let sk = SigningKey::<MlDsa65>::generate();
     let pk = sk.verifying_key().encode().as_slice().to_vec();
@@ -29,6 +31,7 @@ fn test_keypair() -> (Vec<u8>, [u8; 32]) {
     (pk, seed_bytes)
 }
 
+#[allow(dead_code)]
 fn sign_request(request: &ActionPlanRequest, sk_seed: &[u8; 32]) -> Vec<u8> {
     let seed = Seed::try_from(sk_seed.as_slice()).unwrap();
     let sk = SigningKey::<MlDsa65>::from_seed(&seed);
@@ -37,6 +40,7 @@ fn sign_request(request: &ActionPlanRequest, sk_seed: &[u8; 32]) -> Vec<u8> {
     sig.to_vec()
 }
 
+#[allow(dead_code)]
 fn hash_action_plan_for_signing(request: &ActionPlanRequest) -> Hash32 {
     let mut hasher = Sha3_256::new();
     hasher.update(request.plan_id);
@@ -99,7 +103,7 @@ fn make_ctx(height: u64, balance: u128, nonce: u64) -> PdpContext {
 
 #[test]
 fn conforms_to_pdp_spec_1_7_deterministic_evaluation() {
-    let mut request = make_request([1u8; 32], [0xAA; 32], ActionType::ClaimTaskLease, 1, 100);
+    let request = make_request([1u8; 32], [0xAA; 32], ActionType::ClaimTaskLease, 1, 100);
     let ctx = make_ctx(50, 1000, 0);
 
     let r1 = evaluate(&request, &ctx);
@@ -121,7 +125,7 @@ fn conforms_to_pdp_spec_1_7_schema_violation_rejected() {
 fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
     let agent_id = [0xAA; 32];
     let plan_id = [0x42; 32];
-    let mut request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
     let mut ctx = make_ctx(50, 1000, 0);
     ctx.consumed_plan_ids = vec![plan_id];
     let result = evaluate(&request, &ctx);
@@ -132,7 +136,7 @@ fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
 #[test]
 fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
     let agent_id = [0xAA; 32];
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
+    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
     let ctx = make_ctx(50, 1000, 3);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
@@ -142,7 +146,7 @@ fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
 #[test]
 fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
     let agent_id = [0xAA; 32];
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
+    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
     let ctx = make_ctx(100, 1000, 0);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
@@ -152,8 +156,7 @@ fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
 #[test]
 fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
     let agent_id = [0xAA; 32];
-    let mut request =
-        make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
+    let request = make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
     let mut ctx = make_ctx(50, 1000, 0);
     ctx.quota_states = vec![QuotaState {
         quota_id: "gov_proposals_per_identity".into(),
@@ -168,7 +171,7 @@ fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
 #[test]
 fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
     let agent_id = [0xAA; 32];
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
     let ctx = make_ctx(50, 0, 0);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
@@ -178,7 +181,7 @@ fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
 #[test]
 fn conforms_to_pdp_spec_1_7_full_chain_approval() {
     let agent_id = [0xAA; 32];
-    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
     let ctx = make_ctx(50, 1000, 0);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.deny_reason, None);

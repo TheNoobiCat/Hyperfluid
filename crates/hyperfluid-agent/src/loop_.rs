@@ -230,8 +230,9 @@ impl AgentRuntime {
             } else if let Some(start) = llm_response.content.find('[') {
                 let end = llm_response.content[start..].find(']').map(|e| start + e + 1);
                 match end {
-                    Some(end) => serde_json::from_str(&llm_response.content[start..end])
-                        .unwrap_or_default(),
+                    Some(end) => {
+                        serde_json::from_str(&llm_response.content[start..end]).unwrap_or_default()
+                    }
                     None => Vec::new(),
                 }
             } else {
@@ -246,7 +247,7 @@ impl AgentRuntime {
                         "system",
                         "You had no actions this iteration. This loop runs forever — you \
                          must find something productive: explore the codebase, browse seeds, \
-                         create a task, or plan your next move."
+                         create a task, or plan your next move.",
                     )?;
                 }
             }

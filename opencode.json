@@ -29,23 +29,9 @@
         "task": "allow"
       }
     },
-    "hyperfluid-research": {
-      "mode": "subagent",
-      "description": "Research agent for Hyperfluid. Investigates decentralized systems, agent architectures, blockchain protocols, AI infrastructure, distributed systems, and developer tooling.",
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "bash": "ask",
-        "webfetch": "allow",
-        "websearch": "allow",
-        "skill": "allow",
-        "task": "allow"
-      }
-    },
     "build-worker": {
       "mode": "subagent",
+      "model": "opencode-go/deepseek-v4-flash",
       "description": "Stateless build worker for Hyperfluid. Implements spec tasks, writes tests, runs CI tools. Receives narrow task context from the build orchestrator. Same full project knowledge as the primary build agent — no specialization, just parallel execution.",
       "permission": {
         "read": "allow",

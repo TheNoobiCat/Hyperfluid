@@ -168,5 +168,3 @@ fn conforms_to_consensus_spec_1_7_two_epoch_recency_edge_case() {
         assert!(!ineligible.contains(member));
     }
 }
-
-

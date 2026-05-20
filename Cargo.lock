@@ -1097,6 +1097,7 @@ dependencies = [
  "hyperfluid-fastpath",
  "hyperfluid-fee-market",
  "hyperfluid-governance",
+ "hyperfluid-p2p",
  "hyperfluid-pdp",
  "hyperfluid-staking",
  "hyperfluid-state",

@@ -19,7 +19,7 @@ Located in `docs/04-specifications/protocol/`
 
 | Spec | Component | FRs | Lines |
 |------|-----------|-----|-------|
-| [`consensus-spec.md`](protocol/consensus-spec.md) | C1 Consensus Engine, C2 State Machine | FR-0001-0010 | Consensus BFT, committee rotation, VDF randomness, SMT state, transaction types, nonces, finality |
+| [`consensus-spec.md`](protocol/consensus-spec.md) | C1 Consensus Engine, C2 State Machine | FR-0001-0010 | Consensus BFT, committee rotation, commit-reveal seed, SMT state, transaction types, nonces, finality |
 | [`staking-spec.md`](protocol/staking-spec.md) | C3 Staking & Validator Manager | FR-0011-0020 | Four-state validator lifecycle, bonding/unbonding, slashing, downtime, evidence pipeline |
 | [`governance-spec.md`](protocol/governance-spec.md) | C4 Governance Engine | FR-0021-0030 | git:head management, proposal lifecycle, vote window, sandbox review, anti-flood controls |
 | [`p2p-wire-spec.md`](protocol/p2p-wire-spec.md) | C7 P2P Networking | FR-0041-0050 | Peer discovery, connection state machine, gossip, relay, fee-ordered mempool |
@@ -43,7 +43,7 @@ Located in `docs/04-specifications/runtime/`
 |------|-----------|-----|-------|
 | [`agent-runtime-spec.md`](runtime/agent-runtime-spec.md) | C10 Agent Runtime | FR-0061-0075, FR-0136-0138 | Infinite loop, core tools, system prompt, handoff, resource limits, process isolation, sandbox security |
 | [`policy-engine-spec.md`](runtime/policy-engine-spec.md) | C9 Policy Decision Point | FR-0106-0120 | 6-step deterministic rule chain, action plans, quota matrix, audit log |
-| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161, FR-0164-0165, FR-0170, FR-0175 | Two-phase quality pipeline, reviewer assignment, anti-collusion, settlement |
+| [`review-engine-spec.md`](runtime/review-engine-spec.md) | C12 Economics (Review Markets) | FR-0161, FR-0164-0165, FR-0170, FR-0175 | Review-as-task pipeline, trusted-agent review, 90/10 payout settlement |
 | [`cli-spec.md`](runtime/cli-spec.md) | C10 Agent Runtime | FR-0068, FR-0069, FR-0199 | CLI command taxonomy, PDP integration, static prompt spec |
 | [`collaboration-spec.md`](runtime/collaboration-spec.md) | C11 Collaboration & Inbox | FR-0076-0105, FR-0176-0190 | Task board, soft leases, inbox routing, trust ladder, airdrop economics |
 
@@ -103,7 +103,7 @@ Located in `docs/04-specifications/security/`
 | ADR-0003 (PDP Deterministic Chain) | policy-engine-spec.md, governance-spec.md |
 | ADR-0004 (Agent Process Separation) | agent-runtime-spec.md Section 4 |
 | ADR-0005 (Content-Addressed SMT) | consensus-spec.md Section 2, state-sync-spec.md |
-| ADR-0007 (Committee BFT VDF) | consensus-spec.md Section 1, staking-spec.md |
+| ADR-0007 (Committee BFT Seed) | consensus-spec.md Section 1 |
 | ADR-0008 (Two-Phase Quality) | review-engine-spec.md Section 1 |
 | ADR-0009 (EIP-1559 Fee Market) | fee-market-spec.md Section 1 |
 | ADR-0010 (Two-Stage Trust Ladder) | collaboration-spec.md Section 3 |

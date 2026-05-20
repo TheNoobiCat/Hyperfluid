@@ -166,6 +166,7 @@ fn tx(hash: u8, sender: u8, tx_type: TxTypeTag, prio: u128, base: u128) -> Mempo
         priority_fee: prio,
         base_fee: base,
         max_fee_per_tx: base.saturating_add(prio),
+        tx_data: vec![hash],
     }
 }
 

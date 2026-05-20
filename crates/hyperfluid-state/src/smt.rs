@@ -12,7 +12,7 @@ use sha3::Digest;
 use sparse_merkle_tree::{
     default_store::DefaultStore,
     traits::{Hasher, Value},
-    H256, MerkleProof, SparseMerkleTree as InnerSmt,
+    MerkleProof, SparseMerkleTree as InnerSmt, H256,
 };
 
 use crate::Hash32;
@@ -30,7 +30,7 @@ impl Hasher for Sha3Hasher {
     }
 
     fn write_byte(&mut self, b: u8) {
-        self.state.update(&[b]);
+        self.state.update([b]);
     }
 
     fn finish(self) -> H256 {
@@ -86,9 +86,7 @@ impl Default for SparseMerkleTree {
 
 impl SparseMerkleTree {
     pub fn new() -> Self {
-        Self {
-            inner: InnerTree::default(),
-        }
+        Self { inner: InnerTree::default() }
     }
 
     /// Insert or update a key-value pair.
@@ -114,12 +112,7 @@ impl SparseMerkleTree {
         let proof = self.inner.merkle_proof(vec![hkey]).ok()?;
         let root = self.root();
 
-        Some(InclusionProof {
-            key: *key,
-            value: value.0,
-            proof,
-            root,
-        })
+        Some(InclusionProof { key: *key, value: value.0, proof, root })
     }
 
     /// Verify an inclusion or exclusion proof against a trusted root.
@@ -131,11 +124,7 @@ impl SparseMerkleTree {
         let hval_hash = hash_value(&proof.value);
         let hroot = H256::from(root);
 
-        proof
-            .proof
-            .clone()
-            .verify::<Sha3Hasher>(&hroot, vec![(hkey, hval_hash)])
-            .unwrap_or(false)
+        proof.proof.clone().verify::<Sha3Hasher>(&hroot, vec![(hkey, hval_hash)]).unwrap_or(false)
     }
 }
 

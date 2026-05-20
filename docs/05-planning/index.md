@@ -42,7 +42,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 |-------|------|----------|------------|-------|-----------------|
 | 00 | Foundation | 1–2 weeks | — | — | Repo, tooling, CI, local testnet scaffold |
 | 01 | Protocol Core | 6–8 weeks | C1, C2, C3, C5, C7, C8 | 7 (protocol + storage) | Single-node chain with staking, fees, P2P, artifact storage |
-| 02 | Agent Runtime | 6–8 weeks | C4, C6, C9, C10, C11, C12 | 8 (runtime + remaining protocol) | Agent-driven task board with PDP gating, review pipeline, governance |
+| 02 | Agent Runtime | 6–8 weeks | C4, C6, C9, C10, C11, C12 | 7 (runtime + remaining protocol) | Agent-driven task board with PDP gating, review pipeline, governance |
 | 03 | Validation | 4–6 weeks | All | All 15 | Conformance matrix, adversarial test suite, load results, security audit |
 | 04 | Mainnet Prep | 4–6 weeks | All | All 15 | Runbooks, SLOs, monitoring, incident playbooks, launch checklist |
 
@@ -54,7 +54,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 |-------|--------|---------|-----------|-------------|
 | Stage 00: Foundation | COMPLETE | 2026-05-02 | 2026-05-04 | Gate result: PASS |
 | Stage 01: Protocol Core | COMPLETE | 2026-05-05 | 2026-05-14 | Gate result: PASS |
-| Stage 02: Agent Runtime | IN PROGRESS (Pre-Flight: clatter+ml-dsa) | — | — | — |
+| Stage 02: Agent Runtime | IN PROGRESS (Week 3-4: Agent Runtime Library) | — | — | — |
 | Stage 03: Validation | NOT STARTED | — | — | — |
 | Stage 04: Mainnet Prep | NOT STARTED | — | — | — |
 
@@ -65,7 +65,7 @@ Protocol Core must precede Agent Runtime because agents submit action plans to t
 | Stage | Specs Included |
 |-------|---------------|
 | 01 | consensus-spec.md, staking-spec.md, p2p-wire-spec.md, fee-market-spec.md, state-sync-spec.md, artifact-availability-spec.md |
-| 02 | governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, telemetry-spec.md, incident-response-spec.md |
+| 02 | governance-spec.md, fastpath-spec.md, agent-runtime-spec.md, policy-engine-spec.md, review-engine-spec.md, collaboration-spec.md, incident-response-spec.md |
 | 03 | All 14 specs (conformance) |
 | 04 | All 14 specs (operations) |
 

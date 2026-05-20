@@ -84,10 +84,7 @@ impl LlmProvider for OpenAiProvider {
                 content: request.system_prompt.clone(),
             });
             for msg in &request.messages {
-                msgs.push(OpenAiMessage {
-                    role: msg.role.clone(),
-                    content: msg.content.clone(),
-                });
+                msgs.push(OpenAiMessage { role: msg.role.clone(), content: msg.content.clone() });
             }
             msgs
         };
@@ -109,9 +106,11 @@ impl LlmProvider for OpenAiProvider {
             .map_err(|e| LlmError::Api(e.to_string()))?
             .json()?;
 
-        let choice = resp.choices.into_iter().next().ok_or_else(|| {
-            LlmError::Api("empty choices in OpenAI response".into())
-        })?;
+        let choice = resp
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| LlmError::Api("empty choices in OpenAI response".into()))?;
 
         Ok(LlmResponse {
             content: choice.message.content,
@@ -153,28 +152,20 @@ struct OllamaMessage {
 #[derive(Deserialize)]
 struct OllamaResponseMessage {
     message: OllamaMessage,
+    #[allow(dead_code)]
     total_duration: Option<u64>,
 }
 
 impl LlmProvider for OllamaProvider {
     fn complete(&self, request: &LlmRequest) -> Result<LlmResponse, LlmError> {
         let mut messages: Vec<OllamaMessage> = Vec::with_capacity(request.messages.len() + 1);
-        messages.push(OllamaMessage {
-            role: "system".into(),
-            content: request.system_prompt.clone(),
-        });
+        messages
+            .push(OllamaMessage { role: "system".into(), content: request.system_prompt.clone() });
         for msg in &request.messages {
-            messages.push(OllamaMessage {
-                role: msg.role.clone(),
-                content: msg.content.clone(),
-            });
+            messages.push(OllamaMessage { role: msg.role.clone(), content: msg.content.clone() });
         }
 
-        let body = OllamaChatRequest {
-            model: self.model.clone(),
-            messages,
-            stream: false,
-        };
+        let body = OllamaChatRequest { model: self.model.clone(), messages, stream: false };
 
         let resp: OllamaResponseMessage = self
             .client
@@ -236,10 +227,8 @@ pub fn provider_from_config(section: &LlmSection) -> Box<dyn LlmProvider> {
             }
         }
         "ollama" => {
-            let api_url = section
-                .api_url
-                .clone()
-                .unwrap_or_else(|| "http://localhost:11434/api/chat".into());
+            let api_url =
+                section.api_url.clone().unwrap_or_else(|| "http://localhost:11434/api/chat".into());
             Box::new(OllamaProvider::new(api_url, section.model.clone()))
         }
         _ => Box::new(StubProvider),

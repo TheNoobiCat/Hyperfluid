@@ -19,6 +19,7 @@ hyperfluid-pdp = { path = "../hyperfluid-pdp" }
 hyperfluid-staking = { path = "../hyperfluid-staking" }
 hyperfluid-economics = { path = "../hyperfluid-economics" }
 hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
+hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 tokio.workspace = true
 tracing.workspace = true
 arc-malachitebft-core-consensus = "0.7.0-pre"

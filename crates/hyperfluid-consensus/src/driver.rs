@@ -14,21 +14,26 @@ use parity_scale_codec::{Decode, Encode};
 use sha3::{Digest, Sha3_256};
 use tokio::task::JoinHandle;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use hyperfluid_fee_market::{compute_next_base_fee, FeeConfig, FeeMarketState};
+use hyperfluid_p2p::mempool::{Mempool, MempoolConfig, MempoolTx, TxTypeTag};
 use hyperfluid_staking::SystemParameters;
 use hyperfluid_state::state_machine::{ExecutionContext, SplitChildSpec, StateMachine};
 use hyperfluid_state::{Account, HeartbeatPayload, ReviewVerdict, TaskStatus, TrustStageEnum};
 
+use crate::genesis::GenesisConfig;
+use crate::types::{
+    Block, BlockHeader, DelegationAction, GovernanceAction, Hash32, StakingAction,
+    TransactionEnvelope, TxType,
+};
 use hyperfluid_fastpath::lifecycle::FastPathEngine;
 use hyperfluid_fastpath::types::{FastPathChallengeTx, FastPathParams, FastPathProposal};
 use hyperfluid_governance::proposal::GovernanceEngine;
 use hyperfluid_governance::types::{GovernanceParams, GovernanceVote, VoteOption};
 use hyperfluid_pdp::rule_chain;
-use hyperfluid_pdp::types::{ActionPlanRequest, ActionType, Decision, PdpContext, TrustStage};
-use crate::genesis::GenesisConfig;
-use crate::types::{
-    Block, BlockHeader, DelegationAction, GovernanceAction, Hash32, StakingAction,
-    TransactionEnvelope, TxType,
+use hyperfluid_pdp::types::{
+    ActionPlanRequest, ActionType, Decision, PdpContext, QuotaConsumption, QuotaState, TrustStage,
 };
 
 /// Payload format for TransferTx transactions.
@@ -163,7 +168,7 @@ struct SplitChildPayload {
 struct SubmitReviewPayload {
     review_task_id: Hash32,
     reviewer_id: Hash32,
-    verdict_accept: bool,    // true = Accept, false = Reject
+    verdict_accept: bool, // true = Accept, false = Reject
     evidence_hash: Hash32,
 }
 
@@ -185,6 +190,19 @@ pub struct ConsensusDriver {
     pub fee_config: FeeConfig,
     /// Staking system parameters for bond/unbond/delegation thresholds.
     pub staking_params: SystemParameters,
+    /// Single fee-ordered mempool for pending transactions.
+    pub mempool: Mempool,
+    /// Full transaction storage, keyed by tx_hash, for mempool retrieval.
+    pub tx_store: BTreeMap<[u8; 32], TransactionEnvelope>,
+    /// Agent pubkey bindings for PDP signature verification.
+    /// Stub: unit value — real ML-DSA key verification deferred to Week 9-10.
+    pub key_bindings: BTreeMap<Hash32, ()>,
+    /// Expected next nonce per agent (PDP replay protection).
+    pub agent_nonces: BTreeMap<Hash32, u64>,
+    /// Quota consumption state per (agent, quota_id).
+    pub quota_states: BTreeMap<(Hash32, String), QuotaState>,
+    /// Consumed plan IDs for PDP replay protection (deduplication).
+    pub consumed_plan_ids: BTreeSet<Hash32>,
     /// When true, bypasses PDP validation for all transaction types.
     /// Used for development/testing when full PDP state (key bindings,
     /// nonce tracking, quota states) is not yet wired.
@@ -207,7 +225,13 @@ impl ConsensusDriver {
             fee_state: FeeMarketState::default(),
             fee_config: FeeConfig::default(),
             staking_params: SystemParameters::default(),
-            pdp_bypass: false,
+            mempool: Mempool::new(MempoolConfig::default()),
+            tx_store: BTreeMap::new(),
+            key_bindings: BTreeMap::new(),
+            agent_nonces: BTreeMap::new(),
+            quota_states: BTreeMap::new(),
+            consumed_plan_ids: BTreeSet::new(),
+            pdp_bypass: true,
         }
     }
 
@@ -255,7 +279,75 @@ impl ConsensusDriver {
         genesis_block
     }
 
+    /// Submit a transaction to the mempool for future block inclusion.
+    ///
+    /// Encodes the envelope, derives a tx hash, infers a TxTypeTag, and inserts
+    /// into the fee-ordered mempool. Stores the full envelope for retrieval at
+    /// block production time.
+    pub fn submit_tx(&mut self, tx: TransactionEnvelope) -> bool {
+        let tx_data = tx.encode();
+        let tx_hash = sha3_256_hash(&tx_data);
+        if self.tx_store.contains_key(&tx_hash) {
+            return false;
+        }
+        let sender_id = self.extract_sender_id(&tx).unwrap_or([0u8; 32]);
+        let tx_type_tag = match tx.tx_type {
+            TxType::GovernanceTx(_) => TxTypeTag::Governance,
+            TxType::EvidenceTx => TxTypeTag::Evidence,
+            _ => TxTypeTag::Standard,
+        };
+        let mtx = MempoolTx {
+            tx_hash,
+            sender_id,
+            tx_type: tx_type_tag,
+            priority_fee: 0,
+            base_fee: self.fee_state.base_fee,
+            max_fee_per_tx: self.fee_state.base_fee.saturating_add(1_000_000_000_000_000),
+            tx_data,
+        };
+        self.tx_store.insert(tx_hash, tx);
+        self.mempool.insert(mtx)
+    }
+
+    /// Extract the sender/agent ID from a transaction envelope for mempool routing.
+    fn extract_sender_id(&self, tx: &TransactionEnvelope) -> Option<[u8; 32]> {
+        match tx.tx_type {
+            TxType::TransferTx => {
+                let payload = TransferPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.sender_id)
+            }
+            TxType::GovernanceTx(_) => {
+                let payload = GovernancePayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.proposer_id)
+            }
+            TxType::StakingTx(_) => {
+                let payload = StakingPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.validator_id)
+            }
+            TxType::DelegationTx(_) => {
+                let payload = DelegationPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.delegator_id)
+            }
+            TxType::TaskCreateTx => {
+                let payload = TransferPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.sender_id)
+            }
+            TxType::ClaimTaskTx => {
+                let payload = ClaimTaskPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.agent_id)
+            }
+            TxType::FastPathTx => {
+                let payload = FastPathPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.proposer_id)
+            }
+            _ => None,
+        }
+    }
+
     /// Produce a new block at the next height.
+    ///
+    /// If `txs` is non-empty, those transactions are used directly. If `txs` is empty,
+    /// transactions are selected from the fee-ordered mempool.
     ///
     /// 1. Executes each transaction against the state machine
     /// 2. Computes the post-execution SMT state root
@@ -267,8 +359,16 @@ impl ConsensusDriver {
         let new_height = self.height + 1;
         let ctx = ExecutionContext { height: new_height, timestamp };
 
+        let block_txs = if txs.is_empty() {
+            let max_txs_per_block = 100usize;
+            let selected_mtxs = self.mempool.select_for_block(max_txs_per_block);
+            selected_mtxs.iter().filter_map(|mtx| self.tx_store.remove(&mtx.tx_hash)).collect()
+        } else {
+            txs
+        };
+
         // 1. Execute all transactions
-        for tx in &txs {
+        for tx in &block_txs {
             self.execute_tx(tx, ctx);
         }
 
@@ -308,10 +408,10 @@ impl ConsensusDriver {
         let state_root = self.state_machine.compute_state_root();
 
         // 3b. Compute transaction Merkle root
-        let transaction_root = Self::compute_transaction_root(&txs);
+        let transaction_root = Self::compute_transaction_root(&block_txs);
 
         // 4. Adjust EIP-1559 base fee
-        let block_util_pct = self.compute_block_utilization(&txs);
+        let block_util_pct = self.compute_block_utilization(&block_txs);
         self.fee_state.base_fee =
             compute_next_base_fee(self.fee_state.base_fee, block_util_pct, &self.fee_config, 8);
 
@@ -332,7 +432,7 @@ impl ConsensusDriver {
                 timestamp,
                 epoch: new_epoch,
             },
-            transactions: txs,
+            transactions: block_txs,
         };
 
         // 6. Store and advance
@@ -697,60 +797,108 @@ impl ConsensusDriver {
 
     /// PDP pre-validation integration point for governance and fast-path transactions.
     ///
-    /// Maps `TxType` to `ActionType`, builds a minimal `PdpContext` from available
-    /// driver state, and runs the 5-step deterministic rule chain. When key bindings,
-    /// nonce tracking, and quota states are fully wired into ConsensusDriver, this
-    /// method will enforce all PDP rules deterministically before execution.
+    /// Maps `TxType` to `ActionType`, builds a `PdpContext` from live driver state
+    /// (agent balance, nonce, key binding, quotas), and runs the 5-step deterministic
+    /// rule chain. When PDP bypass is enabled, all transactions pass through.
     ///
-    /// Currently allows all transactions through — PDP state (key bindings, nonces,
-    /// quota tracking) is not yet maintained in ConsensusDriver, so the rule chain
-    /// would deny everything. When that state is wired, the key_binding check below
-    /// is removed and the `Decision::Approved` gate takes effect.
-    fn validate_tx_pdp(&self, tx: &TransactionEnvelope, ctx: ExecutionContext) -> bool {
+    /// Signature verification (step 2) is a stub — real ML-DSA-65 checking deferred
+    /// to Week 9-10. When pdp_bypass is false, key_binding must be present for the
+    /// agent (fail-closed), but step 2 itself always passes (no cryptographic check).
+    fn validate_tx_pdp(&mut self, tx: &TransactionEnvelope, ctx: ExecutionContext) -> bool {
+        if self.pdp_bypass {
+            return true;
+        }
+
         let action_type = match tx.tx_type {
             TxType::GovernanceTx(GovernanceAction::Propose) => ActionType::SubmitGovernanceProposal,
             TxType::GovernanceTx(GovernanceAction::Vote) => ActionType::CastGovernanceVote,
             TxType::FastPathTx => ActionType::SubmitFastPathMerge,
+            TxType::TransferTx => ActionType::ClaimTaskLease,
+            TxType::TaskCreateTx => ActionType::CreateTask,
+            TxType::ClaimTaskTx => ActionType::ClaimTaskLease,
+            TxType::HeartbeatTx => ActionType::RenewTaskLease,
+            TxType::SubmitTaskTx => ActionType::PublishTopicMessage,
+            TxType::SubmitReviewTx => ActionType::SubmitGovernanceProposal,
             _ => return true,
         };
 
+        let agent_id = self.extract_sender_id(tx).unwrap_or([0u8; 32]);
+
+        let balance = self.state_machine.get_account(&agent_id).map(|a| a.balance).unwrap_or(0);
+
+        let nonce = self.agent_nonces.get(&agent_id).copied().unwrap_or(0);
+
+        let key_binding = self.key_bindings.get(&agent_id).copied();
+
+        let trust_stage = self
+            .state_machine
+            .trust_stages_iter()
+            .find(|r| r.agent_id == agent_id)
+            .map(|r| match r.stage {
+                TrustStageEnum::Untrusted => TrustStage::Untrusted,
+                TrustStageEnum::Trusted => TrustStage::Trusted,
+            })
+            .unwrap_or(TrustStage::Untrusted);
+
+        let quota_states: Vec<QuotaState> = self
+            .quota_states
+            .iter()
+            .filter(|((aid, _), _)| *aid == agent_id)
+            .map(|(_, qs)| qs.clone())
+            .collect();
+
         let pdp_ctx = PdpContext {
             current_height: ctx.height,
-            key_binding: None,
-            agent_balance_attagx: u128::MAX,
-            agent_nonce: 0,
-            consumed_plan_ids: vec![],
-            quota_states: vec![],
-            trust_stage: TrustStage::Untrusted,
+            key_binding,
+            agent_balance_attagx: balance,
+            agent_nonce: nonce,
+            consumed_plan_ids: self.consumed_plan_ids.iter().copied().collect(),
+            quota_states,
+            trust_stage,
         };
 
         let request = ActionPlanRequest {
-            plan_id: [0u8; 32],
-            agent_id: [0u8; 32],
+            plan_id: sha3_256_hash(&tx.tx_payload),
+            agent_id,
             action_type,
-            resource_id: [0u8; 32],
+            resource_id: sha3_256_hash(&tx.tx_payload),
             reason_hash: [0u8; 32],
             evidence_refs: vec![],
-            nonce: 0,
+            nonce,
             expires_at_height: ctx.height.saturating_add(1000),
             agent_signature: vec![],
         };
 
         let response = rule_chain::evaluate(&request, &pdp_ctx);
 
-        // PDP bypass for development/testing — allows transactions without
-        // full PDP state wiring (key bindings, nonce tracking, quota states).
-        if self.pdp_bypass {
-            return true;
+        if matches!(response.decision, Decision::Approved) {
+            if let Some(ref consumed) = response.consumed_quota {
+                self.apply_quota_consumption(agent_id, consumed);
+            }
+            self.agent_nonces.insert(agent_id, nonce.saturating_add(1));
+            self.consumed_plan_ids.insert(request.plan_id);
+            true
+        } else {
+            tracing::debug!(
+                "PDP denied tx: agent={} action={:?} reason={:?}",
+                hex::encode(agent_id),
+                action_type,
+                response.deny_reason,
+            );
+            false
         }
+    }
 
-        // Without key_binding wired, governance/fast-path transactions are
-        // denied (fail-closed) when pdp_bypass is disabled.
-        if pdp_ctx.key_binding.is_none() {
-            return false;
+    fn apply_quota_consumption(&mut self, agent_id: Hash32, consumed: &[QuotaConsumption]) {
+        for qc in consumed {
+            let key = (agent_id, qc.quota_id.clone());
+            let entry = self.quota_states.entry(key).or_insert(QuotaState {
+                quota_id: qc.quota_id.clone(),
+                consumed: 0,
+                window_start_height: self.height,
+            });
+            entry.consumed = entry.consumed.saturating_add(qc.amount_consumed);
         }
-
-        matches!(response.decision, Decision::Approved)
     }
 
     /// Compute the transaction Merkle root from a list of transaction envelopes.
@@ -817,10 +965,11 @@ impl ConsensusDriver {
                 if let Ok(mut d) = driver.lock() {
                     let block = d.produce_block(vec![], timestamp);
                     tracing::info!(
-                        "Produced block height={}, hash={}, state_root={}",
+                        "Produced block height={}, hash={}, state_root={}, mempool={}",
                         block.header.height,
                         hex::encode(block.header.block_hash()),
                         hex::encode(block.header.state_root),
+                        d.mempool.len(),
                     );
                 }
 
@@ -998,8 +1147,9 @@ mod tests {
             approved_plan_id: None,
             gateway_signature: None,
         };
+        assert!(driver.submit_tx(tx));
 
-        let block = driver.produce_block(vec![tx], 1);
+        let block = driver.produce_block(vec![], 1);
         let root_after = block.header.state_root;
 
         assert_eq!(driver.account_balance(&alice_id), Some(900_000_000_000_000_000_000u128));
