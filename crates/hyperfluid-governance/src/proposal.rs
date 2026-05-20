@@ -153,17 +153,11 @@ impl GovernanceEngine {
         }
 
         let participated_weight = proposal.yes_weight + proposal.no_weight;
-        let participated_pct = if total_snapshot_stake > 0 {
-            (participated_weight * 100) / total_snapshot_stake
-        } else {
-            0
-        };
+        let participated_pct =
+            (participated_weight * 100).checked_div(total_snapshot_stake).unwrap_or(0);
 
-        let yes_pct = if participated_weight > 0 {
-            (proposal.yes_weight * 100) / participated_weight
-        } else {
-            0
-        };
+        let yes_pct =
+            (proposal.yes_weight * 100).checked_div(participated_weight).unwrap_or(0);
 
         let quorum_met = participated_pct >= self.params.quorum_required_pct as u128;
         let majority_yes = yes_pct > 50;
