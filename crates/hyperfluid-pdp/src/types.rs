@@ -136,7 +136,7 @@ pub struct QuotaState {
 #[derive(Debug, Clone)]
 pub struct PdpContext {
     pub current_height: u64,
-    pub key_binding: Option<()>, // placeholder for future signature verification
+    pub key_binding: Option<Vec<u8>>,
     pub agent_balance_attagx: u128,
     pub agent_nonce: u64,
     pub consumed_plan_ids: Vec<Hash32>,

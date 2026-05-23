@@ -93,7 +93,7 @@ impl SparseMerkleTree {
     pub fn insert(&mut self, key: Hash32, value: Vec<u8>) {
         let hkey = H256::from(key);
         let hval = SmValue(value);
-        let _ = self.inner.update(hkey, hval);
+        debug_assert!(self.inner.update(hkey, hval).is_ok(), "SMT insert failed");
     }
 
     /// Compute the SMT root hash.

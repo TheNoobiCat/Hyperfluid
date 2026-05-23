@@ -2,7 +2,7 @@
 
 **Component:** C7 P2P Networking & Connection Manager
 **Source ADRs:** ADR-0001 (12-Component Architecture)
-**Covered FRs:** FR-0041, FR-0042, FR-0043, FR-0044, FR-0045, FR-0046, FR-0047, FR-0048, FR-0049, FR-0050, FR-0152
+**Covered FRs:** FR-0041, FR-0042, FR-0043, FR-0044, FR-0045, FR-0046, FR-0047, FR-0048, FR-0049, FR-0050, FR-0152, FR-0197
 **Dependencies:** clatter (PQ-Noise hybrid handshake), ml-dsa (ML-DSA-65 identity keys)
 
 ---

@@ -29,9 +29,9 @@ hyperfluid
 ├── tx
 │   ├── transfer     --to <address> --amount <atto-agx>
 │   ├── stake        --action <bond|renew|unbond|withdraw> --amount <atto-agx>
+│   ├── delegate     --action <delegate|undelegate|withdraw|set-commission>
+│   │                   --to <validator> [--amount <atto-agx>] [--commission-rate <0-20>]
 │   ├── identity     --reveal-pubkey <pubkey>
-│   ├── task         --create (deprecated, use `hyperfluid task submit`)
-│   ├── review       --submit <review-record>
 │   ├── governance   --propose <proposal-file>
 │   └── evidence     --submit <evidence-file>
 │
@@ -57,7 +57,8 @@ hyperfluid
 │   ├── submit       --title <title> --description-file <path> --bounty <atto-agx>
 │   │                   --seed-ref <seed> [--required-skills <hash>] [--sponsor]
 │   ├── heartbeat    --id <task-id> [--progress-hash <hash>]
-│   └── lease        --id <task-id> --action <extend|release>
+│   ├── lease        --id <task-id> --action <extend|release>
+│   └── split        --id <parent-task-id> --children <child-spec-json>
 │
 ├── review
 │   ├── list         [--status <status>] [--task-id <task-id>]
@@ -71,6 +72,13 @@ hyperfluid
 │   ├── vote         --id <proposal-id> --choice <yes|no>
 │   ├── fetch-bundle --id <proposal-id>
 │   └── verify       --id <proposal-id>
+│
+├── fastpath
+│   ├── list         [--topic <topic>] [--status <status>]
+│   ├── propose      --topic <topic> --proposed-head <hash> --manifest <hash>
+│   ├── approve      --id <proposal-id>
+│   ├── challenge    --id <proposal-id> --evidence <hash>
+│   └── status       --id <proposal-id>
 │
 ├── agent
 │   ├── list-skills

@@ -61,8 +61,11 @@ pub fn compute_next_base_fee(
         let delta = current_base_fee
             .checked_mul(utilization.saturating_sub(target))
             .and_then(|v| v.checked_div(denom))
-            .unwrap_or(0);
-        let cap = current_base_fee * (config.max_adjustment_per_mil as u128) / 1000;
+            .unwrap_or(u128::MAX);
+        let cap = current_base_fee
+            .checked_mul(config.max_adjustment_per_mil as u128)
+            .map(|v| v / 1000)
+            .unwrap_or(u128::MAX);
         let increased = current_base_fee.saturating_add(delta);
         std::cmp::min(increased, current_base_fee.saturating_add(cap))
     } else if utilization < target {
@@ -70,8 +73,11 @@ pub fn compute_next_base_fee(
         let delta = current_base_fee
             .checked_mul(target.saturating_sub(utilization))
             .and_then(|v| v.checked_div(denom))
-            .unwrap_or(0);
-        let cap = current_base_fee * (config.max_adjustment_per_mil as u128) / 1000;
+            .unwrap_or(u128::MAX);
+        let cap = current_base_fee
+            .checked_mul(config.max_adjustment_per_mil as u128)
+            .map(|v| v / 1000)
+            .unwrap_or(u128::MAX);
         let decreased = current_base_fee.saturating_sub(delta);
         let floor_reduced = current_base_fee.saturating_sub(cap);
         #[allow(clippy::comparison_chain)]
@@ -98,8 +104,14 @@ pub fn tx_meets_min_fee(max_fee: u128, base_fee: u128) -> bool {
 }
 
 /// Compute the burn portion of a transaction fee.
-pub fn compute_burn_amount(base_fee: u128) -> u128 {
-    base_fee
+pub fn compute_burn_amount(base_fee: u128, gas_used: u64) -> u128 {
+    base_fee.saturating_mul(gas_used as u128)
+}
+
+impl FeeMarketState {
+    pub fn accumulate_burn(&mut self, burn_amount: u128) {
+        self.fee_burn_accumulator = self.fee_burn_accumulator.saturating_add(burn_amount);
+    }
 }
 
 /// Compute validator rebate from total priority fees across epoch.
@@ -181,8 +193,19 @@ mod tests {
 
     #[test]
     fn burn_computed_correctly() {
-        assert_eq!(compute_burn_amount(500), 500);
-        assert_eq!(compute_burn_amount(0), 0);
+        assert_eq!(compute_burn_amount(500, 1), 500);
+        assert_eq!(compute_burn_amount(100, 3), 300);
+        assert_eq!(compute_burn_amount(500, 0), 0);
+    }
+
+    #[test]
+    fn burn_accumulator_works() {
+        let mut state = FeeMarketState::default();
+        assert_eq!(state.fee_burn_accumulator, 0);
+        state.accumulate_burn(1000);
+        assert_eq!(state.fee_burn_accumulator, 1000);
+        state.accumulate_burn(500);
+        assert_eq!(state.fee_burn_accumulator, 1500);
     }
 
     #[test]

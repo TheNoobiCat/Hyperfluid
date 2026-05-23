@@ -114,23 +114,34 @@ pub struct ProofOfPossession {
 
 impl ProofOfPossession {
     /// Build a proof-of-possession for the given chunk.
+    /// Verifies the Merkle proof against the expected chunk root before returning.
+    /// Returns None if the chunk is missing or the proof does not verify against chunk_root_hash.
     pub fn build(
         chunks: &[Vec<u8>],
         chunk_index: u32,
-        _chunk_root_hash: [u8; 32],
+        chunk_root_hash: [u8; 32],
         lease_id: [u8; 32],
         response_height: u64,
-    ) -> Self {
-        let chunk_bytes = chunks.get(chunk_index as usize).cloned().unwrap_or_default();
+    ) -> Option<Self> {
+        let chunk_bytes = chunks.get(chunk_index as usize).cloned()?;
         let merkle_proof = crate::chunks::merkle_proof_for_chunk(chunks, chunk_index);
-        Self {
+        let leaf_hash = crate::chunks::hash_leaf(&chunk_bytes);
+        if !crate::chunks::verify_merkle_proof(
+            &leaf_hash,
+            chunk_index,
+            &merkle_proof,
+            &chunk_root_hash,
+        ) {
+            return None;
+        }
+        Some(Self {
             lease_id,
             chunk_index,
             chunk_bytes,
             merkle_proof,
             lease_signature: vec![],
             response_height,
-        }
+        })
     }
 }
 

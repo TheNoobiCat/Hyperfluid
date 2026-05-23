@@ -7,18 +7,11 @@ use serde::{Deserialize, Serialize};
 pub type Hash32 = [u8; 32];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ProposalState {
-    Proposed,
-    ReviewWindowOpened,
-    Certified,
-    Final,
-    Rejected,
-    RolledBack,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReviewerVote {
     Approve,
+    /// Not currently constructed in production code — used via `!= Approve` filter.
+    /// Kept for spec completeness (fastpath-spec.md §1.3 lists Deny as valid vote).
+    #[allow(dead_code)]
     Deny,
 }
 

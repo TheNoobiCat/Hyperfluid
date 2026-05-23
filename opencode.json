@@ -44,6 +44,10 @@
         "webfetch": "deny",
         "websearch": "deny"
       }
+    },
+    "explore": {
+      "mode": "subagent",
+      "model": "opencode-go/deepseek-v4-flash"
     }
   },
   "permission": {

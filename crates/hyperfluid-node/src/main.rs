@@ -160,7 +160,10 @@ async fn main() {
         ConsensusDriver::run_block_loop(driver.clone(), running.clone(), block_interval);
 
     // Wait for the block loop to complete (it exits when running becomes false)
-    let _ = loop_handle.await;
+    match loop_handle.await {
+        Ok(()) => tracing::info!("Block loop exited cleanly"),
+        Err(e) => tracing::error!("Block loop panicked or was cancelled: {}", e),
+    }
     running.store(false, Ordering::SeqCst);
 
     // Give the loop a moment to flush
@@ -169,20 +172,27 @@ async fn main() {
     // Report final state
     {
         let guard = driver.lock();
-        if let Ok(driver) = guard {
-            let last_block = driver.block_store.last();
-            let final_height = driver.height;
-            let last_hash = last_block
-                .map(|b| hex::encode(b.header.block_hash()))
-                .unwrap_or_else(|| "none".to_string());
-            let smt_root = hex::encode(driver.state_machine.compute_state_root());
+        match guard {
+            Ok(driver) => {
+                let last_block = driver.block_store.last();
+                let final_height = driver.height;
+                let last_hash = last_block
+                    .map(|b| hex::encode(b.header.block_hash()))
+                    .unwrap_or_else(|| "none".to_string());
+                let smt_root = hex::encode(driver.state_machine.compute_state_root());
 
-            tracing::info!(
-                "Node shutdown: final height={}, last_block_hash={}, smt_root={}",
-                final_height,
-                last_hash,
-                smt_root,
-            );
+                tracing::info!(
+                    "Node shutdown: final height={}, last_block_hash={}, smt_root={}",
+                    final_height,
+                    last_hash,
+                    smt_root,
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    "Consensus driver mutex poisoned at shutdown; skipping final state report"
+                );
+            }
         }
     }
 }

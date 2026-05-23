@@ -130,6 +130,29 @@
 
 ---
 
+## FR-0181: Bribery Resistance for Fast-Path Approvals
+
+**Category:** Economics
+
+**Statement:** The system shall resist off-chain bribery for fast-path approvals through independent-reviewer requirements, challenge windows, rollback collateral slashing, and reviewer trust regression on reversals.
+
+**Rationale:** Off-chain payments can exceed honest rewards. See `agx-economics-and-adversarial-incentives.md` Section 7 (Bribery market for fast-path approvals).
+
+**Source Research:**
+- `agx-economics-and-adversarial-incentives.md` Section 7 (Bribery market)
+- `proof-of-work-quality-and-review-markets.md` Section 7 (Reviewer cartel)
+
+**Acceptance Criteria:**
+- [ ] Independent reviewer requirement makes collusion harder.
+- [ ] Challenge window allows post-hoc fraud detection.
+- [ ] Reviewers face slashing and trust regression for approving bad merges.
+- [ ] Economic cost of bribery exceeds expected honest reward differential.
+
+**Dependencies:** FR-0165, FR-0033
+**Tags:** must-have
+
+---
+
 ## FR-0183: Stake Concentration Monitoring
 
 **Category:** Economics
@@ -225,7 +248,9 @@
 
 **Category:** Economics
 
-**Statement:** The system shall require all economic parameter updates to pass through on-chain `git:head` governance with deposit, vote window, and deterministic execution.
+**Status:** CLOSED 2026-05-23 — Redundant with FR-0021 (On-Chain git:head Governance) and FR-0155 (Parameter Bounds). Governance-spec.md §1 and FR-0155 already cover parameter change lifecycle.
+
+**Original Statement:** The system shall require all economic parameter updates to pass through on-chain `git:head` governance with deposit, vote window, and deterministic execution.
 
 **Rationale:** Economic parameters are safety-critical and must not be changed unilaterally. See `agx-economics-and-adversarial-incentives.md` Section 10 (Implementation Plan).
 

@@ -11,7 +11,9 @@ pub mod store;
 mod types;
 
 pub use chunks::chunk_bytes_for_test;
-pub use chunks::{compute_chunk_merkle_root, merkle_proof_for_chunk, verify_merkle_proof};
+pub use chunks::{
+    compute_chunk_merkle_root, hash_leaf, merkle_proof_for_chunk, verify_merkle_proof,
+};
 pub use manifest::compute_manifest_root_hash;
 pub use store::{
     chunk_exists, chunk_path, delete_chunk, load_chunk, store_chunk, StoreConfig, StoreError,

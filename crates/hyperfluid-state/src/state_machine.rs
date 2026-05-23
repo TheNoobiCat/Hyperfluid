@@ -909,10 +909,10 @@ impl StateMachine {
 
         // Create 2 review tasks (each worth 5% of work bounty)
         let review_count: u64 = 2;
+        let mut created: u32 = 0;
         for i in 0..review_count {
             let review_task_id =
                 crate::sha3_256(&[task_id_copy.as_slice(), &i.to_le_bytes()].concat());
-            // Avoid collision with existing tasks
             if self.tasks.contains_key(&review_task_id) {
                 continue;
             }
@@ -936,7 +936,9 @@ impl StateMachine {
             };
             self.tasks.insert(review_task_id, review_task);
             self.review_task_map.insert(review_task_id, task_id);
+            created += 1;
         }
+        debug_assert_eq!(created, review_count as u32, "must create exactly 2 review tasks");
 
         ExecutionResult::Success
     }
@@ -1101,8 +1103,11 @@ impl StateMachine {
     }
 
     /// Check lease expiry for a task. If lease expired, return task to Open pool.
+    /// If escrow is still Locked (bounty never released), refund the bounty to the
+    /// task funder and mark escrow as Refunded.
     /// Called at every block boundary, not as a transaction.
     pub fn run_lease_expiry(&mut self, task_id: &Hash32, current_height: u64) -> bool {
+        let prior_escrow = self.tasks.get(task_id).map(|t| t.escrow_status);
         let should_expire = self.tasks.get(task_id).is_some_and(|t| {
             matches!(t.status, TaskStatus::Claimed | TaskStatus::InProgress)
                 && t.lease_expires_height <= current_height
@@ -1125,6 +1130,17 @@ impl StateMachine {
         if let Some(task) = self.tasks.get_mut(task_id) {
             task.primary_owner = [0u8; 32];
             task.status = TaskStatus::Open;
+
+            // Refund escrowed bounty if lease expired without release
+            // SPEC_DEVIATION: Bounty is zeroed to prevent claim on refunded task.
+            if prior_escrow == Some(EscrowStatus::Locked) {
+                task.escrow_status = EscrowStatus::Refunded;
+                let refund = task.bounty_agx;
+                task.bounty_agx = 0;
+                if let Some(funder) = self.accounts.get_mut(&task.funder) {
+                    funder.balance = funder.balance.saturating_add(refund);
+                }
+            }
         }
 
         true
@@ -1230,7 +1246,8 @@ impl StateMachine {
         for topic in self.topic_records.values_mut() {
             let inactive_blocks = current_height.saturating_sub(topic.last_activity_height);
             let decay_units = inactive_blocks / decay_rate;
-            topic.decay_score = topic.decay_score.saturating_sub(decay_units as u32);
+            topic.decay_score =
+                topic.decay_score.saturating_sub(u32::try_from(decay_units).unwrap_or(u32::MAX));
             if topic.decay_score < 25 {
                 topic.status = TopicStatus::Stale;
             }
@@ -1603,6 +1620,200 @@ mod tests {
             ExecutionContext { height: 10, timestamp: 1000 },
         );
         assert_eq!(result, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn run_lease_expiry_refunds_escrow_and_marks_refunded() {
+        let mut sm = StateMachine::new();
+        // Creator/funder with 500 AGX balance
+        let creator_id = [1u8; 32];
+        let task_id = [0xAAu8; 32];
+        let seed_ref = [0xBBu8; 32];
+        let agent_id = [2u8; 32];
+        let bounty = 300_000_000_000_000_000_000u128; // 300 AGX
+        let fee = 10_000_000_000_000_000_000u128; // 10 AGX
+
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.init_account(test_account(2, 500_000_000_000_000_000_000, 0));
+
+        // Create a task — escrow_status = Locked, 500 - 300 - 10 = 190 AGX remaining
+        let r = sm.execute_task_create(
+            creator_id,
+            bounty,
+            fee,
+            task_id,
+            1,
+            seed_ref,
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            100,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+        assert_eq!(sm.get_account(&creator_id).unwrap().balance, 190_000_000_000_000_000_000);
+        assert_eq!(sm.tasks.get(&task_id).unwrap().escrow_status, EscrowStatus::Locked,);
+
+        // Claim the task so status → Claimed, lease starts at height 100, expires at 220
+        let min_collateral = 10_000_000_000_000_000_000u128.max(bounty * 5 / 1000);
+        let r = sm.execute_claim_task(
+            task_id,
+            agent_id,
+            min_collateral,
+            100,
+            TrustStageEnum::Trusted,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+        assert_eq!(sm.tasks.get(&task_id).unwrap().status, TaskStatus::Claimed);
+
+        // Advance past lease expiry (lease started at 100, expires at 220)
+        let expired = sm.run_lease_expiry(&task_id, 221);
+        assert!(expired);
+
+        // Task should be back to Open, escrow = Refunded, bounty zeroed
+        let task = sm.tasks.get(&task_id).unwrap();
+        assert_eq!(task.status, TaskStatus::Open);
+        assert_eq!(task.escrow_status, EscrowStatus::Refunded);
+        assert_eq!(task.bounty_agx, 0);
+
+        // Funder received the bounty back: 190 AGX + 300 AGX = 490 AGX
+        assert_eq!(sm.get_account(&creator_id).unwrap().balance, 490_000_000_000_000_000_000);
+    }
+
+    #[test]
+    fn run_lease_expiry_noop_when_released() {
+        let mut sm = StateMachine::new();
+        let creator_id = [1u8; 32];
+        let task_id = [0xBBu8; 32];
+        let agent_id = [2u8; 32];
+        let bounty = 300_000_000_000_000_000_000u128;
+
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.init_account(test_account(2, 500_000_000_000_000_000_000, 0));
+
+        // Create and claim
+        let r = sm.execute_task_create(
+            creator_id,
+            bounty,
+            0,
+            task_id,
+            1,
+            [0xBBu8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            100,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+        let min_collateral = 10_000_000_000_000_000_000u128.max(bounty * 5 / 1000);
+        let r = sm.execute_claim_task(
+            task_id,
+            agent_id,
+            min_collateral,
+            100,
+            TrustStageEnum::Trusted,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+
+        // Simulate escrow being Released (e.g. via review settlement)
+        let t = sm.tasks.get_mut(&task_id).unwrap();
+        t.escrow_status = EscrowStatus::Released;
+
+        // Advance past lease expiry
+        let expired = sm.run_lease_expiry(&task_id, 221);
+        assert!(expired);
+
+        // Escrow status should NOT change — already Released
+        let task = sm.tasks.get(&task_id).unwrap();
+        assert_eq!(task.escrow_status, EscrowStatus::Released);
+        // Bounty should not have been refunded (already released)
+        assert_eq!(task.bounty_agx, bounty);
+    }
+
+    #[test]
+    fn run_lease_expiry_noop_when_bounty_redistributed() {
+        let mut sm = StateMachine::new();
+        let creator_id = [1u8; 32];
+        let task_id = [0xCCu8; 32];
+        let agent_id = [2u8; 32];
+        let bounty = 300_000_000_000_000_000_000u128;
+
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.init_account(test_account(2, 500_000_000_000_000_000_000, 0));
+
+        let r = sm.execute_task_create(
+            creator_id,
+            bounty,
+            0,
+            task_id,
+            1,
+            [0xCCu8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            100,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+        let min_collateral = 10_000_000_000_000_000_000u128.max(bounty * 5 / 1000);
+        let r = sm.execute_claim_task(
+            task_id,
+            agent_id,
+            min_collateral,
+            100,
+            TrustStageEnum::Trusted,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+
+        // Simulate bounty redistributed (e.g. via task split)
+        let t = sm.tasks.get_mut(&task_id).unwrap();
+        t.escrow_status = EscrowStatus::BountyRedistributed;
+
+        let expired = sm.run_lease_expiry(&task_id, 221);
+        assert!(expired);
+
+        let task = sm.tasks.get(&task_id).unwrap();
+        assert_eq!(task.escrow_status, EscrowStatus::BountyRedistributed);
+        assert_eq!(task.bounty_agx, bounty);
+    }
+
+    #[test]
+    fn run_lease_expiry_noop_when_not_expired() {
+        let mut sm = StateMachine::new();
+        let task_id = [0xDDu8; 32];
+
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+
+        let r = sm.execute_task_create(
+            [1u8; 32],
+            100,
+            0,
+            task_id,
+            1,
+            [0xDDu8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            100,
+            ctx(100),
+        );
+        assert_eq!(r, ExecutionResult::Success);
+
+        // Task is Open (not Claimed/InProgress) — should not expire
+        let expired = sm.run_lease_expiry(&task_id, 999);
+        assert!(!expired);
     }
 
     #[test]

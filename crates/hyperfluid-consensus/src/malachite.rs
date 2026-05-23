@@ -220,7 +220,7 @@ impl Validator<HyperfluidContext> for HyperfluidValidator {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HyperfluidValidatorSet {
-    validators: Vec<HyperfluidValidator>,
+    pub validators: Vec<HyperfluidValidator>,
     total_power: VotingPower,
 }
 

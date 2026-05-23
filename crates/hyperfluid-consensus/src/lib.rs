@@ -5,4 +5,5 @@
 pub mod driver;
 pub mod genesis;
 pub mod malachite;
+pub mod malachite_consensus;
 pub mod types;

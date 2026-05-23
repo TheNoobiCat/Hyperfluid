@@ -4,7 +4,7 @@
 
 use hyperfluid_pdp::audit::AuditLog;
 use hyperfluid_pdp::quota::QuotaManager;
-use hyperfluid_pdp::rule_chain::evaluate;
+use hyperfluid_pdp::rule_chain::{evaluate, hash_action_plan_for_signing};
 use hyperfluid_pdp::types::{
     ActionPlanRequest, ActionPlanResponse, ActionType, Decision, DenyReason, Hash32, PdpContext,
     QuotaState, TrustStage,
@@ -12,16 +12,6 @@ use hyperfluid_pdp::types::{
 use ml_dsa::{Generate, Keypair, MlDsa65, Seed, SignatureEncoding, Signer, SigningKey};
 use sha3::{Digest, Sha3_256};
 
-#[allow(dead_code)]
-fn sha3_256_bytes(data: &[u8]) -> Hash32 {
-    let mut hasher = Sha3_256::new();
-    hasher.update(data);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&hasher.finalize());
-    out
-}
-
-#[allow(dead_code)]
 fn test_keypair() -> (Vec<u8>, [u8; 32]) {
     let sk = SigningKey::<MlDsa65>::generate();
     let pk = sk.verifying_key().encode().as_slice().to_vec();
@@ -29,42 +19,6 @@ fn test_keypair() -> (Vec<u8>, [u8; 32]) {
     let mut seed_bytes = [0u8; 32];
     seed_bytes.copy_from_slice(seed.as_slice());
     (pk, seed_bytes)
-}
-
-#[allow(dead_code)]
-fn sign_request(request: &ActionPlanRequest, sk_seed: &[u8; 32]) -> Vec<u8> {
-    let seed = Seed::try_from(sk_seed.as_slice()).unwrap();
-    let sk = SigningKey::<MlDsa65>::from_seed(&seed);
-    let msg = hash_action_plan_for_signing(request);
-    let sig = sk.sign(&msg);
-    sig.to_vec()
-}
-
-#[allow(dead_code)]
-fn hash_action_plan_for_signing(request: &ActionPlanRequest) -> Hash32 {
-    let mut hasher = Sha3_256::new();
-    hasher.update(request.plan_id);
-    hasher.update(request.agent_id);
-    let action_discriminant: u8 = match request.action_type {
-        ActionType::PublishTopicMessage => 0,
-        ActionType::ClaimTaskLease => 1,
-        ActionType::RenewTaskLease => 2,
-        ActionType::CreateTask => 3,
-        ActionType::SubmitFastPathMerge => 4,
-        ActionType::SubmitGovernanceProposal => 5,
-        ActionType::CastGovernanceVote => 6,
-    };
-    hasher.update([action_discriminant]);
-    hasher.update(request.resource_id);
-    hasher.update(request.reason_hash);
-    for ev in &request.evidence_refs {
-        hasher.update(ev);
-    }
-    hasher.update(request.nonce.to_le_bytes());
-    hasher.update(request.expires_at_height.to_le_bytes());
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&hasher.finalize());
-    out
 }
 
 fn make_request(
@@ -87,10 +41,10 @@ fn make_request(
     }
 }
 
-fn make_ctx(height: u64, balance: u128, nonce: u64) -> PdpContext {
+fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: Option<Vec<u8>>) -> PdpContext {
     PdpContext {
         current_height: height,
-        key_binding: None,
+        key_binding,
         agent_balance_attagx: balance,
         agent_nonce: nonce,
         consumed_plan_ids: vec![],
@@ -99,12 +53,33 @@ fn make_ctx(height: u64, balance: u128, nonce: u64) -> PdpContext {
     }
 }
 
+fn make_request(
+    plan_id: Hash32,
+    agent_id: Hash32,
+    action_type: ActionType,
+    nonce: u64,
+    expires: u64,
+) -> ActionPlanRequest {
+    ActionPlanRequest {
+        plan_id,
+        agent_id,
+        action_type,
+        resource_id: [1u8; 32],
+        reason_hash: [2u8; 32],
+        evidence_refs: vec![],
+        nonce,
+        expires_at_height: expires,
+        agent_signature: vec![],
+    }
+}
+}
+
 // ── Section 1.7: Deterministic Policy Evaluation ────────────────────────
 
 #[test]
 fn conforms_to_pdp_spec_1_7_deterministic_evaluation() {
     let request = make_request([1u8; 32], [0xAA; 32], ActionType::ClaimTaskLease, 1, 100);
-    let ctx = make_ctx(50, 1000, 0);
+    let ctx = make_ctx(50, 1000, 0, None);
 
     let r1 = evaluate(&request, &ctx);
     let r2 = evaluate(&request, &ctx);
@@ -115,18 +90,79 @@ fn conforms_to_pdp_spec_1_7_deterministic_evaluation() {
 #[test]
 fn conforms_to_pdp_spec_1_7_schema_violation_rejected() {
     let request = make_request([0u8; 32], [1u8; 32], ActionType::ClaimTaskLease, 1, 100);
-    let ctx = make_ctx(0, 1000, 0);
+    let ctx = make_ctx(0, 1000, 0, None);
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
 }
 
 #[test]
+fn conforms_to_pdp_spec_1_7_signature_verification_valid() {
+    let agent_id = [0xAA; 32];
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let ctx = make_ctx(50, 1000, 0, Some(pk));
+    let result = evaluate(&request, &ctx);
+    assert_eq!(result.deny_reason, None);
+}
+
+#[test]
+fn conforms_to_pdp_spec_1_7_signature_invalid_wrong_key() {
+    let agent_id = [0xAA; 32];
+    let (_pk_a, sk_seed_a) = test_keypair();
+    let (pk_b, _sk_seed_b) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed_a.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let ctx = make_ctx(50, 1000, 0, Some(pk_b));
+    let result = evaluate(&request, &ctx);
+    assert_eq!(result.decision, Decision::Denied);
+    assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
+}
+
+#[test]
+fn conforms_to_pdp_spec_1_7_signature_invalid_tampered() {
+    let agent_id = [0xAA; 32];
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    request.nonce = 999;
+    let ctx = make_ctx(50, 1000, 0, Some(pk));
+    let result = evaluate(&request, &ctx);
+    assert_eq!(result.decision, Decision::Denied);
+    assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
+}
+
+#[test]
+fn conforms_to_pdp_spec_1_7_signature_rejected_no_key_binding() {
+    let agent_id = [0xAA; 32];
+    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let ctx = make_ctx(50, 1000, 0, None);
+    let result = evaluate(&request, &ctx);
+    assert_eq!(result.decision, Decision::Denied);
+    assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
+}
+
+#[test]
 fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
     let agent_id = [0xAA; 32];
     let plan_id = [0x42; 32];
-    let request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
-    let mut ctx = make_ctx(50, 1000, 0);
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let mut ctx = make_ctx(50, 1000, 0, Some(pk));
     ctx.consumed_plan_ids = vec![plan_id];
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
@@ -136,8 +172,13 @@ fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
 #[test]
 fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
     let agent_id = [0xAA; 32];
-    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
-    let ctx = make_ctx(50, 1000, 3);
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let ctx = make_ctx(50, 1000, 3, Some(pk));
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
@@ -146,8 +187,13 @@ fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
 #[test]
 fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
     let agent_id = [0xAA; 32];
-    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
-    let ctx = make_ctx(100, 1000, 0);
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 50);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let ctx = make_ctx(100, 1000, 0, Some(pk));
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
@@ -156,8 +202,13 @@ fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
 #[test]
 fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
     let agent_id = [0xAA; 32];
-    let request = make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
-    let mut ctx = make_ctx(50, 1000, 0);
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let mut ctx = make_ctx(50, 1000, 0, Some(pk));
     ctx.quota_states = vec![QuotaState {
         quota_id: "gov_proposals_per_identity".into(),
         consumed: 1,
@@ -171,8 +222,13 @@ fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
 #[test]
 fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
     let agent_id = [0xAA; 32];
-    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    let ctx = make_ctx(50, 0, 0);
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let ctx = make_ctx(50, 0, 0, Some(pk));
     let result = evaluate(&request, &ctx);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::InsufficientFunds));
@@ -181,8 +237,13 @@ fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
 #[test]
 fn conforms_to_pdp_spec_1_7_full_chain_approval() {
     let agent_id = [0xAA; 32];
-    let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
-    let ctx = make_ctx(50, 1000, 0);
+    let (pk, sk_seed) = test_keypair();
+    let mut request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
+    let msg = hash_action_plan_for_signing(&request);
+    let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
+    let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);
+    request.agent_signature = sk.sign(&msg).to_vec();
+    let ctx = make_ctx(50, 1000, 0, Some(pk));
     let result = evaluate(&request, &ctx);
     assert_eq!(result.deny_reason, None);
 }

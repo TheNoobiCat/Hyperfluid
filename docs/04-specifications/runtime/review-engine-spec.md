@@ -2,7 +2,7 @@
 
 **Component:** C12 Economics & Incentives (Review Market)
 **Source ADRs:** ADR-0008 (Two-Phase Quality Pipeline), ADR-0017 (90/10 Payout Split)
-**Covered FRs:** FR-0148, FR-0149, FR-0161, FR-0164, FR-0165, FR-0170, FR-0175, FR-0191
+**Covered FRs:** FR-0148, FR-0149, FR-0153, FR-0161, FR-0164, FR-0165, FR-0170, FR-0175, FR-0181, FR-0191
 **Dependencies:** C1 Consensus Engine, C8 Artifact Availability, C9 Policy Decision Point
 
 ---

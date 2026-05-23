@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 Week 3-4 Agent Runtime C10 library COMPLETE 2026-05-18. Stage 02 Week 5-6 COMPLETE 2026-05-20 — 27 conformance tests + P2P TCP transport + mempool + PDP context state wired into node.) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 Week 3-4 Agent Runtime C10 library COMPLETE 2026-05-18. Stage 02 Week 5-6 COMPLETE 2026-05-20 — 27 conformance tests + P2P TCP transport + mempool + PDP context state wired into node. Stage 02 Week 7-8 COMPLETE 2026-05-21 — BftDriver + Malachite Driver integration + run_bft_loop + ~750 lines, 10 tests.) |
 
 ---
 
@@ -62,7 +62,7 @@ Key fixes:
 Remaining work:
 
 1. **Malachite BFT protocol wiring** — SigningScheme + Context implemented (malachite.rs). Effect handler, network bridge, host actor deferred (~1,100 lines remaining). Not blocking Stage 02 — ConsensusDriver produces blocks.
-2. **Slashing execution + reward distribution** — deferred to Stage 03 (Validation).
+2. **Slashing execution + reward distribution** — Stage 02 Week 9-10.
 3. **24-hour soak test** — deferred to Stage 03 (Validation).
 4. ~~P2P not wired into node binary~~ **RESOLVED 2026-05-20** — `TcpTransport::accept_loop()` started in `main()` with real Identity + Clatter handshake.
 5. ~~Mempool not wired into `produce_block()`~~ **RESOLVED 2026-05-20** — fee-ordered mempool with `submit_tx()`, empty txs trigger mempool selection.
@@ -126,6 +126,12 @@ Key findings:
 3. **MINOR:** `fee-market-spec.md` still referenced `max_adjustment_pct: u8` after B-18's code rename to `max_adjustment_per_mil: u16`. Fixed by updating spec struct and formulas.
 
 Systemic patterns identified: SMT root completeness gap (new entity added but root not updated), validate-then-mutate ordering violation in state handlers, spec-code field name drift recurrence.
+
+## Recent Design Changes (2026-05-21) — Stage 02 Week 7-8 BFT Consensus Integration
+
+| Change | Summary | Docs Affected |
+|--------|---------|---------------|
+| Malachite BFT integration | BftDriver wrapping core-driver::Driver with ML-DSA-65 signing, consensus network channels, run_bft_loop() wired into ConsensusDriver. ~750 lines, 10 new tests. Single-validator BFT mode. Multi-validator networking deferred to Week 9-10. | `hyperfluid-consensus/src/malachite_consensus.rs` (new, 410 lines), `hyperfluid-consensus/src/driver.rs` (modified), `hyperfluid-consensus/src/malachite.rs` (modified) |
 
 ## Recent Design Changes (2026-05-18) — Stage 02 Week 3-4 Agent Runtime
 
@@ -235,14 +241,40 @@ Systemic patterns identified: fail-open when state absent, panic/assert in produ
 
 Process improvements: 7 new generic guards added to `execute-build.md` `checkpoint.md`.
 
+## Bug Audit (2026-05-23 — Round 7)
+
+**Result:** 12 bugs found and fixed across 4 crates and 1 process file. See `docs/01-research/_audit-bugs-2026-05-23.md` for full report.
+
+Key findings:
+1. **CRITICAL:** Fee market silent overflow via `unwrap_or(0)` on `checked_mul.checked_div` chain — high-utilization blocks produce zero fee adjustment.
+2. **HIGH:** `ProofOfPossession::build` ignored `chunk_root_hash` parameter — proof never verified against expected root. Also silently returned empty data for OOB chunk index.
+3. **HIGH:** `FeeMarketState.fee_burn_accumulator` dead field (never written) + `compute_burn_amount` trivial identity stub.
+4. **HIGH:** `hash_leaf` was private but needed by `ProofOfPossession::build` for proof verification.
+5. **MEDIUM:** Topic decay `decay_units as u32` truncating cast — replaced with `try_from`.
+6. **MEDIUM:** Review task collision silently skipped with `continue` — zero-review-tasks scenario possible.
+7. **MEDIUM:** SMT store insert `Result` silently ignored.
+8. **MEDIUM:** Block loop `JoinHandle` result discarded — panicked task would be silently swallowed.
+9. **MEDIUM:** Mutex poison silently masked at node shutdown — no crash forensics.
+
+Systemic patterns identified: checked-math `unwrap_or(0)` silent masking, unchecked multiplication alongside checked ops, dead struct fields, truncating `as` casts without bounds checks, async JoinHandle result discarded, mutex poison silently masked.
+
+Process improvements: 5 new generic guards added to `execute-build.md` `checkpoint.md` (checked-math overflow, truncating-cast, async-JoinHandle, mutex-poison, dead-field read-side).
+
 ## Next Actions
 
 **Stage 02 Week 5-6 (P2P + Mempool + PDP Wire-Up): COMPLETE (2026-05-20) — P2P TCP transport + mempool + PDP context state wired into node**
 
-**Stage 02 Week 7-8 (BFT Consensus Integration): NEXT**
-- Malachite BFT wiring: effect handler, clatter network bridge, Host actor
-- Disable local block production; enable BFT-driven block production
-- Byzantine validation tests, state sync integration
+**Stage 02 Week 7-8 (BFT Consensus Integration): COMPLETE (2026-05-21) — BftDriver + Malachite Driver + run_bft_loop + ~750 lines, 10 new tests, all CI checks pass**
+
+**Stage 02 Week 9-10 (Real PDP + CLI + TUI + Telegram + Inbox + Review Sandbox + Soak): NEXT**
+- PDP signature verification with ML-DSA-65 (set `pdp_bypass = false`)
+- `hyperfluid` CLI crate with 7 subcommands
+- TUI setup wizard (ratatui)
+- Telegram bot client
+- Inbox router + off-chain agent messaging (gossip-based, PDP quota enforced)
+- Review sandbox subagent (real cgroups v2 + seccomp BPF + mount namespace isolation, exploration tools but no CLI access, serves both task review and governance proposal review)
+- Slashing + reward distribution
+- 1000-block cross-component soak
 
 ## Layer 4 Spec Inventory (delivered)
 
@@ -358,4 +390,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-20 (Stage 02 Week 5-6 conformance tests complete. 27 new tests for collaboration + review specs. All 6 CI checks pass.)*
+*Last updated: 2026-05-23 (fill-gaps audit. Phase 0 traceability: 3 unscheduled FRs resolved. GAP-01a host commit persistence wired. Vaporware: ProposalState dead enum removed, EscrowStatus::Refunded wired. Spec header drift fixed across 5 specs. 6 new tests. CI all-green.)*

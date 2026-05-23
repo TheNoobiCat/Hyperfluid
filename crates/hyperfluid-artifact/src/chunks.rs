@@ -21,7 +21,7 @@ pub fn chunk_bytes_for_test(data: &[u8], n: usize) -> Vec<Vec<u8>> {
 }
 
 /// Hash a single chunk via SHA3-256.
-fn hash_leaf(chunk: &[u8]) -> [u8; 32] {
+pub fn hash_leaf(chunk: &[u8]) -> [u8; 32] {
     let mut hasher = Sha3_256::new();
     Digest::update(&mut hasher, chunk);
     let mut out = [0u8; 32];
