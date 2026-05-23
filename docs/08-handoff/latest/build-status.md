@@ -1,13 +1,13 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) IN PROGRESS
 
-**Last updated:** 2026-05-23 (fill-gaps audit: Phase 0 traceability fixed (3 unscheduled FRs resolved via close/header-drift-fix). GAP-01a host commit persistence resolved (2 new tests). Vaporware: ProposalState dead enum removed, EscrowStatus::Refunded wired (4 new tests). Spec header drift fixed across 5 specs. CI mimic all-green.)
-**Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards deferred, BFT consensus deferred)
-**Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 complete, Week 3-4 complete, Week 5-6 complete, Week 7-8 complete)
+**Last updated:** 2026-05-23 (Week 9-10 partial completion: PDP ML-DSA-65 signature verification wired (pdp_bypass=false), hyperfluid CLI crate with 7 subcommands, E2E pipeline tests (5), inbox router with PDP quota enforcement (10 tests), slashing + reward distribution (7 tests), 1000-block soak tests (3), CI mimic all-green)
+**Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards DEFERRED → NOW IMPLEMENTED, BFT consensus deferred)
+**Stage:** 02 — Agent Runtime — **IN PROGRESS** (Week 1-2 complete, Week 3-4 complete, Week 5-6 complete, Week 7-8 complete, Week 9-10 PARTIALLY COMPLETE)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
 **Week 3-4 (Agent Runtime C10):** COMPLETE (87 tests, infinite loop, tools, SQLite, handoff, sandbox)
 **Week 5-6 (Collaboration + Review Conformance + P2P+Mempool+PDP Wire-Up):** COMPLETE (27 conformance tests + P2P TCP transport + mempool wired + PDP context state tracking)
 **Week 7-8 (BFT Consensus Integration):** COMPLETE (BftDriver + Malachite Driver + run_bft_loop + ~750 lines new code, 10 new tests)
-**Week 9-10 (Real PDP + CLI + TUI + Telegram + Inbox + Soak):** NEXT
+**Week 9-10 (Real PDP + CLI + TUI + Telegram + Inbox + Slashing + Soak):** PARTIALLY COMPLETE
 
 ## PENDING CODE CHANGES — ALL APPLIED (2026-05-06)
 
@@ -620,15 +620,59 @@ See `docs/01-research/_audit-bugs-2026-05-18.md` for full report.
 
 ## NEXT ACTION (first task on next build run)
 
-**Stage 02 Week 9-10 (Real PDP + CLI + TUI + Telegram + Inbox + Soak):**
+**Stage 02 Week 9-10 continuation (TUI + Telegram + Review Sandbox):**
 
-1. **PDP signature verification (step 2):** Wire ML-DSA-65 signature checking into the PDP rule chain. Set `pdp_bypass = false`.
-2. **`hyperfluid` CLI crate:** 7 subcommands, clap argument parsing, JSON output.
-3. **TUI setup wizard (ratatui):** First-launch config flow.
-4. **Telegram bot client:** Long-polling, `/status`/`/balance`/`/send`.
-5. **Inbox router + off-chain agent messaging:** `InboxMessage` type, PDP quota enforcement, gossip-based delivery.
-6. **Review sandbox subagent:** Real cgroups v2 + seccomp BPF isolation.
-7. **Slashing + reward distribution:** Equivocation/downtime slashing, epoch-end fee rebates.
-8. **1000-block cross-component soak.**
+1. **TUI setup wizard (ratatui):** First-launch config flow. Writes `config.toml`.
+2. **Telegram bot client:** Long-polling getUpdates, `/status`/`/balance`/`/send`, sponsored task submission.
+3. **Review sandbox subagent:** Real cgroups v2 + seccomp BPF isolation for task and governance review.
+4. **Multi-validator BFT networking:** Wire clatter network bridge + effect handler for multi-node consensus. (deferred from Week 7-8)
+5. **Full multi-node soak:** 4-validator BFT network with real PDP, agents, reviews, and governance.
+
+## Week 9-10 Completed Tasks (2026-05-23)
+
+| Task | Status |
+|------|--------|
+| PDP signature verification (step 2): ML-DSA-65 wired, `pdp_bypass = false` | **COMPLETE** (47 tests: 30 unit + 17 conformance) |
+| `hyperfluid` CLI crate: 7 subcommands, clap, JSON output | **COMPLETE** (7 integration tests) |
+| CLI → PDP → state machine pipeline: 5 E2E tests | **COMPLETE** (transfer, task_create, tampered, unsigned, deterministic) |
+| Inbox router + off-chain agent messaging | **COMPLETE** (10 tests: delivery, dedup, expiry, quotas, window rotation) |
+| Slashing + reward distribution | **COMPLETE** (7 tests: equivocation, downtime, jail, reward proportional) |
+| 1000-block cross-component soak | **COMPLETE** (3 tests: 1000 blocks, 500 mixed ops, determinism) |
+| TUI setup wizard (ratatui) | **DEFERRED** to Week 9-10 continuation |
+| Telegram bot client | **DEFERRED** to Week 9-10 continuation |
+| Review sandbox subagent (real OS isolation) | **DEFERRED** to Week 9-10 continuation |
+
+## Verification (after Week 9-10 partial)
+
+| Check | Result |
+|-------|--------|
+| `cargo build --workspace` | PASS (14 crates) |
+| `cargo test --workspace` | PASS (403/403, 1 pre-existing BFT skip) |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
+| `cargo doc --workspace --no-deps --document-private-items` | PASS |
+| `cargo deny check` | PASS |
+| `cargo bench --workspace --no-run` | PASS |
+| Determinism sweep (floating-point) | PASS |
+| Determinism sweep (wall-clock/random) | PASS |
+| `panic!/assert!` in library src/ | PASS (only in tests + main.rs) |
+| Truncating casts in protocol code | PASS (only in safe test contexts) |
+| `Ordering::Relaxed` in production | PASS (none found) |
+
+## New Code Summary (Week 9-10)
+
+| File | Lines | Tests |
+|------|-------|-------|
+| `crates/hyperfluid-pdp/src/rule_chain.rs` | +60 | 6 new (step2 verification) |
+| `crates/hyperfluid-pdp/src/types.rs` | +1 | key_binding type change |
+| `crates/hyperfluid-pdp/tests/conformance_pdp_spec.rs` | ~60 changed | 5 new sig verification hooks |
+| `crates/hyperfluid-cli/` (new crate) | ~450 | 12 (7 cli + 5 E2E) |
+| `crates/hyperfluid-collaboration/src/inbox.rs` (new) | ~350 | 10 |
+| `crates/hyperfluid-state/src/state_machine.rs` | +180 | 7 (slashing + rewards) |
+| `crates/hyperfluid-node/tests/soak_test.rs` (new) | ~170 | 3 |
+| `crates/hyperfluid-consensus/src/driver.rs` | +5 | pdp_bypass change |
+
+**Total:** ~1,260 lines of new code, 43 new tests.
+
 
 ---

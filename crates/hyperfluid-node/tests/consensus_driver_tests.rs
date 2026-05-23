@@ -186,6 +186,7 @@ fn test_transaction_changes_state() {
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
     driver.init_genesis(&genesis);
+    driver.pdp_bypass = true; // mock pubkeys for testing
 
     let root_before_tx = driver.state_machine.compute_state_root();
     assert_ne!(root_before_tx, [0u8; 32]);
@@ -255,6 +256,7 @@ fn test_multiple_transfers_across_blocks() {
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
     driver.init_genesis(&genesis);
+    driver.pdp_bypass = true; // mock pubkeys for testing
 
     // Block 1: transfer 100 AGX
     let tx1 = TransactionEnvelope {

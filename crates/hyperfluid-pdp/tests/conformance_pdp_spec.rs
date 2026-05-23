@@ -9,8 +9,7 @@ use hyperfluid_pdp::types::{
     ActionPlanRequest, ActionPlanResponse, ActionType, Decision, DenyReason, Hash32, PdpContext,
     QuotaState, TrustStage,
 };
-use ml_dsa::{Generate, Keypair, MlDsa65, Seed, SignatureEncoding, Signer, SigningKey};
-use sha3::{Digest, Sha3_256};
+use ml_dsa::{Generate, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey};
 
 fn test_keypair() -> (Vec<u8>, [u8; 32]) {
     let sk = SigningKey::<MlDsa65>::generate();
@@ -19,26 +18,6 @@ fn test_keypair() -> (Vec<u8>, [u8; 32]) {
     let mut seed_bytes = [0u8; 32];
     seed_bytes.copy_from_slice(seed.as_slice());
     (pk, seed_bytes)
-}
-
-fn make_request(
-    plan_id: Hash32,
-    agent_id: Hash32,
-    action_type: ActionType,
-    nonce: u64,
-    expires: u64,
-) -> ActionPlanRequest {
-    ActionPlanRequest {
-        plan_id,
-        agent_id,
-        action_type,
-        resource_id: [1u8; 32],
-        reason_hash: [2u8; 32],
-        evidence_refs: vec![],
-        nonce,
-        expires_at_height: expires,
-        agent_signature: vec![],
-    }
 }
 
 fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: Option<Vec<u8>>) -> PdpContext {
@@ -71,7 +50,6 @@ fn make_request(
         expires_at_height: expires,
         agent_signature: vec![],
     }
-}
 }
 
 // ── Section 1.7: Deterministic Policy Evaluation ────────────────────────
@@ -203,7 +181,8 @@ fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
 fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
     let agent_id = [0xAA; 32];
     let (pk, sk_seed) = test_keypair();
-    let mut request = make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
+    let mut request =
+        make_request([1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100);
     let msg = hash_action_plan_for_signing(&request);
     let seed = ml_dsa::Seed::try_from(sk_seed.as_slice()).unwrap();
     let sk = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&seed);

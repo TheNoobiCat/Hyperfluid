@@ -1,9 +1,11 @@
 // === Hyperfluid Node Binary ===
 //
 // Full node binary: genesis boot, config loading, real block production loop
-// via ConsensusDriver, P2P TCP transport, clean shutdown on signal.
+// via ConsensusDriver, P2P TCP transport, local JSON-RPC server, clean shutdown.
 //
 // Source: docs/05-planning/stages/stage-01-protocol-core.md
+
+pub mod rpc;
 
 use hyperfluid_consensus::driver::ConsensusDriver;
 use hyperfluid_consensus::genesis::GenesisConfig;
@@ -109,8 +111,16 @@ async fn main() {
         tracing::info!("Genesis config written to {:?}", out_path);
     }
 
-    // Wrap driver for shared access across async tasks
+    // Wrap driver for shared access across async tasks and RPC server
     let driver = Arc::new(Mutex::new(driver));
+
+    // ── Local JSON-RPC server (loopback only) ──
+    let rpc_port: u16 =
+        std::env::var("HYPERFLUID_RPC_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(8545);
+    let (_rpc_handle, rpc_addr) =
+        rpc::start_rpc_server(Arc::clone(&driver), ([127, 0, 0, 1], rpc_port).into());
+    tracing::info!("JSON-RPC server listening on {} (local-only)", rpc_addr);
+
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 

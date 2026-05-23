@@ -53,6 +53,7 @@ impl TestNode {
     fn new(node_id: u8, port: u16, genesis: &GenesisConfig) -> Self {
         let mut driver = ConsensusDriver::new(genesis.epoch_length);
         driver.init_genesis(genesis);
+        driver.pdp_bypass = true; // mock pubkeys for multi-node testing
         Self { driver, node_id, port, chain_id: genesis.chain_id.clone() }
     }
 

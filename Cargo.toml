@@ -11,7 +11,7 @@ members = [
     "crates/hyperfluid-pdp",
     "crates/hyperfluid-agent",
     "crates/hyperfluid-collaboration",
-    "crates/hyperfluid-economics",
+    "crates/hyperfluid-cli",
     "crates/hyperfluid-node",
 ]
 resolver = "2"
@@ -35,6 +35,7 @@ hex = "0.4"
 parity-scale-codec = { version = "3", features = ["derive", "max-encoded-len"] }
 clatter = { version = "2.2", default-features = false, features = ["std", "use-25519", "use-chacha20poly1305", "use-sha", "use-rust-crypto-ml-kem"] }
 ml-dsa = { version = "0.1.0-rc.11", default-features = false, features = ["alloc", "getrandom", "pkcs8"] }
+clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 
 [profile.dev]

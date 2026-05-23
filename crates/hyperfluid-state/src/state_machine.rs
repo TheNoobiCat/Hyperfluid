@@ -54,6 +54,8 @@ pub struct StateMachine {
     review_records: HashMap<Hash32, Vec<ReviewRecord>>,
     /// Review tasks map: review_task_id -> work_task_id (lookup for claim enforcement)
     review_task_map: HashMap<Hash32, Hash32>,
+    /// Accumulated fee burn from slashing and base fee burning
+    pub fee_burn_accumulator: u128,
 }
 
 /// In-memory delegation state tracked by the state machine.
@@ -70,12 +72,21 @@ pub(crate) struct DelegationState {
 /// Tracks bond/unbond/withdraw lifecycle and stake amounts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 pub struct ValidatorTracker {
+    pub validator_id: Hash32,
     pub self_bond: u128,
     pub total_delegated: u128,
     pub commission_rate: u8,
     pub bonding_height: u64,
     pub unbonding_height: u64,
     pub state: ValidatorLifecycleState,
+    /// Block height until which the validator is jailed (0 = not jailed)
+    pub jailed_until_height: u64,
+    /// Number of times this validator has been slashed
+    pub slash_count: u64,
+    /// Height of the most recent slash
+    pub last_slash_height: u64,
+    /// Height of the most recent reward distribution to this validator
+    pub last_reward_height: u64,
 }
 
 /// Specification for a single child task in a split operation.
@@ -143,6 +154,7 @@ impl StateMachine {
             validators: HashMap::new(),
             review_records: HashMap::new(),
             review_task_map: HashMap::new(),
+            fee_burn_accumulator: 0,
         }
     }
 
@@ -156,12 +168,17 @@ impl StateMachine {
         self.validators.insert(
             validator_id,
             ValidatorTracker {
+                validator_id,
                 self_bond,
                 total_delegated: 0,
                 commission_rate: 0,
                 bonding_height,
                 unbonding_height: 0,
                 state: ValidatorLifecycleState::Active,
+                jailed_until_height: 0,
+                slash_count: 0,
+                last_slash_height: 0,
+                last_reward_height: 0,
             },
         );
     }
@@ -612,12 +629,17 @@ impl StateMachine {
         }
 
         let vt = self.validators.entry(validator_id).or_insert(ValidatorTracker {
+            validator_id,
             self_bond: 0,
             total_delegated: 0,
             commission_rate: 0,
             bonding_height: current_height,
             unbonding_height: 0,
             state: ValidatorLifecycleState::Active,
+            jailed_until_height: 0,
+            slash_count: 0,
+            last_slash_height: 0,
+            last_reward_height: 0,
         });
         vt.self_bond = vt.self_bond.saturating_add(amount);
         vt.state = ValidatorLifecycleState::Active;
@@ -1400,6 +1422,155 @@ impl StateMachine {
     pub fn delegations_count(&self) -> usize {
         self.delegations.len()
     }
+
+    /// Execute equivocation slashing.
+    ///
+    /// Slashes 10% of the validator's self-bonded stake, burns the slashed amount,
+    /// and jails the validator for a minimum jail period (30 days).
+    /// The validator's state is set to Paused during the jail period.
+    ///
+    /// Returns `Rejected` if:
+    /// - The validator does not exist
+    /// - The validator is not Active
+    /// - The evidence has already been processed (equivocation already recorded)
+    pub fn execute_slash_equivocation(
+        &mut self,
+        validator_id: Hash32,
+        evidence_height: u64,
+        min_jail_blocks: u64,
+        current_height: u64,
+    ) -> ExecutionResult {
+        let vt = match self.validators.get(&validator_id) {
+            Some(vt) => vt,
+            None => return ExecutionResult::Rejected,
+        };
+
+        if vt.state != ValidatorLifecycleState::Active {
+            return ExecutionResult::Rejected;
+        }
+
+        if vt.jailed_until_height > current_height {
+            return ExecutionResult::Rejected;
+        }
+
+        let slash_amount = vt.self_bond / 10; // 10% slash
+
+        let vt = self.validators.get_mut(&validator_id).unwrap();
+        vt.self_bond = vt.self_bond.saturating_sub(slash_amount);
+        vt.state = ValidatorLifecycleState::Paused;
+        vt.jailed_until_height = current_height + min_jail_blocks;
+        vt.slash_count = vt.slash_count.saturating_add(1);
+        vt.last_slash_height = evidence_height;
+
+        // Burn the slashed AGX from the validator's account
+        if let Some(account) = self.accounts.get_mut(&validator_id) {
+            account.balance = account.balance.saturating_sub(slash_amount);
+        }
+
+        // Add to total burned counter
+        self.fee_burn_accumulator = self.fee_burn_accumulator.saturating_add(slash_amount);
+
+        ExecutionResult::Success
+    }
+
+    /// Execute downtime slashing.
+    ///
+    /// Slashes 1% of the validator's self-bonded stake per downtime incident.
+    /// Repeated downtime incidents increase the slash proportionally.
+    /// Validator is paused if they missed more than 20% of blocks in the liveness window.
+    ///
+    /// Returns `Rejected` if:
+    /// - The validator does not exist
+    /// - The validator is not Active
+    pub fn execute_slash_downtime(
+        &mut self,
+        validator_id: Hash32,
+        missed_blocks: u64,
+        total_window_blocks: u64,
+        evidence_height: u64,
+        pause_threshold_pct: u64, // e.g. 20 = 20%
+        min_jail_blocks: u64,
+        current_height: u64,
+    ) -> ExecutionResult {
+        let vt = match self.validators.get(&validator_id) {
+            Some(vt) => vt,
+            None => return ExecutionResult::Rejected,
+        };
+
+        if vt.state != ValidatorLifecycleState::Active {
+            return ExecutionResult::Rejected;
+        }
+
+        let downtime_pct =
+            if total_window_blocks > 0 { (missed_blocks * 100) / total_window_blocks } else { 0 };
+
+        if downtime_pct < pause_threshold_pct {
+            return ExecutionResult::Success; // Below threshold, no action
+        }
+
+        // 1% slash per incident, capped at 5%
+        let slash_basis_points = std::cmp::min(500, (vt.slash_count + 1) * 100);
+        let slash_amount = (vt.self_bond * slash_basis_points as u128) / 10000;
+
+        let vt = self.validators.get_mut(&validator_id).unwrap();
+        vt.self_bond = vt.self_bond.saturating_sub(slash_amount);
+
+        if downtime_pct >= pause_threshold_pct {
+            vt.state = ValidatorLifecycleState::Paused;
+            vt.jailed_until_height = current_height + min_jail_blocks;
+        }
+        vt.slash_count = vt.slash_count.saturating_add(1);
+        vt.last_slash_height = evidence_height;
+
+        if let Some(account) = self.accounts.get_mut(&validator_id) {
+            account.balance = account.balance.saturating_sub(slash_amount);
+        }
+
+        self.fee_burn_accumulator = self.fee_burn_accumulator.saturating_add(slash_amount);
+
+        ExecutionResult::Success
+    }
+
+    /// Distribute epoch-end fee rebates to validators proportionally to their
+    /// self-bonded stake. Active validators receive rebates from the fee pool.
+    ///
+    /// Fee pool is consumed (set to zero) after distribution.
+    pub fn execute_distribute_rewards(&mut self, epoch_fee_pool: &mut u128) -> ExecutionResult {
+        if *epoch_fee_pool == 0 {
+            return ExecutionResult::Success;
+        }
+
+        let total_stake: u128 = self
+            .validators
+            .values()
+            .filter(|vt| vt.state == ValidatorLifecycleState::Active)
+            .map(|vt| vt.self_bond)
+            .sum();
+
+        if total_stake == 0 {
+            return ExecutionResult::Success;
+        }
+
+        let pool = *epoch_fee_pool;
+
+        for vt in self.validators.values_mut() {
+            if vt.state != ValidatorLifecycleState::Active {
+                continue;
+            }
+            let share = pool
+                .checked_mul(vt.self_bond)
+                .and_then(|v| v.checked_div(total_stake))
+                .unwrap_or(0);
+            if let Some(account) = self.accounts.get_mut(&vt.validator_id) {
+                account.balance = account.balance.saturating_add(share);
+            }
+            vt.last_reward_height = 0; // Will be set by caller
+        }
+
+        *epoch_fee_pool = 0;
+
+        ExecutionResult::Success
+    }
 }
 
 #[cfg(test)]
@@ -2015,5 +2186,118 @@ mod tests {
         let root_withdrawn = sm.compute_state_root();
 
         assert_ne!(root_bonded, root_withdrawn);
+    }
+
+    // ── Slashing & Rewards Tests ──────────────────────────────────────
+
+    const MIN_BOND_SLASH: u128 = 100_000_000_000_000_000_000u128;
+    const JAIL_BLOCKS: u64 = 5000;
+
+    #[test]
+    fn slash_equivocation_reduces_stake_and_jails() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND_SLASH, 1, MIN_BOND_SLASH, 10, ctx(10));
+
+        let r = sm.execute_slash_equivocation(v, 100, JAIL_BLOCKS, 100);
+        assert_eq!(r, ExecutionResult::Success);
+
+        let vt = sm.get_validator(&v).unwrap();
+        assert_eq!(vt.self_bond, MIN_BOND_SLASH * 9 / 10);
+        assert_eq!(vt.state, ValidatorLifecycleState::Paused);
+        assert_eq!(vt.jailed_until_height, 100 + JAIL_BLOCKS);
+        assert_eq!(vt.slash_count, 1);
+
+        assert_eq!(sm.fee_burn_accumulator, MIN_BOND_SLASH / 10);
+    }
+
+    #[test]
+    fn slash_equivocation_rejects_nonexistent() {
+        let mut sm = StateMachine::new();
+        let r = sm.execute_slash_equivocation([1u8; 32], 100, JAIL_BLOCKS, 100);
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn slash_equivocation_rejects_already_jailed() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND_SLASH, 1, MIN_BOND_SLASH, 10, ctx(10));
+        sm.execute_slash_equivocation(v, 100, JAIL_BLOCKS, 100);
+
+        // Second slash while jailed should be rejected
+        let r = sm.execute_slash_equivocation(v, 150, JAIL_BLOCKS, 150);
+        assert_eq!(r, ExecutionResult::Rejected);
+    }
+
+    #[test]
+    fn slash_downtime_below_threshold_no_action() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND_SLASH, 1, MIN_BOND_SLASH, 10, ctx(10));
+
+        let r = sm.execute_slash_downtime(v, 5, 100, 100, 20, JAIL_BLOCKS, 100);
+        assert_eq!(r, ExecutionResult::Success);
+
+        let vt = sm.get_validator(&v).unwrap();
+        assert_eq!(vt.state, ValidatorLifecycleState::Active);
+        assert_eq!(vt.self_bond, MIN_BOND_SLASH);
+    }
+
+    #[test]
+    fn slash_downtime_above_threshold_pauses() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND_SLASH, 1, MIN_BOND_SLASH, 10, ctx(10));
+
+        let r = sm.execute_slash_downtime(v, 50, 100, 100, 20, JAIL_BLOCKS, 100);
+        assert_eq!(r, ExecutionResult::Success);
+
+        let vt = sm.get_validator(&v).unwrap();
+        assert_eq!(vt.state, ValidatorLifecycleState::Paused);
+        assert!(vt.self_bond < MIN_BOND_SLASH);
+        assert_eq!(vt.slash_count, 1);
+    }
+
+    #[test]
+    fn reward_distribution_proportional_to_stake() {
+        let mut sm = StateMachine::new();
+        let v1 = [1u8; 32];
+        let v2 = [2u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.init_account(test_account(2, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v1, 1_000, 1, 1_000, 10, ctx(10));
+        sm.execute_bond(v2, 3_000, 1, 3_000, 10, ctx(10));
+
+        let initial_v1 = sm.get_account(&v1).unwrap().balance;
+        let initial_v2 = sm.get_account(&v2).unwrap().balance;
+
+        let mut fee_pool: u128 = 40_000; // 40000 atto-AGX
+        let r = sm.execute_distribute_rewards(&mut fee_pool);
+        assert_eq!(r, ExecutionResult::Success);
+        assert_eq!(fee_pool, 0);
+
+        // v1 has 1/4 of total stake, v2 has 3/4
+        let after_v1 = sm.get_account(&v1).unwrap().balance;
+        let after_v2 = sm.get_account(&v2).unwrap().balance;
+        assert!(after_v1 > initial_v1, "v1 should receive reward");
+        assert!(after_v2 > initial_v2, "v2 should receive reward");
+        assert!(after_v2 > after_v1);
+    }
+
+    #[test]
+    fn reward_distribution_empty_pool_noop() {
+        let mut sm = StateMachine::new();
+        let v = [1u8; 32];
+        sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
+        sm.execute_bond(v, MIN_BOND_SLASH, 1, MIN_BOND_SLASH, 10, ctx(10));
+
+        let mut fee_pool: u128 = 0;
+        let r = sm.execute_distribute_rewards(&mut fee_pool);
+        assert_eq!(r, ExecutionResult::Success);
     }
 }

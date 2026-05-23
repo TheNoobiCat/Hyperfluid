@@ -17,7 +17,6 @@ hyperfluid-governance = { path = "../hyperfluid-governance" }
 hyperfluid-fastpath = { path = "../hyperfluid-fastpath" }
 hyperfluid-pdp = { path = "../hyperfluid-pdp" }
 hyperfluid-staking = { path = "../hyperfluid-staking" }
-hyperfluid-economics = { path = "../hyperfluid-economics" }
 hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
 hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 tokio.workspace = true

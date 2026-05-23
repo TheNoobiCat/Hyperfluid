@@ -829,10 +829,7 @@ impl ConsensusDriver {
 
         let nonce = self.agent_nonces.get(&agent_id).copied().unwrap_or(0);
 
-        let key_binding = self
-            .state_machine
-            .get_account(&agent_id)
-            .map(|a| a.pubkey.clone());
+        let key_binding = self.state_machine.get_account(&agent_id).and_then(|a| a.pubkey.clone());
 
         let trust_stage = self
             .state_machine
@@ -1276,6 +1273,7 @@ mod tests {
             GenesisAccount { account_id: bob_id, balance: 0, pubkey: None },
         ]);
         driver.init_genesis(&genesis);
+        driver.pdp_bypass = true; // test accounts have no pubkeys for PDP sig verification
         let root_before = driver.state_machine.compute_state_root();
 
         let payload = TransferPayload {

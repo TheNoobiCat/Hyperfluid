@@ -77,25 +77,27 @@ fn step2_signature_verification(
     request: &ActionPlanRequest,
     ctx: &PdpContext,
 ) -> Result<(), PdpError> {
+    use ml_dsa::{EncodedVerifyingKey, MlDsa65, Verifier, VerifyingKey};
+
     let pk_bytes = ctx.key_binding.as_ref().ok_or(PdpError::SignatureVerificationFailed)?;
     if request.agent_signature.is_empty() {
         return Err(PdpError::SignatureVerificationFailed);
     }
 
-    let verifying_key = ml_dsa::VerifyingKey::<ml_dsa::MlDsa65>::try_from(pk_bytes.as_slice())
+    let encoded = EncodedVerifyingKey::<MlDsa65>::try_from(pk_bytes.as_slice())
         .map_err(|_| PdpError::SignatureVerificationFailed)?;
+    let verifying_key = VerifyingKey::<MlDsa65>::decode(&encoded);
 
-    let sig = ml_dsa::Signature::<ml_dsa::MlDsa65>::try_from(request.agent_signature.as_slice())
+    let sig = ml_dsa::Signature::<MlDsa65>::try_from(request.agent_signature.as_slice())
         .map_err(|_| PdpError::SignatureVerificationFailed)?;
 
     let message = hash_action_plan_for_signing(request);
 
-    verifying_key
-        .verify(&message, &sig)
-        .map_err(|_| PdpError::SignatureVerificationFailed)
+    verifying_key.verify(&message, &sig).map_err(|_| PdpError::SignatureVerificationFailed)
 }
 
 pub fn hash_action_plan_for_signing(request: &ActionPlanRequest) -> [u8; 32] {
+    use sha3::Digest;
     let mut hasher = sha3::Sha3_256::new();
     hasher.update(request.plan_id);
     hasher.update(request.agent_id);
@@ -376,7 +378,7 @@ mod tests {
 
     fn test_keypair() -> (Vec<u8>, [u8; 32]) {
         let sk = SigningKey::<MlDsa65>::generate();
-        let pk = sk.verifying_key().encode().as_ref().to_vec();
+        let pk = sk.verifying_key().encode().as_slice().to_vec();
         let seed = sk.to_seed();
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_slice());
@@ -390,7 +392,12 @@ mod tests {
         sk.sign(&msg).to_vec()
     }
 
-    fn make_ctx(height: u64, balance: u128, nonce: u64, key_binding: Option<Vec<u8>>) -> PdpContext {
+    fn make_ctx(
+        height: u64,
+        balance: u128,
+        nonce: u64,
+        key_binding: Option<Vec<u8>>,
+    ) -> PdpContext {
         PdpContext {
             current_height: height,
             key_binding,
@@ -496,8 +503,13 @@ mod tests {
         let (_pk_a, seed_a) = test_keypair();
         let (pk_b, _seed_b) = test_keypair();
         let (request, _ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk_b, &seed_a,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk_b,
+            &seed_a,
         );
         let ctx = make_ctx(50, 1000, 0, Some(pk_b)); // verify with pk_b but signed with seed_a
         let result = evaluate(&request, &ctx);
@@ -510,8 +522,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (mut request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         request.nonce = 999; // tamper after signing
         let result = evaluate(&request, &ctx);
@@ -524,8 +541,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Approved);
@@ -538,10 +560,8 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let plan_id = [0x42; 32];
         let (pk, seed) = test_keypair();
-        let (request, mut ctx) = make_signed_request(
-            plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
-        );
+        let (request, mut ctx) =
+            make_signed_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100, &pk, &seed);
         ctx.consumed_plan_ids = vec![plan_id];
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Denied);
@@ -553,8 +573,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (mut request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            5,
+            100,
+            &pk,
+            &seed,
         );
         let mut ctx_wrong_nonce = ctx.clone();
         ctx_wrong_nonce.agent_nonce = 3; // nonce doesn't match expected +1
@@ -569,8 +594,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (mut request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         let mut ctx_expired = ctx.clone();
         ctx_expired.current_height = 150; // past expiry
@@ -585,8 +615,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (mut request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 20000,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            20000,
+            &pk,
+            &seed,
         );
         let mut ctx_normal = ctx.clone();
         ctx_normal.current_height = 100;
@@ -601,8 +636,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (mut request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 5, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            5,
+            100,
+            &pk,
+            &seed,
         );
         let mut ctx_valid = ctx.clone();
         ctx_valid.agent_nonce = 4; // request.nonce == ctx.nonce + 1
@@ -618,8 +658,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (request, mut ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::SubmitGovernanceProposal,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         ctx.quota_states = vec![QuotaState {
             quota_id: "gov_proposals_per_identity".into(),
@@ -636,8 +681,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (request, mut ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::SubmitGovernanceProposal, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::SubmitGovernanceProposal,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         ctx.quota_states = vec![QuotaState {
             quota_id: "gov_proposals_per_identity".into(),
@@ -655,8 +705,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (mut request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         let mut ctx_poor = ctx.clone();
         ctx_poor.agent_balance_attagx = 0;
@@ -671,8 +726,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk,
+            &seed,
         );
         let result = evaluate(&request, &ctx);
         assert_eq!(result.decision, Decision::Approved);
@@ -683,8 +743,13 @@ mod tests {
         let agent_id = [0xAAu8; 32];
         let (pk, seed) = test_keypair();
         let (request, ctx) = make_signed_request(
-            [1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100,
-            &pk, &seed,
+            [1u8; 32],
+            agent_id,
+            ActionType::ClaimTaskLease,
+            1,
+            100,
+            &pk,
+            &seed,
         );
 
         let r1 = evaluate(&request, &ctx);

@@ -9,6 +9,7 @@ description = "C11 Collaboration & Inbox: Task board, team formation, topic life
 
 [dependencies]
 hyperfluid-state = { path = "../hyperfluid-state" }
+sha3.workspace = true
 
 [dev-dependencies]
 hex = "0.4"
