@@ -262,19 +262,18 @@ Process improvements: 5 new generic guards added to `execute-build.md` `checkpoi
 
 ## Next Actions
 
-**Stage 02 Week 5-6 (P2P + Mempool + PDP Wire-Up): COMPLETE (2026-05-20) — P2P TCP transport + mempool + PDP context state wired into node**
+**Pipeline fix (2026-05-23):** Added `.opencode/commands/execute-build/no-deferral.md` — hard rule against deferring buildable tasks. Updated `preamble.md` and `read-and-implement.md` with BUILDABLE vs BLOCKED classification gate.
 
-**Stage 02 Week 7-8 (BFT Consensus Integration): COMPLETE (2026-05-21) — BftDriver + Malachite Driver + run_bft_loop + ~750 lines, 10 new tests, all CI checks pass**
+**Stage 02 Week 9-10 partial (2026-05-23):** PDP ML-DSA-65, CLI crate, E2E pipeline, inbox router, slashing + rewards, soak test — **COMPLETE** (see `build-status.md`).
 
-**Stage 02 Week 9-10 (Real PDP + CLI + TUI + Telegram + Inbox + Review Sandbox + Soak): NEXT**
-- PDP signature verification with ML-DSA-65 (set `pdp_bypass = false`)
-- `hyperfluid` CLI crate with 7 subcommands
-- TUI setup wizard (ratatui)
-- Telegram bot client
-- Inbox router + off-chain agent messaging (gossip-based, PDP quota enforced)
-- Review sandbox subagent (real cgroups v2 + seccomp BPF + mount namespace isolation, exploration tools but no CLI access, serves both task review and governance proposal review)
-- Slashing + reward distribution
-- 1000-block cross-component soak
+**Stage 02 Week 9-10 continuation — see `docs/08-handoff/latest/build-status.md` §NEXT ACTIONS for full plan:**
+- Phase 1: TUI setup wizard (ratatui) — `crates/hyperfluid-agent/src/tui.rs`
+- Phase 2: Telegram bot client — `crates/hyperfluid-agent/src/telegram.rs`
+- Phase 3: Review sandbox subagent — `crates/hyperfluid-agent/src/sandbox.rs`
+- Phase 4a: Network bridge — `crates/hyperfluid-consensus/src/network_bridge.rs`
+- Phase 4b: Wire into driver — `crates/hyperfluid-consensus/src/driver.rs`
+- Phase 4c: Multi-node BFT soak test — `crates/hyperfluid-node/tests/multi_node_bft_test.rs`
+- Phase 4d: PDP wiring in BFT — `crates/hyperfluid-consensus/src/driver.rs`
 
 ## Layer 4 Spec Inventory (delivered)
 

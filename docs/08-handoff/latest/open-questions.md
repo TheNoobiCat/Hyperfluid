@@ -1,5 +1,33 @@
 # Session 2026-05-14 — Open Questions
 
+## Unresolved Implementation Gaps (2026-05-23)
+
+### Protocol backend gaps (BUILDABLE)
+
+| # | Gap | Location | What's needed |
+|---|-----|----------|---------------|
+| GAP-03 | EvidenceTx unwired | `driver.rs:794` | Wire slashing via `execute_slash_equivocation` / `execute_slash_downtime` in state machine. EvidenceTx handler currently returns early with comment "not yet wired". |
+| GAP-04 | git:head tracking | `driver.rs` | Store current git:head commit hash in ConsensusDriver state. Currently `[0u8; 32]` placeholder. Wire through governance proposal execution so `GovernanceTx::Propose` updates the active commit on pass. |
+| GAP-05 | FastPath approve per-agent | `fastpath/src/lifecycle.rs` | No `submit_approval()` for individual fast-path committee members. Only `issue_certificate_with_quorum` exists which requires pre-collected approvals. Need per-agent approval accumulation. |
+| GAP-06 | Query committee by epoch | `driver.rs` | No epoch→committee history stored. Committee is computed on-the-fly but not archived. Need `BTreeMap<u64, Committee>` snapshot per epoch in ConsensusDriver. |
+
+### RPC routing gaps (BUILDABLE)
+
+| # | Gap | Location | What's needed |
+|---|-----|----------|---------------|
+| GAP-07 | /tx/submit only routes 4 types | `rpc.rs:324` | Only handles "transfer", "task_create", "evidence", "fast_path". Missing: staking, delegation, claim, heartbeat, submit_review, withdraw. All have backend logic in state machine + driver but RPC can't reach them. |
+| GAP-08 | /governance/propose stub | `rpc.rs:400` | Just returns a static JSON with "submitted" status. Needs to call `GovernanceEngine.submit_proposal()` via driver. |
+| GAP-09 | /governance/vote stub | `rpc.rs:420` | Same — static "vote_recorded" status. Needs to call `GovernanceEngine.cast_vote()`. |
+| GAP-10 | Missing read endpoints | `rpc.rs` | No endpoints for: `/query/validator?validator_id=`, `/query/committee?epoch=`, `/query/git-head`, `/query/fee-estimate`. |
+
+### New subsystem needed (BUILDABLE)
+
+| # | Gap | What's needed |
+|---|-----|---------------|
+| GAP-11 | Skills infra | Scan `~/.hyperfluid/skills/<name>/SKILL.md`, parse title/description/tools, inject into agent system prompt as available skill. Filesystem only — no on-chain storage. Agent uses `hyperfluid agent load-skill <name>` to load. See GLOSSARY.md "Skill" definition. |
+
+---
+
 ## Q4: Stage 02 Week 5-6 scope mismatch (2026-05-20)
 
 **Spec section:** `stage-02-agent-runtime.md` Week 5-6

@@ -3,6 +3,13 @@ Read:
 2. All specifications referenced for this week.
 3. `docs/08-handoff/latest/build-status.md` (what's already done).
 
+**No-deferral gate (from no-deferral.md):**
+Before grouping tasks, classify every task in the week's stage file:
+- BUILDABLE: can be built now → MUST appear in the delegation plan
+- BLOCKED: dependency doesn't exist → document exact file:line that's missing
+Every BUILDABLE task MUST be built. Every BLOCKED task MUST have a file:line citation.
+If you cannot produce the citation, the task is BUILDABLE and must be built.
+
 **Model awareness:** The orchestrator (this agent) runs on a powerful pro model. Subagents
 (`build-worker`) run on `deepseek-v4-flash` — a smaller, cheaper model with lower intelligence and less power.
 The worker will NOT infer, extrapolate, or "figure out" missing context.

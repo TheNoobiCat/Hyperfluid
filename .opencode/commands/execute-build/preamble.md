@@ -7,3 +7,8 @@ Before implementing this week's tasks, verify the upstream components you depend
 3. If a gap blocks your current task (e.g., you need a working node binary but it's a stub), **STOP**. Fix the gap first. Do NOT build on top of a stub.
 4. If a gap does not block your task, document it in `open-questions.md` and proceed.
 5. Do NOT mark any prior week as "complete" if its GAP NOTE describes missing integration behavior that still exists.
+
+**NO-DEFERRAL RULE:** Read `.opencode/commands/execute-build/no-deferral.md` before
+entering step 2 (read-and-implement). Every task in the current week's stage file
+MUST be either built or proven unbuildable (missing dependency at file:line level).
+Do not enter the delegation phase without knowing which tasks fall into which bucket.

@@ -618,15 +618,94 @@ See `docs/01-research/_audit-bugs-2026-05-18.md` for full report.
 
 ---
 
-## NEXT ACTION (first task on next build run)
+## NEXT ACTIONS — Stage 02 Week 9-10 Continuation (all BUILDABLE)
 
-**Stage 02 Week 9-10 continuation (TUI + Telegram + Review Sandbox):**
+### Phase 1: TUI Setup Wizard
+- **File:** `crates/hyperfluid-agent/src/tui.rs` (new, ~150 lines)
+- **Deps:** add `ratatui = "0.29"`, `crossterm = "0.28"` to `crates/hyperfluid-agent/Cargo.toml`
+- Interactive terminal form: project name → agent name → LLM provider (select) → API URL → API key → capability tags → optional Telegram token
+- Writes valid `config.toml` on completion; reads existing config for re-entry pre-fill
+- Entry point: `hyperfluid-agent --setup` flag in `crates/hyperfluid-agent/src/main.rs`
+- **Test:** ratatui TestBackend, simulate keypresses, assert written config matches inputs
 
-1. **TUI setup wizard (ratatui):** First-launch config flow. Writes `config.toml`.
-2. **Telegram bot client:** Long-polling getUpdates, `/status`/`/balance`/`/send`, sponsored task submission.
-3. **Review sandbox subagent:** Real cgroups v2 + seccomp BPF isolation for task and governance review.
-4. **Multi-validator BFT networking:** Wire clatter network bridge + effect handler for multi-node consensus. (deferred from Week 7-8)
-5. **Full multi-node soak:** 4-validator BFT network with real PDP, agents, reviews, and governance.
+### Phase 2: Telegram Bot Client
+- **File:** `crates/hyperfluid-agent/src/telegram.rs` (new, ~200 lines)
+- **Deps:** none (reqwest::blocking already in workspace)
+- Long-polling getUpdates tokio task, reads bot token from config.toml `[telegram]` section
+- Commands: `/start` (welcome), `/status` (SQLite summary), `/balance` (calls node RPC `/agent/status`), `/send <agent_id> <amount>` (confirmation flow)
+- Sponsored submission (FR-0200): natural language → refine scope + bounty → confirm with "yes" → `hyperfluid task submit --sponsor`
+- Single-tenant: responds only to configured user_id from `[telegram]` config
+- **Test:** mock HTTP responses for Telegram API getUpdates/sendMessage
+
+### Phase 3: Review Sandbox Subagent
+- **File:** `crates/hyperfluid-agent/src/sandbox.rs` (new, ~200 lines)
+- **Deps:** none
+- Spawns stripped-down agent process for task/governance review
+- Tools allowed: bash, read, edit, write (exploration only); tools blocked: hyperfluid CLI, network (except loopback to node RPC)
+- Timeout: 30 minutes; receives artifact chunk path + evidence path; returns verdict (accept/reject) + reason + evidence hash via stdout JSON
+- Host process reads stdout, submits review tx on subagent's behalf
+- OS isolation: Linux cgroups v2 + seccomp BPF (read/write/stat/mmap/exit) + mount namespace (tmpfs with only artifact + binary); macOS/Windows process-level only (SPEC_DEVIATION)
+- **Test:** sandbox can read artifact files, cannot access files outside working dir, cannot make outbound HTTP calls (except 127.0.0.1), verdict correctly captured by host
+
+### Phase 4a: Network Bridge
+- **File:** `crates/hyperfluid-consensus/src/network_bridge.rs` (new, ~200 lines)
+- **Deps:** parity-scale-codec (already in workspace)
+- Bridges tokio channels (BFT driver) ↔ TCP transport (P2P layer)
+- Wire format: 1-byte tag (0x01=Vote, 0x02=Proposal) + SCALE-encoded payload
+- `run_sender`: reads `ConsensusNetworkMsg` from outgoing channel, encodes to bytes, sends to connected peer channels
+- `run_receiver`: reads bytes from peer channels, deserializes, pushes `ConsensusNetworkMsg` to incoming channel
+- Reference: `crates/hyperfluid-consensus/src/malachite_consensus.rs:37` (ConsensusNetworkMsg enum), `crates/hyperfluid-consensus/src/driver.rs:988` (run_bft_loop where channels are created), `crates/hyperfluid-p2p/src/tcp.rs` (TcpTransport)
+- Register in `crates/hyperfluid-consensus/src/lib.rs`: `pub mod network_bridge;`
+
+### Phase 4b: Wire Network Bridge into Driver
+- **File:** `crates/hyperfluid-consensus/src/driver.rs` (modify, ~60 lines)
+- Add `peer_addrs: BTreeMap<Address32, SocketAddr>` and `bind_addr: SocketAddr` params to `run_bft_loop`
+- Before main select! loop: build per-peer mpsc channels, connect to each peer via TcpTransport, spawn read/write tasks per peer
+- Spawn `network_bridge::run_sender` (reads outgoing_tx broadcasts to peers) and `network_bridge::run_receiver` (reads from peers pushes to incoming_rx)
+- In `handle_bft_event` → `RequestBlock`: replace `produce_block(vec![], timestamp)` with mempool pull via `d.mempool.select_for_block(100)`
+
+### Phase 4c: Multi-Node BFT Soak Test
+- **File:** `crates/hyperfluid-node/tests/multi_node_bft_test.rs` (new, ~250 lines)
+- 4 validators on localhost ephemeral ports, each with real ML-DSA-65 keypair
+- All boot from identical genesis (all 4 validators bonded, real pubkeys in genesis accounts)
+- Each runs `run_bft_loop` with peer_addrs of the other 3
+- `four_validator_bft_converges`: submit transfer tx on node 0, poll until all reach height >= 20, assert all 4 identical state roots + block hashes at every height
+- `byzantine_equivocation_detected`: one validator equivocates, assert honest nodes detect evidence and slashing fires
+- `bft_network_partition_recovers`: partition validator 4, assert validator 4 catches up on reconnect
+- Reference: `crates/hyperfluid-node/tests/multi_node_test.rs` (TestNode helper), `crates/hyperfluid-node/tests/rpc_integration.rs` (tokio runtime pattern), `crates/hyperfluid-state/src/state_machine.rs:1406` (execute_slash_equivocation)
+
+### Phase 4d: PDP Wiring in BFT
+- **File:** `crates/hyperfluid-consensus/src/driver.rs` (modify, ~10 lines)
+- Remove `pdp_bypass = true` from multi-node test; genesis accounts carry real pubkeys for PDP signature verification
+- Verify transactions in BFT context go through full PDP rule chain with ML-DSA-65 signatures
+
+### Phase 5: Protocol Backend Gaps (BUILDABLE)
+
+- **GAP-03 EvidenceTx:** `driver.rs:794` — wire `execute_slash_equivocation` / `execute_slash_downtime`. Add `TxType::EvidenceTx =>` match arm that reads evidence payload, calls state machine slashing. ~30 lines.
+- **GAP-04 git:head tracking:** `driver.rs` — add `git_head_commit: Hash32` field to ConsensusDriver. Initialize from genesis. Wire `GovernanceTx::Propose` handler to update it on proposal execution. ~20 lines.
+- **GAP-05 FastPath approve:** `fastpath/src/lifecycle.rs` — add `FastPathEngine::submit_approval(agent_id, proposal_id)` that accumulates per-agent approvals toward quorum certificate. ~40 lines.
+- **GAP-06 Query committee by epoch:** `driver.rs` — add `committee_history: BTreeMap<u64, Committee>` to ConsensusDriver. Snapshot committee at each epoch boundary. Expose via read endpoint. ~30 lines.
+
+### Phase 6: RPC Routing Gaps (BUILDABLE)
+
+- **GAP-07 Expand /tx/submit:** `rpc.rs:324` — add match arms for staking (bond/unbond/withdraw), delegation (delegate/undelegate/commission), claim, heartbeat, submit_review. All have backend logic in state machine. ~80 lines.
+- **GAP-08 Wire /governance/propose:** `rpc.rs:400` — call `GovernanceEngine.submit_proposal()` via driver instead of returning stub JSON. ~30 lines.
+- **GAP-09 Wire /governance/vote:** `rpc.rs:420` — call `GovernanceEngine.cast_vote()` via driver. ~30 lines.
+- **GAP-10 Missing read endpoints:** `rpc.rs` — add `/query/validator?validator_id=`, `/query/committee?epoch=`, `/query/git-head`, `/query/fee-estimate`. ~50 lines.
+
+### Phase 7: Skills Infrastructure (BUILDABLE)
+
+- **GAP-11 Skills infra:** new file `crates/hyperfluid-agent/src/skills.rs` (~100 lines). Scan `~/.hyperfluid/skills/<name>/SKILL.md`, parse title + description, inject into agent system prompt as available skills. `hyperfluid agent load-skill <name>` CLI command. Filesystem only, no on-chain. See GLOSSARY.md "Skill" canonical definition. ~100 lines.
+
+### Execution Order
+1. TUI + Telegram + Sandbox + Network Bridge + RPC gaps + Protocol gaps + Skills → **parallel** (different crates/modules, 7+ build-worker subagents)
+2. Wire into driver → depends on Phase 4a (network_bridge.rs must exist)
+3. Multi-node BFT soak test → depends on Phase 4b
+4. PDP wiring → can be done alongside Phase 4b
+5. CI mimic: fmt, clippy, test, doc, deny, bench
+
+### Total
+~2,100 lines new code, 8 new files, 4 modified files, 0 new crates.
 
 ## Week 9-10 Completed Tasks (2026-05-23)
 
