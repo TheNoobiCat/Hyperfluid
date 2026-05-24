@@ -17,6 +17,8 @@ use crate::types::{ConnState, ConnectionState, DiscoveryConfig, Hash32};
 #[cfg(feature = "clatter-secure-channel")]
 use crate::identity::Identity;
 #[cfg(feature = "clatter-secure-channel")]
+use crate::identity::{ML_DSA65_PUBKEY_LEN, ML_DSA65_SIG_LEN};
+#[cfg(feature = "clatter-secure-channel")]
 use crate::secure_channel::{ClatterHandshake, ClatterSecureChannel};
 #[cfg(not(feature = "clatter-secure-channel"))]
 use crate::transport::MockSecureChannel as SecureChannel;
@@ -362,7 +364,21 @@ async fn perform_initiator_handshake(
         return Err(TcpError::Handshake("handshake not finished after 4 messages".into()));
     }
 
-    handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))
+    let channel =
+        handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))?;
+
+    // Identity binding: prove we own the key that derives our peer_id.
+    // Sends verifying_key || signature(session_id) as a self-contained proof
+    // of possession. The responder verifies peer_id = SHA3-256(verifying_key)
+    // and checks the signature without needing external key lookup.
+    let verifying_key = local_identity.verifying_key_encoded();
+    let sig = local_identity.sign(channel.session_id());
+    let mut id_frame = Vec::with_capacity(ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN);
+    id_frame.extend_from_slice(&verifying_key);
+    id_frame.extend_from_slice(&sig);
+    write_frame(&mut stream, &id_frame).await?;
+
+    Ok(channel)
 }
 
 #[cfg(feature = "clatter-secure-channel")]
@@ -410,7 +426,31 @@ async fn perform_responder_handshake(
         return Err(TcpError::Handshake("handshake not finished after 4 messages".into()));
     }
 
-    handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))
+    let channel =
+        handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))?;
+
+    // Identity binding: verify the initiator owns the claimed peer_id.
+    let id_frame = read_frame(&mut stream).await?;
+    if id_frame.len() < ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN {
+        return Err(TcpError::Handshake(format!(
+            "invalid identity binding frame: expected >= {} bytes, got {}",
+            ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN,
+            id_frame.len()
+        )));
+    }
+    let vk_bytes = &id_frame[..ML_DSA65_PUBKEY_LEN];
+    let sig_bytes = &id_frame[ML_DSA65_PUBKEY_LEN..];
+    let computed_peer_id = crate::identity::compute_peer_id_from_bytes(vk_bytes);
+    if computed_peer_id != remote_id {
+        return Err(TcpError::Handshake(
+            "identity binding: peer_id does not match claimed identity".into(),
+        ));
+    }
+    if !Identity::verify_with_pubkey(vk_bytes, channel.session_id(), sig_bytes) {
+        return Err(TcpError::Handshake("identity binding: signature verification failed".into()));
+    }
+
+    Ok(channel)
 }
 
 #[cfg(feature = "clatter-secure-channel")]
@@ -536,7 +576,31 @@ async fn perform_responder_handshake_on_split(
         return Err(TcpError::Handshake("handshake not finished after 4 messages".into()));
     }
 
-    handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))
+    let channel =
+        handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))?;
+
+    // Identity binding: verify the initiator owns the claimed peer_id.
+    let id_frame = read_frame_split(&mut reader).await?;
+    if id_frame.len() < ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN {
+        return Err(TcpError::Handshake(format!(
+            "invalid identity binding frame: expected >= {} bytes, got {}",
+            ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN,
+            id_frame.len()
+        )));
+    }
+    let vk_bytes = &id_frame[..ML_DSA65_PUBKEY_LEN];
+    let sig_bytes = &id_frame[ML_DSA65_PUBKEY_LEN..];
+    let computed_peer_id = crate::identity::compute_peer_id_from_bytes(vk_bytes);
+    if computed_peer_id != remote_id {
+        return Err(TcpError::Handshake(
+            "identity binding: peer_id does not match claimed identity".into(),
+        ));
+    }
+    if !Identity::verify_with_pubkey(vk_bytes, channel.session_id(), sig_bytes) {
+        return Err(TcpError::Handshake("identity binding: signature verification failed".into()));
+    }
+
+    Ok(channel)
 }
 
 // --- Tests ---

@@ -1311,7 +1311,7 @@ impl ConsensusDriver {
         running: Arc<AtomicBool>,
         config: crate::malachite_consensus::ConsensusNetworkConfig,
         channels: crate::malachite_consensus::ConsensusChannels,
-        keypair: crate::malachite::MlDsa65PrivateKey,
+        identity: Arc<hyperfluid_p2p::identity::Identity>,
         node_addr: crate::malachite::Address32,
         validator_set: crate::malachite::HyperfluidValidatorSet,
         proposer_seed: [u8; 32],
@@ -1323,7 +1323,7 @@ impl ConsensusDriver {
         use crate::network_bridge;
 
         tokio::spawn(async move {
-            let mut bft = BftDriver::new(validator_set.clone(), proposer_seed, keypair, node_addr);
+            let mut bft = BftDriver::new(validator_set.clone(), proposer_seed, identity, node_addr);
 
             // -- Network bridge setup --
             // Clone incoming_tx before partial moves from channels
@@ -1675,15 +1675,13 @@ mod tests {
     fn bft_block_committed_persists_block_store_and_height() {
         // GAP-01a: BFT-committed blocks MUST be persisted in the driver state.
         // This test goes through the full handle_bft_event code path.
-        use ml_dsa::Generate;
-        use ml_dsa::KeyExport;
-        use ml_dsa::Keypair;
-        use ml_dsa::MlDsa65;
+        use std::sync::Arc;
+
+        use hyperfluid_p2p::identity::Identity;
         use tokio::sync::mpsc;
 
         use crate::malachite::{
-            Address32, HyperfluidValidator, HyperfluidValidatorSet, MlDsa65PrivateKey,
-            MlDsa65PublicKey,
+            Address32, HyperfluidValidator, HyperfluidValidatorSet, MlDsa65PublicKey,
         };
         use crate::malachite_consensus::{BftDriver, ConsensusEvent, ConsensusNetworkConfig};
 
@@ -1715,18 +1713,17 @@ mod tests {
         };
 
         // 3. Create BFT infrastructure needed by handle_bft_event
-        let keypair = ml_dsa::SigningKey::<MlDsa65>::generate();
-        let pk_bytes = keypair.verifying_key().to_bytes().to_vec();
+        let identity = Arc::new(Identity::generate());
+        let pk_bytes = identity.verifying_key_encoded();
         let addr_bytes = sha3_256_hash(&pk_bytes);
         let addr = Address32::new(addr_bytes);
-        let privkey = MlDsa65PrivateKey(keypair);
 
         let set = HyperfluidValidatorSet::new(vec![HyperfluidValidator::new(
             addr,
             MlDsa65PublicKey(pk_bytes),
             100,
         )]);
-        let mut bft = BftDriver::new(set, [0xAAu8; 32], privkey, addr);
+        let mut bft = BftDriver::new(set, [0xAAu8; 32], identity, addr);
 
         let (outgoing_tx, _outgoing_rx) = mpsc::unbounded_channel();
         let config = ConsensusNetworkConfig::default();

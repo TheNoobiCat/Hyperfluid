@@ -26,6 +26,7 @@ struct NodeConfig {
     genesis: GenesisConfig,
     block_interval_secs: u64,
     p2p_bind: SocketAddr,
+    node_key_path: PathBuf,
 }
 
 impl NodeConfig {
@@ -36,6 +37,7 @@ impl NodeConfig {
         let mut genesis_path: Option<PathBuf> = None;
         let mut block_interval_secs: u64 = 2;
         let mut p2p_bind_str: Option<String> = None;
+        let mut node_key_path = PathBuf::from("node_key");
 
         let mut i = 1;
         while i < args.len() {
@@ -59,6 +61,12 @@ impl NodeConfig {
                     i += 1;
                     if i < args.len() {
                         p2p_bind_str = Some(args[i].clone());
+                    }
+                }
+                "--node-key" => {
+                    i += 1;
+                    if i < args.len() {
+                        node_key_path = PathBuf::from(&args[i]);
                     }
                 }
                 _ => {}
@@ -85,8 +93,46 @@ impl NodeConfig {
             GenesisConfig::new_testnet_single_validator()
         };
 
-        Self { gen_genesis, genesis_path, genesis, block_interval_secs, p2p_bind }
+        Self { gen_genesis, genesis_path, genesis, block_interval_secs, p2p_bind, node_key_path }
     }
+}
+
+/// Load an existing node identity from disk, or generate a new one and persist it.
+fn load_or_create_identity(path: &PathBuf) -> Identity {
+    if let Ok(seed_bytes) = std::fs::read(path) {
+        if seed_bytes.len() == 32 {
+            let mut seed = [0u8; 32];
+            seed.copy_from_slice(&seed_bytes);
+            let identity = Identity::from_seed(&seed);
+            tracing::info!(
+                "Loaded node identity from {} (peer_id: {})",
+                path.display(),
+                hex::encode(identity.peer_id()),
+            );
+            return identity;
+        }
+        tracing::warn!(
+            "Node key file {} has wrong size ({} bytes, expected 32) — generating new identity",
+            path.display(),
+            seed_bytes.len(),
+        );
+    }
+    let identity = Identity::generate();
+    let seed = identity.to_seed();
+    if let Err(e) = std::fs::write(path, seed) {
+        tracing::warn!(
+            "Failed to persist node identity to {}: {} — identity will not survive restart",
+            path.display(),
+            e,
+        );
+    } else {
+        tracing::info!(
+            "Generated new node identity (peer_id: {}) — saved to {}",
+            hex::encode(identity.peer_id()),
+            path.display(),
+        );
+    }
+    identity
 }
 
 #[tokio::main]
@@ -154,7 +200,9 @@ async fn main() {
     let p2p_config = DiscoveryConfig::default();
     let peer_cache = Arc::new(tokio::sync::RwLock::new(PeerCache::new()));
     let tcp_transport = Arc::new(TcpTransport::new(p2p_config, Arc::clone(&peer_cache)));
-    let local_identity = Arc::new(Identity::generate());
+
+    // Persist the node identity so peer_id is stable across restarts.
+    let local_identity = Arc::new(load_or_create_identity(&config.node_key_path));
     let local_peer_id = *local_identity.peer_id();
 
     {

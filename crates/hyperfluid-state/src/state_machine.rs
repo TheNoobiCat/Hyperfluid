@@ -436,8 +436,7 @@ impl StateMachine {
 
         for child in &children {
             let child_bounty =
-                parent_bounty.saturating_mul(child.bounty_share_pct as u128)
-                    / 100u128;
+                parent_bounty.saturating_mul(child.bounty_share_pct as u128) / 100u128;
             let child_task = Task {
                 task_id: child.task_id,
                 topic_id: parent_topic,

@@ -13,21 +13,22 @@
 // Source: ADR-0018, docs/specs/protocol/consensus-spec.md Section 1
 // Stage: 02 Week 7-8
 
+use std::sync::Arc;
+
 use arc_malachitebft_core_driver::{Driver, Input, Output, ThresholdParams};
 use arc_malachitebft_core_types::{
     Context, Height, NilOrVal, Proposal, Round, SignedMessage, SignedProposal, SignedVote, Timeout,
     TimeoutKind, Validator, Validity, Value, Vote, VotingPower,
 };
-use ml_dsa::SignatureEncoding;
-use ml_dsa::Signer;
 use sha3::{Digest, Sha3_256};
 use tokio::sync::mpsc;
 
 use crate::malachite::{
     Address32, BlockHeight, BlockValue, HyperfluidContext, HyperfluidProposal, HyperfluidValidator,
-    HyperfluidValidatorSet, HyperfluidVote, MlDsa65PrivateKey, MlDsa65PublicKey, MlDsa65Signature,
+    HyperfluidValidatorSet, HyperfluidVote, MlDsa65PublicKey, MlDsa65Signature,
 };
 use crate::types::{Block, Hash32};
+use hyperfluid_p2p::identity::Identity;
 
 // ---------------------------------------------------------------------------
 // Consensus message types for network gossip
@@ -59,7 +60,7 @@ pub enum ConsensusEvent {
 
 pub struct BftDriver {
     driver: Driver<HyperfluidContext>,
-    keypair: MlDsa65PrivateKey,
+    identity: Arc<Identity>,
     #[allow(dead_code)]
     node_addr: Address32,
     ctx: HyperfluidContext,
@@ -69,7 +70,7 @@ impl BftDriver {
     pub fn new(
         validator_set: HyperfluidValidatorSet,
         proposer_seed: [u8; 32],
-        keypair: MlDsa65PrivateKey,
+        identity: Arc<Identity>,
         node_addr: Address32,
     ) -> Self {
         let ctx = HyperfluidContext::new(validator_set.clone(), proposer_seed);
@@ -82,7 +83,7 @@ impl BftDriver {
             ThresholdParams::default(),
         );
 
-        Self { driver, keypair, node_addr, ctx }
+        Self { driver, identity, node_addr, ctx }
     }
 
     pub fn height(&self) -> BlockHeight {
@@ -228,19 +229,17 @@ impl BftDriver {
         events
     }
 
-    /// Sign a vote with the node's ML-DSA-65 private key.
+    /// Sign a vote with the node's ML-DSA-65 identity.
     fn sign_vote(&self, vote: HyperfluidVote) -> SignedVote<HyperfluidContext> {
         let msg_bytes = vote.to_sign_bytes();
-        let signature = self.keypair.0.sign(&msg_bytes);
-        let sig = MlDsa65Signature(signature.to_vec());
+        let sig = MlDsa65Signature(self.identity.sign(&msg_bytes));
         SignedMessage::new(vote, sig)
     }
 
-    /// Sign a proposal with the node's ML-DSA-65 private key.
+    /// Sign a proposal with the node's ML-DSA-65 identity.
     fn sign_proposal(&self, proposal: HyperfluidProposal) -> SignedProposal<HyperfluidContext> {
         let msg_bytes = proposal.to_sign_bytes();
-        let signature = self.keypair.0.sign(&msg_bytes);
-        let sig = MlDsa65Signature(signature.to_vec());
+        let sig = MlDsa65Signature(self.identity.sign(&msg_bytes));
         SignedMessage::new(proposal, sig)
     }
 }
@@ -368,11 +367,6 @@ mod tests {
     use super::*;
     use crate::types::BlockHeader;
     use arc_malachitebft_core_types::ValidatorSet;
-    use ml_dsa::Generate;
-    use ml_dsa::KeyExport;
-    use ml_dsa::Keypair;
-    use ml_dsa::MlDsa65;
-    use ml_dsa::Verifier;
 
     fn dummy_block(height: u64) -> Block {
         Block {
@@ -390,11 +384,11 @@ mod tests {
         }
     }
 
-    fn test_keypair() -> (Address32, MlDsa65PrivateKey) {
-        let keypair = ml_dsa::SigningKey::<MlDsa65>::generate();
-        let pk_bytes = keypair.verifying_key().to_bytes().to_vec();
+    fn test_identity() -> (Address32, Arc<Identity>) {
+        let identity = Identity::generate();
+        let pk_bytes = identity.verifying_key_encoded();
         let addr = sha3_256_hash(&pk_bytes);
-        (Address32::new(addr), MlDsa65PrivateKey(keypair))
+        (Address32::new(addr), Arc::new(identity))
     }
 
     fn single_validator_set(addr: Address32, pk: Vec<u8>) -> HyperfluidValidatorSet {
@@ -403,19 +397,19 @@ mod tests {
 
     #[test]
     fn bft_driver_initializes() {
-        let (addr, keypair) = test_keypair();
-        let pk = keypair.0.verifying_key().to_bytes().to_vec();
+        let (addr, identity) = test_identity();
+        let pk = identity.verifying_key_encoded();
         let set = single_validator_set(addr, pk);
-        let bft = BftDriver::new(set, [0xAAu8; 32], keypair, addr);
+        let bft = BftDriver::new(set, [0xAAu8; 32], identity, addr);
         assert_eq!(bft.height(), BlockHeight::INITIAL);
     }
 
     #[test]
     fn bft_driver_start_height_produces_get_value() {
-        let (addr, keypair) = test_keypair();
-        let pk = keypair.0.verifying_key().to_bytes().to_vec();
+        let (addr, identity) = test_identity();
+        let pk = identity.verifying_key_encoded();
         let set = single_validator_set(addr, pk.clone());
-        let mut bft = BftDriver::new(set, [0xAAu8; 32], keypair, addr);
+        let mut bft = BftDriver::new(set, [0xAAu8; 32], identity, addr);
 
         let events = bft.start_height(1, single_validator_set(addr, pk));
         let has_get_value = events.iter().any(|e| matches!(e, ConsensusEvent::RequestBlock { .. }));
@@ -424,10 +418,10 @@ mod tests {
 
     #[test]
     fn bft_driver_propose_and_decide_single_validator() {
-        let (addr, keypair) = test_keypair();
-        let pk = keypair.0.verifying_key().to_bytes().to_vec();
+        let (addr, identity) = test_identity();
+        let pk = identity.verifying_key_encoded();
         let set = single_validator_set(addr, pk);
-        let mut bft = BftDriver::new(set.clone(), [0xAAu8; 32], keypair.clone(), addr);
+        let mut bft = BftDriver::new(set.clone(), [0xAAu8; 32], Arc::clone(&identity), addr);
 
         let events = bft.start_height(1, set);
         let round: Round = events
@@ -451,12 +445,10 @@ mod tests {
 
     #[test]
     fn signing_roundtrip_preserves_identity() {
-        let keypair = ml_dsa::SigningKey::<MlDsa65>::generate();
-        let privkey = MlDsa65PrivateKey(keypair.clone());
+        let identity = Identity::generate();
         let msg = b"Hyperfluid consensus test message";
-        let sig = privkey.0.sign(msg);
-        let vk = keypair.verifying_key();
-        assert!(vk.verify(msg, &sig).is_ok());
+        let sig = identity.sign(msg);
+        assert!(identity.verify(msg, &sig));
     }
 
     #[test]
@@ -506,18 +498,18 @@ mod tests {
 
     #[test]
     fn bft_driver_process_vote_from_other_validator() {
-        let (addr1, keypair1) = test_keypair();
-        let pk1 = keypair1.0.verifying_key().to_bytes().to_vec();
+        let (addr1, identity1) = test_identity();
+        let pk1 = identity1.verifying_key_encoded();
 
-        let (addr2, keypair2) = test_keypair();
-        let pk2 = keypair2.0.verifying_key().to_bytes().to_vec();
+        let (addr2, identity2) = test_identity();
+        let pk2 = identity2.verifying_key_encoded();
 
         let validators = vec![
             HyperfluidValidator::new(addr1, MlDsa65PublicKey(pk1.clone()), 50),
             HyperfluidValidator::new(addr2, MlDsa65PublicKey(pk2.clone()), 50),
         ];
         let set = HyperfluidValidatorSet::new(validators);
-        let mut bft = BftDriver::new(set.clone(), [0xAAu8; 32], keypair1.clone(), addr1);
+        let mut bft = BftDriver::new(set.clone(), [0xAAu8; 32], Arc::clone(&identity1), addr1);
 
         // Start consensus at height 1
         let _ = bft.start_height(1, set);
@@ -532,7 +524,7 @@ mod tests {
             vote_type: arc_malachitebft_core_types::VoteType::Prevote,
             validator_addr: addr2,
         };
-        let sig_bytes = keypair2.0.sign(&vote.to_sign_bytes()).to_vec();
+        let sig_bytes = identity2.sign(&vote.to_sign_bytes());
         let signed = SignedMessage::new(vote, MlDsa65Signature(sig_bytes));
 
         // Process the vote from addr2 — the driver must accept it without crash
@@ -581,10 +573,10 @@ mod tests {
 
     #[test]
     fn bft_driver_rejects_vote_from_unknown_validator() {
-        let (addr1, keypair1) = test_keypair();
-        let pk1 = keypair1.0.verifying_key().to_bytes().to_vec();
+        let (addr1, identity1) = test_identity();
+        let pk1 = identity1.verifying_key_encoded();
         let set = single_validator_set(addr1, pk1);
-        let mut bft = BftDriver::new(set.clone(), [0xAAu8; 32], keypair1.clone(), addr1);
+        let mut bft = BftDriver::new(set.clone(), [0xAAu8; 32], Arc::clone(&identity1), addr1);
 
         bft.start_height(1, set);
 
