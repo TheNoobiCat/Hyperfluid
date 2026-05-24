@@ -31,15 +31,25 @@ Read the prompt left by the user at the end of this message, then read `BUILD-SY
    - If a week boundary was crossed or new tasks were injected into the stage plan, update the stage file's week-by-week breakdown.
    - Update `PROJECT-STATUS.md`: record the fix, update "Next Actions" and "Last updated".
 
-5. **CI mimic** — run the same checks as `.github/workflows/ci.yml` to guarantee a push to GitHub would pass:
-   - `cargo fmt --all -- --check`
-   - `cargo clippy --workspace --all-targets -- -D warnings`
-   - `cargo test --workspace`
-   - `cargo doc --workspace --no-deps --document-private-items`
-   - `cargo deny check`
-   - `cargo bench --workspace --no-run`
-   
-   If any step fails, fix the issue before proceeding. Do not actually commit or push to github.
+5. **CI mimic** — replicate CI exactly: `RUSTFLAGS="-D warnings"`, auto-fix first, then strict check.
+
+   ```powershell
+   # Phase 1 — auto-fix what clippy and rustfmt can handle
+   cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged -- -D warnings 2>$null
+   cargo fmt --all
+
+   # Phase 2 — strict verification matching CI environment
+   $env:RUSTFLAGS = "-D warnings"
+   cargo fmt --all -- --check ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo clippy --workspace --all-targets -- -D warnings ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo test --workspace ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo doc --workspace --no-deps --document-private-items ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo deny check ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo bench --workspace --no-run ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   Write-Output "ALL CI CHECKS PASSED"
+   ```
+
+   If `cargo clippy --fix` doesn't resolve all lints (e.g. `manual_checked_ops` has no auto-fix), phase 2 will catch the remainder. Fix them and re-run from phase 1. Do not commit or push to github.
 
 6. **Report back:** Summarise what was found, what code files were changed, what docs were updated, and any remaining open questions or gaps.
 

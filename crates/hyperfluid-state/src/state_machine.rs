@@ -50,7 +50,7 @@ pub struct StateMachine {
     delegations: HashMap<(Hash32, Hash32), DelegationState>,
     /// Validator records: validator_id -> ValidatorTracker
     validators: HashMap<Hash32, ValidatorTracker>,
-    /// Open review verdicts: work_task_id -> Vec<ReviewRecord>
+    /// Open review verdicts: work_task_id -> `Vec<ReviewRecord>`
     review_records: HashMap<Hash32, Vec<ReviewRecord>>,
     /// Review tasks map: review_task_id -> work_task_id (lookup for claim enforcement)
     review_task_map: HashMap<Hash32, Hash32>,
@@ -108,7 +108,7 @@ pub enum ValidatorLifecycleState {
 }
 
 /// Detect cycles in a dependency DAG via depth-first search.
-/// Each element is (node_id, [depends_on_ids]). Returns true if any cycle exists.
+/// Each element is (node_id, `\[depends_on_ids\]`). Returns true if any cycle exists.
 fn has_cycle(graph: &[(Hash32, Vec<Hash32>)]) -> bool {
     use std::collections::HashMap as H;
     let node_indices: H<Hash32, usize> =
@@ -1557,7 +1557,7 @@ impl StateMachine {
         self.validators.iter()
     }
 
-    /// Iterate over all review records (work_task_id -> Vec<ReviewRecord>).
+    /// Iterate over all review records (work_task_id -> `Vec<ReviewRecord>`).
     pub fn review_records_iter(&self) -> impl Iterator<Item = (&Hash32, &Vec<ReviewRecord>)> {
         self.review_records.iter()
     }
@@ -1669,8 +1669,7 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
 
-        let downtime_pct =
-            if total_window_blocks > 0 { (missed_blocks * 100) / total_window_blocks } else { 0 };
+        let downtime_pct = (missed_blocks * 100).checked_div(total_window_blocks).unwrap_or(0);
 
         if downtime_pct < pause_threshold_pct {
             return ExecutionResult::Success; // Below threshold, no action

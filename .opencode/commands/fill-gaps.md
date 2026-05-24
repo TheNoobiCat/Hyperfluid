@@ -80,12 +80,25 @@ h. **Vaporware scan:** For every enum variant and struct field in `crates/` that
    - Update `PROJECT-STATUS.md`: remove resolved blockers, update "Next Actions" and "Last updated".
    - Create `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md` summarising: which gaps were investigated, which were filled, which remain, verification evidence per gap.
 
-8. **CI mimic** — run in parallel via 3 `build-worker` subagents:
-   - **Worker A:** `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings`
-   - **Worker B:** `cargo test --workspace && cargo doc --workspace --no-deps --document-private-items`
-   - **Worker C:** `cargo deny check && cargo bench --workspace --no-run`
-   
-   Wait for all three workers. If any fails, run the failing tool locally (not in a subagent) to get the exact error output and fix it. Re-run the full CI locally after fixing to confirm everything passes. Do not actually commit or push to github.
+8. **CI mimic** — replicate CI exactly: `RUSTFLAGS="-D warnings"`, auto-fix first, then strict check.
+
+   ```powershell
+   # Phase 1 — auto-fix what clippy and rustfmt can handle (local only)
+   cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged -- -D warnings 2>$null
+   cargo fmt --all
+
+   # Phase 2 — strict verification in CI-matching environment
+   $env:RUSTFLAGS = "-D warnings"
+   cargo fmt --all -- --check ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo clippy --workspace --all-targets -- -D warnings ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo test --workspace ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo doc --workspace --no-deps --document-private-items ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo deny check ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo bench --workspace --no-run ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   Write-Output "ALL CI CHECKS PASSED"
+   ```
+
+   Run phase 1 locally (not in subagents), then phase 2 in parallel via 3 `build-worker` subagents if preferred — but phase 2 must run with `RUSTFLAGS="-D warnings"`. If any step fails, fix and re-run from phase 1. Do not commit or push to github.
 
 9. **Report back:**
    Summary table of all gaps processed:

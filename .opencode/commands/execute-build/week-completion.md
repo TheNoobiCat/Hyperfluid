@@ -51,12 +51,25 @@ When the week's tasks are complete:
 
    **Wait for the worker.** For each FAIL: fix the violation, re-run that guard locally with Grep to confirm. For each MANUAL: hand-verify, mark PASS or fix. All guards must be PASS before proceeding to step 6. If guard conditions in the prose are unclear, update the guard text in `checkpoint.md` after resolving the issue.
 
-6. **CI mimic** — run in parallel via 3 `build-worker` subagents:
-   - **Worker A:** `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings`
-   - **Worker B:** `cargo test --workspace && cargo doc --workspace --no-deps --document-private-items`
-   - **Worker C:** `cargo deny check && cargo bench --workspace --no-run`
+6. **CI mimic** — replicate CI exactly: `RUSTFLAGS="-D warnings"`, auto-fix first, then strict check.
 
-Wait for all three workers. If any fails, run the failing tool locally (not in a subagent) to get the exact error output and fix it. Re-run the full CI locally after fix to confirm everything passes.
+   ```powershell
+   # Phase 1 — auto-fix what clippy and rustfmt can handle (local only)
+   cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged -- -D warnings 2>$null
+   cargo fmt --all
+
+   # Phase 2 — strict verification in CI-matching environment
+   $env:RUSTFLAGS = "-D warnings"
+   cargo fmt --all -- --check ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo clippy --workspace --all-targets -- -D warnings ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo test --workspace ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo doc --workspace --no-deps --document-private-items ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo deny check ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   cargo bench --workspace --no-run ; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   Write-Output "ALL CI CHECKS PASSED"
+   ```
+
+   Run phase 1 locally first, then phase 2 in parallel via 3 `build-worker` subagents if preferred. If any step fails, fix and re-run from phase 1.
 
 Do not actually commit or push to github.
 
