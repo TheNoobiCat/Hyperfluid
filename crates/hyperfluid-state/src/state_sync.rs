@@ -179,7 +179,7 @@ pub fn compute_state_checksum(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
     Digest::update(&mut hasher, (keys.len() as u64).to_le_bytes());
     // Sort by key bytes to ensure deterministic ordering regardless of source iteration order.
     let mut sorted: Vec<&(Hash32, Vec<u8>)> = keys.iter().collect();
-    sorted.sort_by_key(|a| a.0);
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
     for (key, value) in &sorted {
         Digest::update(&mut hasher, key);
         Digest::update(&mut hasher, (value.len() as u64).to_le_bytes());

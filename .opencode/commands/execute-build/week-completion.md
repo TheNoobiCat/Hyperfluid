@@ -51,15 +51,7 @@ When the week's tasks are complete:
 
    **Wait for the worker.** For each FAIL: fix the violation, re-run that guard locally with Grep to confirm. For each MANUAL: hand-verify, mark PASS or fix. All guards must be PASS before proceeding to step 6. If guard conditions in the prose are unclear, update the guard text in `checkpoint.md` after resolving the issue.
 
-6. **CI mimic** — run auto-fix first, then check strictly.
-
-   **Phase 1 (auto-fix, local only):**
-   ```powershell
-   cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged 2>$null
-   cargo fmt --all
-   ```
-
-   **Phase 2 (parallel check):** Run strict verification in parallel via 3 `build-worker` subagents:
+6. **CI mimic** — run in parallel via 3 `build-worker` subagents:
    - **Worker A:** `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings`
    - **Worker B:** `cargo test --workspace && cargo doc --workspace --no-deps --document-private-items`
    - **Worker C:** `cargo deny check && cargo bench --workspace --no-run`

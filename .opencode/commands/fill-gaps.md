@@ -80,19 +80,11 @@ h. **Vaporware scan:** For every enum variant and struct field in `crates/` that
    - Update `PROJECT-STATUS.md`: remove resolved blockers, update "Next Actions" and "Last updated".
    - Create `docs/08-handoff/latest/checkpoint-YYYY-MM-DD.md` summarising: which gaps were investigated, which were filled, which remain, verification evidence per gap.
 
-8. **CI mimic** — run auto-fix first, then check strictly. Use 3 phases:
-
-   **Phase 1 (auto-fix, local only):** Run these locally (not in subagents) to apply all automatic fixes:
-   ```powershell
-   cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged 2>$null
-   cargo fmt --all
-   ```
-
-   **Phase 2 (parallel check):** Then run strict verification in parallel via 3 `build-worker` subagents:
+8. **CI mimic** — run in parallel via 3 `build-worker` subagents:
    - **Worker A:** `cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings`
    - **Worker B:** `cargo test --workspace && cargo doc --workspace --no-deps --document-private-items`
    - **Worker C:** `cargo deny check && cargo bench --workspace --no-run`
-
+   
    Wait for all three workers. If any fails, run the failing tool locally (not in a subagent) to get the exact error output and fix it. Re-run the full CI locally after fixing to confirm everything passes. Do not actually commit or push to github.
 
 9. **Report back:**

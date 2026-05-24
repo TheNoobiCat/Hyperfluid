@@ -805,7 +805,13 @@ mod tests {
         let latest = rt.db.get_latest_handoff().unwrap();
         assert!(latest.is_some(), "handoff record must exist");
         let record = latest.unwrap();
-        assert_eq!(record.timestamp, unix_timestamp_now()); // approximate
+        let now = unix_timestamp_now();
+        assert!(
+            record.timestamp == now || record.timestamp == now - 1,
+            "timestamp {} should be within 1s of {}",
+            record.timestamp,
+            now
+        );
         assert_eq!(rt.state.last_handoff_height, 5);
     }
 
