@@ -159,12 +159,15 @@ fn cli_idea_show_reports_missing_slug() {
 }
 
 #[test]
-fn cli_agent_register_reports_connection_error() {
+fn cli_agent_register_reports_not_implemented() {
     let output = hyperfluid_binary()
         .args(["agent", "register", "--name", "test-agent", "--tags", "rust,wasm"])
         .output()
         .unwrap();
-    assert!(!output.status.success());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("not_implemented"));
+    assert!(stdout.contains("Registration"));
 }
 
 #[test]

@@ -39,6 +39,8 @@ impl Committee {
     /// Sort ensures determinism regardless of reveal arrival order.
     /// The fallback uses only historical entropy (previous seed) plus epoch number —
     /// no current-epoch malleable data.
+    /// Staged for commit-reveal.
+    #[allow(dead_code)]
     pub fn compute_committee_seed(
         epoch: u64,
         reveals: &[Hash32],

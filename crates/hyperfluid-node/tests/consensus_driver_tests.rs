@@ -207,11 +207,12 @@ fn test_transaction_changes_state() {
 
     let block = driver.produce_block(vec![tx], 1);
 
-    // Verify balances
+    // Verify balances (includes base fee deduction)
+    let base_fee = driver.fee_state.base_fee;
     assert_eq!(
         driver.account_balance(&alice_id),
-        Some(alice_initial - transfer_amount),
-        "Alice balance should be initial minus transfer amount"
+        Some(alice_initial - transfer_amount - base_fee),
+        "Alice balance should be initial minus transfer minus base fee"
     );
     assert_eq!(
         driver.account_balance(&bob_id),
@@ -288,8 +289,10 @@ fn test_multiple_transfers_across_blocks() {
     };
     driver.produce_block(vec![tx2], 2);
 
-    // After 2 transfers: Alice = 850 AGX, Bob = 150 AGX
-    assert_eq!(driver.account_balance(&alice_id), Some(850_000_000_000_000_000_000u128));
+    // After 2 transfers: Alice = 850 AGX minus 2x base fee, Bob = 150 AGX
+    let base_fee = driver.fee_state.base_fee;
+    let expected_alice = 850_000_000_000_000_000_000u128 - base_fee * 2;
+    assert_eq!(driver.account_balance(&alice_id), Some(expected_alice));
     assert_eq!(driver.account_balance(&bob_id), Some(150_000_000_000_000_000_000u128));
     assert_eq!(driver.account_nonce(&alice_id), Some(2));
     assert_eq!(driver.height, 2);
@@ -601,6 +604,7 @@ fn test_validator_bond_via_driver() {
     );
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true;
     driver.init_genesis(&genesis);
     let root_before = driver.state_machine.compute_state_root();
 
@@ -617,7 +621,11 @@ fn test_validator_bond_via_driver() {
 
     let vt = driver.state_machine.get_validator(&validator_id).unwrap();
     assert_eq!(vt.self_bond, bond_amount);
-    assert_eq!(driver.account_balance(&validator_id), Some(4_000_000_000_000_000_000_000u128));
+    let base_fee = driver.fee_state.base_fee;
+    assert_eq!(
+        driver.account_balance(&validator_id),
+        Some(4_000_000_000_000_000_000_000u128 - base_fee)
+    );
     assert_ne!(root_before, root_after, "state root must change after bond");
 }
 
@@ -639,6 +647,7 @@ fn test_validator_unbond_via_driver() {
     );
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true;
     driver.init_genesis(&genesis);
 
     let bond_payload = StakingPayload { validator_id, amount: bond_amount, nonce: 1 };
@@ -684,6 +693,7 @@ fn test_validator_withdraw_via_driver() {
     genesis.unbond_delay = 10;
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true;
     driver.staking_params.unbond_delay = 10;
     driver.init_genesis(&genesis);
 
@@ -732,10 +742,12 @@ fn test_validator_withdraw_via_driver() {
         driver.state_machine.get_validator(&validator_id).is_none(),
         "validator should be withdrawn"
     );
+    // 3 base fee deductions for bond, unbond, and withdraw transactions
+    let expected_balance = 5_000_000_000_000_000_000_000u128 - driver.fee_state.base_fee * 3;
     assert_eq!(
         driver.account_balance(&validator_id),
-        Some(5_000_000_000_000_000_000_000u128),
-        "balance should be restored"
+        Some(expected_balance),
+        "balance should be restored minus base fees"
     );
 }
 
@@ -766,6 +778,7 @@ fn test_delegation_via_driver() {
     );
 
     let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    driver.pdp_bypass = true;
     driver.init_genesis(&genesis);
 
     let payload =
@@ -779,10 +792,11 @@ fn test_delegation_via_driver() {
 
     driver.produce_block(vec![tx], 1);
 
+    let base_fee = driver.fee_state.base_fee;
     assert_eq!(
         driver.account_balance(&delegator_id),
-        Some(1_900_000_000_000_000_000_000u128),
-        "delegator balance should decrease by delegation amount"
+        Some(1_900_000_000_000_000_000_000u128 - base_fee),
+        "delegator balance should decrease by delegation amount + base fee"
     );
 }
 
@@ -840,10 +854,12 @@ fn test_validator_cycle_state_root_determinism() {
     genesis.unbond_delay = 10;
 
     let mut d1 = ConsensusDriver::new(genesis.epoch_length);
+    d1.pdp_bypass = true;
     d1.staking_params.unbond_delay = 10;
     d1.init_genesis(&genesis);
 
     let mut d2 = ConsensusDriver::new(genesis.epoch_length);
+    d2.pdp_bypass = true;
     d2.staking_params.unbond_delay = 10;
     d2.init_genesis(&genesis);
 

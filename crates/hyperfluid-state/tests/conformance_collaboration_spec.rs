@@ -14,7 +14,10 @@ fn ctx(h: u64) -> ExecutionContext {
 }
 
 fn fund_account(sm: &mut StateMachine, id: [u8; 32], balance: u128, nonce: u64) {
-    sm.init_account(Account { account_id: id, balance, nonce, pubkey_hash: id, pubkey: None });
+    // Only create if not already present (no silent overwrite).
+    if sm.get_account(&id).is_none() {
+        sm.init_account(Account { account_id: id, balance, nonce, pubkey_hash: id, pubkey: None });
+    }
 }
 
 // ── Section 1.7: Decentralized Task Board ──────────────────────────

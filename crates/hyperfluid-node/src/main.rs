@@ -12,6 +12,7 @@ use hyperfluid_consensus::genesis::GenesisConfig;
 use hyperfluid_p2p::transport::PeerCache;
 use hyperfluid_p2p::types::{DiscoveryConfig, Hash32};
 use hyperfluid_p2p::{identity::Identity, tcp::TcpTransport};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,6 +25,7 @@ struct NodeConfig {
     genesis_path: Option<PathBuf>,
     genesis: GenesisConfig,
     block_interval_secs: u64,
+    p2p_bind: SocketAddr,
 }
 
 impl NodeConfig {
@@ -33,6 +35,7 @@ impl NodeConfig {
         let mut gen_genesis = false;
         let mut genesis_path: Option<PathBuf> = None;
         let mut block_interval_secs: u64 = 2;
+        let mut p2p_bind_str: Option<String> = None;
 
         let mut i = 1;
         while i < args.len() {
@@ -52,10 +55,22 @@ impl NodeConfig {
                         block_interval_secs = args[i].parse().unwrap_or(2);
                     }
                 }
+                "--p2p-bind" => {
+                    i += 1;
+                    if i < args.len() {
+                        p2p_bind_str = Some(args[i].clone());
+                    }
+                }
                 _ => {}
             }
             i += 1;
         }
+
+        let p2p_bind: SocketAddr = p2p_bind_str
+            .or_else(|| std::env::var("HYPERFLUID_P2P_BIND").ok())
+            .unwrap_or_else(|| "0.0.0.0:0".to_string())
+            .parse()
+            .expect("invalid P2P bind address (expected IP:port format, e.g. 0.0.0.0:9876)");
 
         let genesis = if let Some(ref path) = genesis_path {
             let _content = std::fs::read_to_string(path)
@@ -70,7 +85,7 @@ impl NodeConfig {
             GenesisConfig::new_testnet_single_validator()
         };
 
-        Self { gen_genesis, genesis_path, genesis, block_interval_secs }
+        Self { gen_genesis, genesis_path, genesis, block_interval_secs, p2p_bind }
     }
 }
 
@@ -135,7 +150,7 @@ async fn main() {
     let block_interval = Duration::from_secs(config.block_interval_secs);
 
     // ── P2P TCP transport startup ──
-    let p2p_bind_addr: SocketAddr = "127.0.0.1:0".parse().expect("invalid P2P bind address");
+    let p2p_bind_addr = config.p2p_bind;
     let p2p_config = DiscoveryConfig::default();
     let peer_cache = Arc::new(tokio::sync::RwLock::new(PeerCache::new()));
     let tcp_transport = Arc::new(TcpTransport::new(p2p_config, Arc::clone(&peer_cache)));
@@ -156,7 +171,31 @@ async fn main() {
         let transport = Arc::clone(&tcp_transport);
         let identity = Arc::clone(&local_identity);
         let r_p2p = running.clone();
-        let key_provider = Arc::new(|_peer_id: &Hash32| -> Option<([u8; 32], Vec<u8>)> { None });
+        // Build key provider from genesis validator set.
+        // Each validator's account pubkey provides the DH and KEM key material
+        // needed to authenticate inbound P2P connections.
+        let mut key_map: HashMap<Hash32, ([u8; 32], Vec<u8>)> = HashMap::new();
+        {
+            let account_pubkeys: HashMap<Hash32, &Vec<u8>> = config
+                .genesis
+                .accounts
+                .iter()
+                .filter_map(|a| a.pubkey.as_ref().map(|pk| (a.account_id, pk)))
+                .collect();
+            for v in &config.genesis.validators {
+                if let Some(pubkey) = account_pubkeys.get(&v.validator_id) {
+                    let mut dh_key = [0u8; 32];
+                    let copy_len = pubkey.len().min(32);
+                    dh_key[..copy_len].copy_from_slice(&pubkey[..copy_len]);
+                    let kem_key =
+                        if pubkey.len() > 32 { pubkey[32..].to_vec() } else { Vec::new() };
+                    key_map.insert(v.validator_id, (dh_key, kem_key));
+                }
+            }
+        }
+        let key_provider = Arc::new(move |peer_id: &Hash32| -> Option<([u8; 32], Vec<u8>)> {
+            key_map.get(peer_id).cloned()
+        });
         tokio::spawn(async move {
             TcpTransport::accept_loop(listener, identity, key_provider, transport).await;
             r_p2p.store(false, Ordering::Release);

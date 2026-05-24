@@ -9,7 +9,7 @@
 - SLO definitions: uptime, block finality latency, transaction inclusion latency, artifact availability, review pipeline latency.
 - Monitoring dashboards: chain health (block height, finality, validator set), agent metrics (active agents, trust stage distribution, task throughput), economics (fee market, staking distribution, reward distribution).
 - Alerting rules: alerts for block stall (>10s without block), validator churn spike (>20% in epoch).
-- Runbooks: genesis ceremony, validator onboarding, validator offboarding, incident response (per incident-response-spec.md), state sync recovery, artifact repair, key rotation, governance emergency upgrade.
+- Runbooks: genesis ceremony, validator onboarding, validator offboarding, incident response (per incident-response-spec.md), state sync recovery, artifact repair, governance emergency upgrade.
 - Launch checklist: genesis block ceremony, initial validator set bootstrapping, airdrop challenge distribution, monitoring verification, smoke test, public announcement.
 - Private testnet: 20+ node simulated mainnet with realistic geography (latency emulation), 7-day pre-launch soak.
 - Incident drill: simulated vote, post-incident review.
@@ -23,7 +23,7 @@
 - [ ] Launch checklist complete and peer-reviewed.
 - [ ] Private testnet runs for 7 consecutive days without operator intervention. All SLO targets met.
 - [ ] Incident drill completed: congestion event handled within SLA via EIP-1559 base fee dynamics. Post-incident review documented.
-- [ ] Backup & disaster recovery plan tested: restore from SMT snapshot, artifact repair sweep completes, validator key rotation works.
+- [ ] Backup & disaster recovery plan tested: restore from SMT snapshot, artifact repair sweep completes.
 - [ ] `just deploy-testnet` command boots a full testnet from genesis with a single command.
 - [ ] Risks documented and acceptable.
 - [ ] Ready for Layer 6 (Validation — formal validation strategy layer, distinct from implementation-stage validation in Stage 03).
@@ -59,9 +59,8 @@
 4. Incident response runbook (per EIP-1559 congestion handling): normal congestion → base fee rises, congestion subsides → base fee decreases, post-incident review template.
 5. State sync recovery runbook: full-sync from genesis, snap-sync from trusted snapshot, crash recovery from WAL.
 6. Artifact repair runbook: manual repair trigger, repair coordinator status check, replication validation, blob integrity verification.
-7. Key rotation runbook: agent key compromise response, validator key rotation, governance key rotation, certificate chain update.
-8. Governance emergency upgrade runbook: proposal submission (emergency path), fast-track vote (1 hour, 67% quorum), sandbox bypass conditions, upgrade activation coordination.
-9. Exit checkpoint: all runbooks written, reviewed, and tested on 5-node testnet.
+7. Governance emergency upgrade runbook: proposal submission (emergency path), fast-track vote (1 hour, 67% quorum), sandbox bypass conditions, upgrade activation coordination.
+8. Exit checkpoint: all runbooks written, reviewed, and tested on 5-node testnet.
 
 ### Week 3–4: Private Testnet + Soak
 1. Deploy 20+ node private testnet with geographically diverse nodes (or latency emulation via `tc netem`).
@@ -82,7 +81,6 @@
 4. Disaster recovery test:
    - Restore SMT state from snapshot: wipe 1 validator's state, restore from snap-sync source, verify SMT root matches network.
    - Artifact repair: delete 50% of blobs on 1 node, trigger repair, verify all blobs restored.
-   - Validator key rotation: rotate key on 1 active validator, verify committee continues, old key rejected.
 5. Backup validation: create encrypted backup of validator keys, agent keys, and governance multisig. Verify restore procedure.
 6. Exit checkpoint: incident drill completed and documented; disaster recovery procedures validated.
 
@@ -110,7 +108,7 @@
 - **Monitoring alert fatigue:** Too many low-severity alerts desensitize operators. Mitigation: SLO-based alerting only — alert on SLO burn rate, not individual events. Weekly digest for non-critical events.
 - **Private testnet not representative of production:** 20-node testnet may not expose scaling issues at 100-node production scale. Mitigation: extrapolate from Stage 03 load test results (100 validators tested). Private testnet validates operational procedures, not performance.
 - **Governance parameter changes post-launch:** Initial parameters may need adjustment. Mitigation: governance engine operational from Day 1. First governance proposal ready for vote within Week 1 of mainnet.
-- **Key management operational burden:** Validator keys, agent keys, governance keys — multiplies linearly with node count. Mitigation: key rotation runbooks tested; HSM integration documented for validators; automated key backup for agents.
+- **Key management operational burden:** Validator keys, agent keys, governance keys — multiplies linearly with node count. Mitigation: HSM integration documented for validators; automated key backup for agents.
 
 ## Spec References
 

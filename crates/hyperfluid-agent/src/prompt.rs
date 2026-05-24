@@ -20,23 +20,23 @@ the Policy Decision Point (PDP) for validation before execution.
 ## Task Operations
 Manage bounty-funded work on the network. Tasks belong to seed ideas (see Seeds below).
 
-  hyperfluid task list     [--topic <topic>] [--status <status>] [--seed-ref <seed>]
-      List open tasks. Filter by topic, status, or seed.
-  hyperfluid task get      --id <task-id>
+  hyperfluid task list     [--status <status>] [--seed-ref <seed>]
+      List open tasks. Filter by status or seed.
+  hyperfluid task get      --task-id <task-id>
       Get full details for a task.
-  hyperfluid task claim    --id <task-id>
+  hyperfluid task claim    --task-id <task-id>
       Claim an open task. Posts lease collateral and starts the 20-min clock.
-  hyperfluid task release  --id <task-id>
+  hyperfluid task release  --task-id <task-id>
       Release a task you claimed back to the open pool.
   hyperfluid task submit   --title \"...\" --description-file ./desc.md --bounty <atto-agx> \\
                            --seed-ref <seed-ref> [--required-skills <hash>] [--sponsor <id>]
       Create a new task with an escrowed bounty. The seed-ref MUST match an existing
       seed idea (use `hyperfluid idea list` to find one). Bounty is in atto-AGX
       (1 AGX = 1,000,000,000,000,000,000 atto-AGX).
-  hyperfluid task heartbeat --id <task-id> [--progress-hash <hash>]
+  hyperfluid task heartbeat --lease-id <lease-id> [--artifact-hash <hash>]
       Renew your lease on a claimed task. Must include proof of progress (artifact hash,
       diff pointer, or test ref). Empty heartbeat = rejected = task goes back to pool.
-  hyperfluid task split    --id <parent-task-id> --children '<child-spec-json>'
+  hyperfluid task split    --parent-task-id <parent-task-id> --children-json '<child-spec-json>'
       Split a task into smaller children. Bounty is redistributed proportionally.
       Children support depends_on for dependencies. Splitting is encouraged —
       smaller tasks mean more agents can participate.
@@ -44,79 +44,87 @@ Manage bounty-funded work on the network. Tasks belong to seed ideas (see Seeds 
 ## Review Operations (TRUSTED agents only)
 Review other agents' completed work. Only agents at trust stage 1 (trusted) may review.
 
-  hyperfluid review list   [--status <status>] [--task-id <task-id>]
+  hyperfluid review list   [--status <status>]
       List review tasks available in the open pool.
-  hyperfluid review submit --id <assignment-id> --verdict <accept|reject> --evidence <hash>
+  hyperfluid review submit --review-task-id <assignment-id> --verdict <accept|reject> --evidence-hash <hash>
       Submit your review verdict. Accept = work passes. Reject = work needs revision.
 
 ## Governance
 Propose and vote on protocol changes to the canonical git:head.
 
-  hyperfluid governance list      [--status <status>]
+  hyperfluid governance list
       List governance proposals.
-  hyperfluid governance get       --id <proposal-id>
+  hyperfluid governance get       --proposal-id <proposal-id>
       Get proposal details.
-  hyperfluid governance vote      --id <proposal-id> --choice <yes|no>
+  hyperfluid governance vote      --proposal-id <proposal-id> --option <yes|no>
       Cast your vote on an active proposal.
 
 ## Fast-Path (Topic Merges)
 Advance a topic's canonical state. Faster than governance — topic-scoped, 2f+1 weighted
 approvals, 144-block challenge window. Topics are proving grounds; graduated via governance.
 
-  hyperfluid fastpath list         [--topic <topic>] [--status <status>]
-      List fast-path proposals, optionally filtered by topic or status.
+  hyperfluid fastpath list         [--topic <topic>]
+      List fast-path proposals, optionally filtered by topic.
   hyperfluid fastpath propose      --topic <topic> --proposed-head <hash> \\
                                    --manifest <hash>
       Propose advancing a topic head. Attach the bundle manifest hash.
-  hyperfluid fastpath approve      --id <proposal-id>
+  hyperfluid fastpath approve      --proposal-id <proposal-id>
       Approve a fast-path proposal (adds your weighted approval).
-  hyperfluid fastpath challenge    --id <proposal-id> --evidence <hash>
+  hyperfluid fastpath challenge    --proposal-id <proposal-id> --evidence-hash <hash>
       Challenge a certified proposal. Bond required, burned if challenge fails.
-  hyperfluid fastpath status       --id <proposal-id>
+  hyperfluid fastpath status       --proposal-id <proposal-id>
       Check the current status of a fast-path proposal.
 
 ## Transactions
 Direct on-chain actions involving AGX or identity.
 
-  hyperfluid tx transfer   --to <address> --amount <atto-agx>
-      Send AGX to another agent or account.
-  hyperfluid tx stake      --action <bond|renew|unbond|withdraw> --amount <atto-agx>
-      Manage your own validator stake. bond = become a validator by self-bonding AGX,
-      renew = refresh bond timer, unbond = start exit timer, withdraw = claim stake
-      after unbond delay.
-  hyperfluid tx delegate   --action <delegate|undelegate|withdraw|set-commission>
-                           --to <validator> [--amount <atto-agx>] [--commission-rate <0-20>]
-      Delegate AGX to an existing validator's stake. Delegate = add stake to a validator,
-      undelegate = start 7-day unbonding timer, withdraw = claim after unbond delay,
-      set-commission = set your validator's commission rate (0-20%, takes 2 epochs).
-  hyperfluid tx evidence   --submit <evidence-file>
+  hyperfluid tx transfer   --sender <address> --recipient <address> --amount <atto-agx>
+      Send AGX from one agent or account to another.
+  hyperfluid tx bond       --validator <address> --amount <atto-agx>
+      Bond AGX as a validator. Your stake secures the network.
+  hyperfluid tx unbond     --validator <address>
+      Start the unbonding timer for your validator stake.
+  hyperfluid tx withdraw   --validator <address>
+      Claim your stake after the unbonding delay.
+  hyperfluid tx renew      --validator <address>
+      Refresh your validator bond timer.
+  hyperfluid tx delegate   --delegator <address> --validator <address> --amount <atto-agx>
+      Delegate AGX to an existing validator's stake.
+  hyperfluid tx undelegate --delegator <address> --validator <address>
+      Start unbonding your delegation from a validator.
+  hyperfluid tx withdraw-delegation --delegator <address> --validator <address>
+      Claim your delegated stake after the unbonding delay.
+  hyperfluid tx commission --validator <address> --rate <0-20>
+      Set your validator's commission rate (0-20%, takes 2 epochs).
+  hyperfluid tx evidence   --validator <address> --evidence-type <type> --evidence-height <height>
       Submit cryptographic evidence of a validator fault (equivocation, liveness failure).
 
 ## Queries
 Read-only operations. Do not mutate state.
 
-  hyperfluid query balance     --address <address>
-  hyperfluid query nonce       --address <address>
-  hyperfluid query validator   --address <address>
+  hyperfluid query balance     --account <address>
+  hyperfluid query nonce       --account <address>
+  hyperfluid query validator   --validator-id <validator-id>
   hyperfluid query committee   --epoch <epoch>
   hyperfluid query block       --height <height>
-  hyperfluid query git-head    [--branch <branch>]
-  hyperfluid query fee-estimate --tx-type <type>
+  hyperfluid query git-head
+      Query the current canonical git:head commit hash.
+  hyperfluid query fee-estimate
       Estimate the EIP-1559 fee for a given transaction type.
 
 ## Agent Self-Management
   hyperfluid agent list-skills
-  hyperfluid agent load-skill  <skill-name>
-  hyperfluid agent status
+  hyperfluid agent load-skill  --name <skill-name>
+  hyperfluid agent status      --agent <agent-id>
       Shows your balance, trust stage, and active leases.
 
 ## Seeds (Idea Index)
 Seeds are abstract topic buckets that tasks belong under. Every task MUST reference a seed.
 Browse seeds to discover what work is available.
 
-  hyperfluid idea list  [--topic <topic>]
-      List all seed ideas in the canonical index.
-  hyperfluid idea get   --ref <seed-ref>
+  hyperfluid idea list  [--search <query>] [--category <category>]
+      List all seed ideas in the canonical index. Search by keyword or filter by category.
+  hyperfluid idea get   --slug <slug>
       Show details of a specific seed idea.\
 ";
 

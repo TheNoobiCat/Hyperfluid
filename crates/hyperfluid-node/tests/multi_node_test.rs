@@ -192,9 +192,10 @@ fn test_two_nodes_identical_state_after_same_transactions() {
         "state roots must be identical after same transactions"
     );
 
-    // Both nodes must see correct post-transfer balances
-    assert_eq!(node_a.balance(&alice), Some(900_000_000_000_000_000_000u128));
-    assert_eq!(node_b.balance(&alice), Some(900_000_000_000_000_000_000u128));
+    // Both nodes must see correct post-transfer balances (includes base fee deduction)
+    let base_fee = node_a.driver.fee_state.base_fee;
+    assert_eq!(node_a.balance(&alice), Some(900_000_000_000_000_000_000u128 - base_fee));
+    assert_eq!(node_b.balance(&alice), Some(900_000_000_000_000_000_000u128 - base_fee));
     assert_eq!(node_a.balance(&bob), Some(100_000_000_000_000_000_000u128));
     assert_eq!(node_b.balance(&bob), Some(100_000_000_000_000_000_000u128));
 }
@@ -226,11 +227,12 @@ fn test_two_nodes_diverge_with_different_transactions() {
         "state roots must diverge after different transfer amounts"
     );
 
-    // Verify the divergence direction
+    // Verify the divergence direction (includes base fee deduction)
+    let base_fee = node_a.driver.fee_state.base_fee;
     assert_eq!(node_a.balance(&bob), Some(100_000_000_000_000_000_000u128));
     assert_eq!(node_b.balance(&bob), Some(200_000_000_000_000_000_000u128));
-    assert_eq!(node_a.balance(&alice), Some(900_000_000_000_000_000_000u128));
-    assert_eq!(node_b.balance(&alice), Some(800_000_000_000_000_000_000u128));
+    assert_eq!(node_a.balance(&alice), Some(900_000_000_000_000_000_000u128 - base_fee));
+    assert_eq!(node_b.balance(&alice), Some(800_000_000_000_000_000_000u128 - base_fee));
 }
 
 // ─── 4. Three Nodes Sequential Block Sync ────────────────────────────────────
@@ -270,9 +272,10 @@ fn test_three_nodes_sequential_block_sync() {
     assert_eq!(node_b.height(), 1);
     assert_eq!(node_c.height(), 1);
 
-    // All see the same balances
+    // All see the same balances (includes base fee deduction)
+    let base_fee = node_a.driver.fee_state.base_fee;
     for node in &[&node_a, &node_b, &node_c] {
-        assert_eq!(node.balance(&alice), Some(950_000_000_000_000_000_000u128));
+        assert_eq!(node.balance(&alice), Some(950_000_000_000_000_000_000u128 - base_fee));
         assert_eq!(node.balance(&bob), Some(50_000_000_000_000_000_000u128));
     }
 }
@@ -353,11 +356,13 @@ fn test_multi_node_state_divergence_detected() {
         "state roots must diverge after different transactions"
     );
 
-    // Verify the divergence is in the expected direction
+    // Verify the divergence is in the expected direction (includes base fee deduction)
+    let base_fee_a = node_a.driver.fee_state.base_fee;
+    let base_fee_b = node_b.driver.fee_state.base_fee;
     assert_eq!(node_a.balance(&bob), Some(100_000_000_000_000_000_000u128));
     assert_eq!(node_b.balance(&bob), Some(300_000_000_000_000_000_000u128));
 
-    // Alice balances reflect the different transfer amounts
-    assert_eq!(node_a.balance(&alice), Some(900_000_000_000_000_000_000u128));
-    assert_eq!(node_b.balance(&alice), Some(700_000_000_000_000_000_000u128));
+    // Alice balances reflect the different transfer amounts minus base fees
+    assert_eq!(node_a.balance(&alice), Some(900_000_000_000_000_000_000u128 - base_fee_a));
+    assert_eq!(node_b.balance(&alice), Some(700_000_000_000_000_000_000u128 - base_fee_b));
 }

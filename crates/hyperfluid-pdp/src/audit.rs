@@ -155,6 +155,13 @@ impl Default for AuditLog {
 
 fn action_type_discriminant(at: ActionType) -> u8 {
     match at {
+        ActionType::DelegateOperation => 7,
+        ActionType::ReleaseTask => 8,
+        ActionType::StakeOperation => 9,
+        ActionType::SubmitEvidence => 10,
+        ActionType::SubmitReview => 11,
+        ActionType::SubmitTaskCompletion => 12,
+        ActionType::Transfer => 13,
         ActionType::PublishTopicMessage => 0,
         ActionType::ClaimTaskLease => 1,
         ActionType::RenewTaskLease => 2,

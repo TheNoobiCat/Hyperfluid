@@ -428,7 +428,14 @@ where
     if preamble.len() != 32 {
         return Err(TcpError::Handshake("invalid preamble: expected 32-byte peer_id".into()));
     }
-    let remote_peer_id: Hash32 = preamble[..32].try_into().unwrap();
+    let remote_peer_id: Hash32 = match preamble[..32].try_into() {
+        Ok(id) => id,
+        Err(_) => {
+            return Err(TcpError::Handshake(
+                "invalid preamble: could not convert to 32-byte peer_id".into(),
+            ));
+        }
+    };
 
     let (remote_dh_pubkey, remote_kem_pubkey) = (remote_key_provider)(&remote_peer_id)
         .ok_or_else(|| TcpError::Handshake(format!("unknown peer: {:?}", remote_peer_id)))?;

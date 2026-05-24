@@ -2,7 +2,7 @@
 //!
 //! Deterministic policy evaluation for all network-mutating actions.
 //! Schema validation, signature verification, replay protection,
-//! quota enforcement, fee check, audit logging, key rotation.
+//! quota enforcement, fee check, audit logging.
 //!
 //! Source: docs/04-specifications/runtime/policy-engine-spec.md
 

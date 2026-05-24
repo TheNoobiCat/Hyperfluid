@@ -77,12 +77,19 @@ fn conforms_to_state_sync_spec_1_7_crash_recovery_restores_state() {
     let saved_height = 42;
     let snapshot = snapshot_state(&sm, 1, saved_height, [0xC0u8; 32]);
 
-    // Simulate crash: fresh state machine loaded from snapshot keys
+    // Simulate crash: fresh state machine loaded from snapshot keys.
+    // The snapshot contains state for all collections; we verify accounts
+    // are present by checking each key-value pair against Account encoding.
     let mut recovered = StateMachine::new();
+    let mut account_count = 0u32;
     for (_key, value) in &snapshot.sst_keys {
-        let decoded: Account = Account::decode(&mut value.as_slice()).unwrap();
-        recovered.init_account(decoded);
+        if let Ok(decoded) = Account::decode(&mut value.as_slice()) {
+            recovered.init_account(decoded);
+            account_count += 1;
+        }
     }
+    // Verify exactly 2 accounts were recovered
+    assert_eq!(account_count, 2, "must recover exactly 2 accounts from snapshot");
 
     assert_eq!(recovered.get_account(&[1u8; 32]).unwrap().balance, 1000);
     assert_eq!(recovered.get_account(&[2u8; 32]).unwrap().balance, 2000);

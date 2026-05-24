@@ -151,8 +151,6 @@ Step 5: APPROVED
 - Verify quota exhaustion: plan after quota depleted → denied.
 - Verify atomic quota reservation: no negative balances, release on execution failure.
 - Verify fee check: agent with insufficient balance for fee → denied.
-- Verify key rotation: both old and new keys valid during 100-block grace window; old key rejected after grace window finalization.
-- Verify nonce continuity across key rotation (nonce is per agent_id, not per key).
 
 ### 1.8 Trust-Assumption Inventory
 

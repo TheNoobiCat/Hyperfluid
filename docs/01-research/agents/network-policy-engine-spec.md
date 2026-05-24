@@ -263,11 +263,6 @@ function execute_call(call, state):
 - Why it happens: non-atomic quota accounting.
 - Handling/failure mode: atomic quota reservations at approval time and rollback on execution failure.
 
-## Scenario: Signature key rotation mismatch
-- What happens: valid agent rotates keys; peers disagree on active key binding.
-- Why it happens: delayed key-binding state updates.
-- Handling/failure mode: key updates finalized on-chain/in-state before new signatures accepted.
-
 # 8. Scalability Analysis
 ## Small scale (10–100 nodes)
 - Direct PDP checks are cheap; single policy bundle works well.

@@ -43,6 +43,15 @@ pub struct ActionPlanRequest {
 /// Source: policy-engine-spec.md §1.3
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionType {
+    // New variants in alphabetical order before PublishTopicMessage
+    DelegateOperation,
+    ReleaseTask,
+    StakeOperation,
+    SubmitEvidence,
+    SubmitReview,
+    SubmitTaskCompletion,
+    Transfer,
+    // Original variants
     PublishTopicMessage,
     ClaimTaskLease,
     RenewTaskLease,

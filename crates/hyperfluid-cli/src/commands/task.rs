@@ -107,15 +107,17 @@ pub fn run(
                 .map(|s| sha3_256_hash(s.as_bytes()))
                 .unwrap_or([0u8; 32]);
             let payload = (
-                sender_id,     // proposer_id
-                bounty,         // bounty_agx
-                meta_hash,      // metadata_hash
-                skills_hash,    // required_skills_hash
-                [0u8; 32],      // topic_id (derived from seed_ref)
+                sender_id,   // proposer_id
+                bounty,      // bounty_agx
+                meta_hash,   // metadata_hash
+                skills_hash, // required_skills_hash
+                [0u8; 32],   // topic_id (derived from seed_ref)
                 nonce,
             );
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "task_create",
                     "payload": hex::encode(payload.encode()),
@@ -126,16 +128,17 @@ pub fn run(
                 }),
             )?
         }
-        TaskAction::Status { task_id } => rpc_post(
-            client, node_url, "/task/status",
-            serde_json::json!({ "task_id": task_id }),
-        )?,
+        TaskAction::Status { task_id } => {
+            rpc_post(client, node_url, "/task/status", serde_json::json!({ "task_id": task_id }))?
+        }
         TaskAction::Claim { task_id, agent, nonce: _ } => {
             let task_id_bytes = parse_hash32(&task_id)?;
             let agent_id = parse_hash32(&agent)?;
             let payload = (task_id_bytes, agent_id, 0u128, false); // collateral=0 (filled by driver), trust_stage_flag=false
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "claim_task",
                     "payload": hex::encode(payload.encode()),
@@ -144,13 +147,13 @@ pub fn run(
         }
         TaskAction::Heartbeat { lease_id, artifact_hash, agent: _, nonce: _ } => {
             let lease_id_bytes = parse_hash32(&lease_id)?;
-            let artifact = artifact_hash
-                .as_deref()
-                .map(parse_hash32)
-                .transpose()?;
-            let payload = (lease_id_bytes, artifact, None::<[u8; 32]>, None::<[u8; 32]>, vec![0u8; 0]);
+            let artifact = artifact_hash.as_deref().map(parse_hash32).transpose()?;
+            let payload =
+                (lease_id_bytes, artifact, None::<[u8; 32]>, None::<[u8; 32]>, vec![0u8; 0]);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "heartbeat",
                     "payload": hex::encode(payload.encode()),
@@ -162,7 +165,9 @@ pub fn run(
             let agent_id = parse_hash32(&agent)?;
             let payload = (task_id_bytes, agent_id);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "release_task",
                     "payload": hex::encode(payload.encode()),
@@ -177,10 +182,10 @@ pub fn run(
             let child_payloads: Vec<(Hash32, u8, Vec<Hash32>, Hash32)> = children
                 .iter()
                 .map(|c| {
-                    let task_id = parse_hash32(
-                        c.get("task_id").and_then(|v| v.as_str()).unwrap_or("")
-                    )?;
-                    let share = c.get("bounty_share_pct").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+                    let task_id =
+                        parse_hash32(c.get("task_id").and_then(|v| v.as_str()).unwrap_or(""))?;
+                    let share =
+                        c.get("bounty_share_pct").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
                     let depends_on: Vec<Hash32> = c
                         .get("depends_on")
                         .and_then(|v| v.as_array())
@@ -202,7 +207,9 @@ pub fn run(
                 .collect::<Result<Vec<_>, String>>()?;
             let payload = (parent, caller_id, child_payloads);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "split_task",
                     "payload": hex::encode(payload.encode()),
@@ -210,13 +217,14 @@ pub fn run(
             )?
         }
         TaskAction::List { status, seed_ref } => rpc_post(
-            client, node_url, "/task/list",
+            client,
+            node_url,
+            "/task/list",
             serde_json::json!({ "status": status, "seed_ref": seed_ref }),
         )?,
-        TaskAction::Get { task_id } => rpc_post(
-            client, node_url, "/task/status",
-            serde_json::json!({ "task_id": task_id }),
-        )?,
+        TaskAction::Get { task_id } => {
+            rpc_post(client, node_url, "/task/status", serde_json::json!({ "task_id": task_id }))?
+        }
     };
     Ok(format_output(&result, format))
 }

@@ -176,25 +176,27 @@
 
 ---
 
-## NFR-0024: Key Compromise Containment
+## NFR-0024: Key Compromise Containment (SUPERSEDED)
 
 **Category:** Security
 
-**Statement:** The system shall allow rapid key rotation with 100-block grace window, and prevent old revoked keys from being accepted after rotation finalization.
+**Status:** Removed in 2026-05-19 overengineering cleanup. Key rotation code was deleted. Agents can create new accounts if compromised. This requirement is retained for historical traceability only.
 
-**Rationale:** Agent keys may be compromised; rotation must be safe and fast. See `network-policy-engine-spec.md` Section 7 (Signature key rotation mismatch).
+**Statement:** ~~The system shall allow rapid key rotation with 100-block grace window, and prevent old revoked keys from being accepted after rotation finalization.~~
+
+**Rationale:** ~~Agent keys may be compromised; rotation must be safe and fast. See `network-policy-engine-spec.md` Section 7 (Signature key rotation mismatch).~~
 
 **Source Research:**
-- `network-policy-engine-spec.md` Section 7 (Signature key rotation mismatch)
+- ~~`network-policy-engine-spec.md` Section 7 (Signature key rotation mismatch)~~
 
 **Acceptance Criteria:**
-- [ ] Key rotation transaction is committed before new key is active.
-- [ ] Grace window of 100 blocks allows in-flight transactions.
-- [ ] Old keys rejected after grace window.
-- [ ] Rotation is auditable in protocol state.
+- ~~[ ] Key rotation transaction is committed before new key is active.~~
+- ~~[ ] Grace window of 100 blocks allows in-flight transactions.~~
+- ~~[ ] Old keys rejected after grace window.~~
+- ~~[ ] Rotation is auditable in protocol state.~~
 
-**Dependencies:** FR-0118
-**Tags:** must-have
+**Dependencies:** ~~FR-0118~~
+**Tags:** superseded
 
 ---
 

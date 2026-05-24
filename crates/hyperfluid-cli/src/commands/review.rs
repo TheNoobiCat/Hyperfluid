@@ -56,31 +56,41 @@ pub fn run(
             let agent_id = parse_hash32(&agent)?;
             let payload = (task_id, agent_id, 0u128, false);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "claim_task",
                     "payload": hex::encode(payload.encode()),
                 }),
             )?
         }
-        ReviewAction::Verdict { task_id: _, review_task_id, verdict, evidence_hash, agent, nonce: _ } => {
+        ReviewAction::Verdict {
+            task_id: _,
+            review_task_id,
+            verdict,
+            evidence_hash,
+            agent,
+            nonce: _,
+        } => {
             let r_task_id = parse_hash32(&review_task_id)?;
             let reviewer = parse_hash32(&agent)?;
             let accept = verdict.to_lowercase() == "accept";
             let evidence = parse_hash32(&evidence_hash)?;
             let payload = (r_task_id, reviewer, accept, evidence);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "submit_review",
                     "payload": hex::encode(payload.encode()),
                 }),
             )?
         }
-        ReviewAction::List { status } => rpc_post(
-            client, node_url, "/review/list",
-            serde_json::json!({ "status": status }),
-        )?,
+        ReviewAction::List { status } => {
+            rpc_post(client, node_url, "/review/list", serde_json::json!({ "status": status }))?
+        }
     };
     Ok(format_output(&result, format))
 }

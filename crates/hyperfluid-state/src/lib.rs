@@ -29,6 +29,9 @@ pub enum KeyPrefix {
     TaskLease = 0x0F,
     Topic = 0x10,
     ConsumedNonce = 0x11,
+    ReviewRecord = 0x12,
+    ReviewTaskMap = 0x13,
+    FeeBurnAccumulator = 0x14,
 }
 
 impl KeyPrefix {
@@ -55,6 +58,9 @@ impl KeyPrefix {
             0x0F => Some(KeyPrefix::TaskLease),
             0x10 => Some(KeyPrefix::Topic),
             0x11 => Some(KeyPrefix::ConsumedNonce),
+            0x12 => Some(KeyPrefix::ReviewRecord),
+            0x13 => Some(KeyPrefix::ReviewTaskMap),
+            0x14 => Some(KeyPrefix::FeeBurnAccumulator),
             _ => None,
         }
     }
@@ -210,7 +216,7 @@ mod tests {
 
     #[test]
     fn key_prefix_roundtrip() {
-        for b in 0x01u8..=0x11 {
+        for b in 0x01u8..=0x14 {
             let kp = KeyPrefix::from_byte(b).unwrap();
             assert_eq!(kp.byte(), b);
         }
@@ -219,7 +225,8 @@ mod tests {
     #[test]
     fn key_prefix_invalid_byte() {
         assert!(KeyPrefix::from_byte(0x00).is_none());
-        assert!(KeyPrefix::from_byte(0x13).is_none());
+        assert!(KeyPrefix::from_byte(0x15).is_none());
+        assert!(KeyPrefix::from_byte(0xFF).is_none());
     }
 
     #[test]

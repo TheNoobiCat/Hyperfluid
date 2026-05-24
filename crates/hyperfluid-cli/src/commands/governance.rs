@@ -51,7 +51,13 @@ pub fn run(
     node_url: &str,
 ) -> Result<String, String> {
     let result = match action {
-        GovernanceAction::Propose { title_hash, target_hash, description_hash, proposer, nonce } => {
+        GovernanceAction::Propose {
+            title_hash,
+            target_hash,
+            description_hash,
+            proposer,
+            nonce,
+        } => {
             let target = parse_hash32(&target_hash)?;
             let proposer_id = parse_hash32(&proposer)?;
             let proposal_id = {
@@ -64,7 +70,9 @@ pub fn run(
                 out
             };
             rpc_post(
-                client, node_url, "/governance/propose",
+                client,
+                node_url,
+                "/governance/propose",
                 serde_json::json!({
                     "proposal_id": hex::encode(proposal_id),
                     "target_hash": target_hash,
@@ -78,7 +86,9 @@ pub fn run(
         GovernanceAction::Vote { proposal_id, option, voter, nonce } => {
             let approve = option.to_lowercase() == "yes" || option.to_lowercase() == "approve";
             rpc_post(
-                client, node_url, "/governance/vote",
+                client,
+                node_url,
+                "/governance/vote",
                 serde_json::json!({
                     "proposal_id": proposal_id,
                     "approve": approve,
@@ -92,7 +102,9 @@ pub fn run(
             rpc_post(client, node_url, "/governance/list", serde_json::json!({}))?
         }
         GovernanceAction::Get { proposal_id } => rpc_post(
-            client, node_url, "/governance/get",
+            client,
+            node_url,
+            "/governance/get",
             serde_json::json!({ "proposal_id": proposal_id }),
         )?,
     };

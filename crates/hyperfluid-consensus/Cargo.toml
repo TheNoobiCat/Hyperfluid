@@ -25,7 +25,6 @@ arc-malachitebft-core-consensus = "0.7.0-pre"
 arc-malachitebft-core-types = "0.7.0-pre"
 arc-malachitebft-core-driver = "0.7.0-pre"
 ml-dsa = { workspace = true }
-module-lattice = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
 serde_json.workspace = true

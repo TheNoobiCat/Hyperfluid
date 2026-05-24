@@ -1,5 +1,4 @@
 use clap::Subcommand;
-use parity_scale_codec::Encode;
 
 use crate::commands::{format_output, rpc_post};
 use crate::OutputFormat;
@@ -30,19 +29,19 @@ pub fn run(
     node_url: &str,
 ) -> Result<String, String> {
     let result = match action {
-        AgentAction::Status { agent } => rpc_post(
-            client, node_url, "/agent/status",
-            serde_json::json!({ "agent_id": agent }),
-        )?,
-        AgentAction::Register { name, tags } => {
-            let payload = (name.as_bytes().to_vec(), tags.unwrap_or_default().as_bytes().to_vec());
-            rpc_post(
-                client, node_url, "/tx/submit",
-                serde_json::json!({
-                    "tx_type": "task_create",
-                    "payload": hex::encode(payload.encode()),
-                }),
-            )?
+        AgentAction::Status { agent } => {
+            rpc_post(client, node_url, "/agent/status", serde_json::json!({ "agent_id": agent }))?
+        }
+        AgentAction::Register { name: _, tags: _ } => {
+            serde_json::json!({
+                "action": "agent_register",
+                "status": "not_implemented",
+                "note": "On-chain agent registration is not yet implemented. ",
+                "message": format!(
+                    "Registration will be available in a future protocol upgrade. \
+                     For now, agents operate with a local identity derived from their config file."
+                ),
+            })
         }
         AgentAction::ListSkills => {
             serde_json::json!({

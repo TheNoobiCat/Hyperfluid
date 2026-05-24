@@ -161,7 +161,12 @@ impl GovernanceEngine {
         let quorum_met = participated_pct >= self.params.quorum_required_pct as u128;
         let majority_yes = yes_pct > 50;
 
-        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        let proposal = match self.proposals.get_mut(&proposal_id) {
+            Some(p) => p,
+            None => {
+                return Err(ProposalError::ProposalNotFound);
+            }
+        };
 
         if quorum_met && majority_yes {
             proposal.status = ProposalStatus::Passed;
@@ -259,6 +264,8 @@ impl GovernanceEngine {
 }
 
 /// Compute a proposal ID from its content.
+/// Staged for client-side ID derivation.
+#[allow(dead_code)]
 pub fn compute_proposal_id(
     proposer_id: &Hash32,
     proposed_commit: &Hash32,

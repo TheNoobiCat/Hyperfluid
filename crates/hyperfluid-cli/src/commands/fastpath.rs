@@ -77,10 +77,9 @@ pub fn run(
     node_url: &str,
 ) -> Result<String, String> {
     let result = match action {
-        FastPathAction::List { topic } => rpc_post(
-            client, node_url, "/fastpath/list",
-            serde_json::json!({ "topic": topic }),
-        )?,
+        FastPathAction::List { topic } => {
+            rpc_post(client, node_url, "/fastpath/list", serde_json::json!({ "topic": topic }))?
+        }
         FastPathAction::Propose { topic, proposed_head, manifest, proposer, nonce } => {
             let topic_id = parse_hash32(&topic)?;
             let proposed = parse_hash32(&proposed_head)?;
@@ -100,7 +99,9 @@ pub fn run(
             };
             let payload = (proposal_id, topic_id, proposer_id, proposed, false);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "fast_path",
                     "payload": hex::encode(payload.encode()),
@@ -109,21 +110,32 @@ pub fn run(
             )?
         }
         FastPathAction::Approve { proposal_id, reviewer, topic_weight } => rpc_post(
-            client, node_url, "/fastpath/approve",
+            client,
+            node_url,
+            "/fastpath/approve",
             serde_json::json!({
                 "proposal_id": proposal_id,
                 "reviewer_id": reviewer,
                 "topic_weight": topic_weight.unwrap_or(1),
             }),
         )?,
-        FastPathAction::Challenge { proposal_id, topic_id, challenger, evidence_hash, bond, nonce } => {
+        FastPathAction::Challenge {
+            proposal_id,
+            topic_id,
+            challenger,
+            evidence_hash,
+            bond,
+            nonce,
+        } => {
             let pid = parse_hash32(&proposal_id)?;
             let tid = parse_hash32(&topic_id)?;
             let ev = parse_hash32(&evidence_hash)?;
             let challenger_id = parse_hash32(&challenger)?;
             let payload = (pid, tid, challenger_id, ev, true);
             rpc_post(
-                client, node_url, "/tx/submit",
+                client,
+                node_url,
+                "/tx/submit",
                 serde_json::json!({
                     "tx_type": "fast_path",
                     "payload": hex::encode(payload.encode()),
@@ -133,7 +145,9 @@ pub fn run(
             )?
         }
         FastPathAction::Status { proposal_id } => rpc_post(
-            client, node_url, "/fastpath/status",
+            client,
+            node_url,
+            "/fastpath/status",
             serde_json::json!({ "proposal_id": proposal_id }),
         )?,
     };

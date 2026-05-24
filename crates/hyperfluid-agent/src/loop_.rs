@@ -282,7 +282,8 @@ impl AgentRuntime {
 
                 // 6c. Execute tool
                 let started_at = unix_timestamp_now();
-                let output = tools::dispatch_tool(&tc.tool_name, &tc.arguments, &self.working_dir);
+                let output =
+                    tools::dispatch_tool(&tc.tool_name, &tc.arguments, &self.working_dir, &self.db);
 
                 // 6d. Record failure if error
                 if let tools::ToolOutput::Error(ref msg) = output {
@@ -388,7 +389,8 @@ impl AgentRuntime {
             }
 
             let started_at = unix_timestamp_now();
-            let output = tools::dispatch_tool(&tc.tool_name, &tc.arguments, &self.working_dir);
+            let output =
+                tools::dispatch_tool(&tc.tool_name, &tc.arguments, &self.working_dir, &self.db);
 
             if let tools::ToolOutput::Error(ref msg) = output {
                 let now = unix_timestamp_now();
@@ -529,17 +531,21 @@ impl AgentRuntime {
     /// loads the most recent handoff record and active todos,
     /// rebuilds the loop state, and returns a ready-to-resume runtime.
     ///
-    /// If no prior config is found in the DB state KV, falls back to
-    /// `Config::default()`.
-    pub fn recover_from_crash(db_path: &Path, working_dir: &Path) -> Result<Self, AgentError> {
+    /// Config is reloaded from the config file path (not from the DB,
+    /// which may have redacted API keys). Falls back to `Config::default()`
+    /// if the config file cannot be loaded.
+    pub fn recover_from_crash(
+        db_path: &Path,
+        config_path: &Path,
+        working_dir: &Path,
+    ) -> Result<Self, AgentError> {
         // Open database — rusqlite applies WAL recovery automatically
         let db = Database::open(db_path)?;
 
-        // Load config from state KV if present, otherwise default
-        let config: Config = match db.get_state("config_json")? {
-            Some(json) => serde_json::from_str(&json).unwrap_or_default(),
-            None => Config::default(),
-        };
+        // Load config from file (not from DB — DB may have redacted API keys)
+        let config: Config = Config::load(config_path).map_err(|e| {
+            AgentError::Config(format!("failed to load config for crash recovery: {e}"))
+        })?;
 
         let agent_config = config.to_agent_runtime_config();
         let limits = config.to_resource_limits();
@@ -572,9 +578,8 @@ impl AgentRuntime {
             std::fs::create_dir_all(working_dir)?;
         }
 
-        // Stub provider for tests
-        use crate::llm::StubProvider;
-        let provider = Box::new(StubProvider);
+        // Create LLM provider from config (not stub)
+        let provider = llm::provider_from_config(&config.llm);
 
         Ok(Self {
             config,
@@ -925,6 +930,32 @@ mod tests {
         let work_dir = tempfile::tempdir().unwrap();
         let db_path = db_dir.path().join("agent.db");
 
+        // Create a minimal valid config file for crash recovery
+        let config_dir = tempfile::tempdir().unwrap();
+        let config_path = config_dir.path().join("agent.toml");
+        let config_toml = r#"
+[agent]
+project_name = "hyperfluid-agent"
+agent_name = "recovery-agent"
+
+[llm]
+provider = "local"
+model = "default"
+
+[limits]
+loop_interval_ms = 10
+tool_timeout_ms = 120000
+handoff_threshold_pct = 70
+handoff_trigger_messages = 50
+max_ram_bytes = 0
+max_cpu_cores = 0
+cpu_throttle_pct = 0
+max_disk_bytes = 0
+max_file_descriptors = 0
+max_concurrent_connections = 0
+"#;
+        std::fs::write(&config_path, config_toml).unwrap();
+
         // Create runtime, trigger handoff, verify record
         {
             let mut rt =
@@ -935,7 +966,8 @@ mod tests {
         }
 
         // Recover and verify handoff loaded
-        let recovered = AgentRuntime::recover_from_crash(&db_path, work_dir.path()).unwrap();
+        let recovered =
+            AgentRuntime::recover_from_crash(&db_path, &config_path, work_dir.path()).unwrap();
 
         let latest = recovered.db.get_latest_handoff().unwrap();
         assert!(latest.is_some(), "handoff must survive crash");

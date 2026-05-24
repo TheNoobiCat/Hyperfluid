@@ -166,6 +166,63 @@ impl QuotaManager {
                     (TrustStage::Trusted, (10, 10)),
                 ],
             },
+            // Transaction-type action quotas (PDP gated transactions)
+            QuotaEntry {
+                quota_id: "tx_transfer".into(),
+                enforcement_point: "consensus".into(),
+                dimension: "per_agent".into(),
+                limit: 1000,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
+            QuotaEntry {
+                quota_id: "tx_stake".into(),
+                enforcement_point: "consensus".into(),
+                dimension: "per_agent".into(),
+                limit: 100,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
+            QuotaEntry {
+                quota_id: "tx_delegate".into(),
+                enforcement_point: "consensus".into(),
+                dimension: "per_agent".into(),
+                limit: 100,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
+            QuotaEntry {
+                quota_id: "tx_evidence".into(),
+                enforcement_point: "consensus".into(),
+                dimension: "per_agent".into(),
+                limit: 10,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
+            QuotaEntry {
+                quota_id: "tx_review".into(),
+                enforcement_point: "review_engine".into(),
+                dimension: "per_agent".into(),
+                limit: 100,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
+            QuotaEntry {
+                quota_id: "tx_release".into(),
+                enforcement_point: "consensus".into(),
+                dimension: "per_agent".into(),
+                limit: 200,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
+            QuotaEntry {
+                quota_id: "tx_submit".into(),
+                enforcement_point: "consensus".into(),
+                dimension: "per_agent".into(),
+                limit: 200,
+                window_blocks: 3600,
+                stage_multipliers: vec![],
+            },
         ];
 
         for entry in entries {
@@ -299,7 +356,7 @@ mod tests {
     #[test]
     fn canonical_entries_have_all_quota_ids() {
         let qm = QuotaManager::with_canonical_entries();
-        assert_eq!(qm.entries().len(), 14);
+        assert_eq!(qm.entries().len(), 21);
     }
 
     #[test]

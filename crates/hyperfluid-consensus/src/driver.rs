@@ -19,9 +19,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use hyperfluid_fee_market::{compute_next_base_fee, FeeConfig, FeeMarketState};
 use hyperfluid_p2p::mempool::{Mempool, MempoolConfig, MempoolTx, TxTypeTag};
+use hyperfluid_pdp::audit::AuditLog;
 use hyperfluid_staking::SystemParameters;
 use hyperfluid_state::state_machine::{
-    ExecutionContext, SplitChildSpec, StateMachine, ValidatorLifecycleState,
+    ExecutionContext, ExecutionResult, SplitChildSpec, StateMachine, ValidatorLifecycleState,
 };
 use hyperfluid_state::{Account, HeartbeatPayload, ReviewVerdict, TaskStatus, TrustStageEnum};
 
@@ -167,6 +168,15 @@ struct SplitChildPayload {
     required_skills_hash: Hash32,
 }
 
+/// Payload format for TaskCreateTx transactions.
+#[derive(Encode, Decode)]
+struct TaskCreatePayload {
+    creator_id: Hash32,
+    bounty_agx: u128,
+    seed_ref: Hash32,
+    nonce: u64,
+}
+
 /// Payload format for SubmitReviewTx transactions.
 #[derive(Encode, Decode)]
 struct SubmitReviewPayload {
@@ -223,6 +233,11 @@ pub struct ConsensusDriver {
     pub quota_states: BTreeMap<(Hash32, String), QuotaState>,
     /// Consumed plan IDs for PDP replay protection (deduplication).
     pub consumed_plan_ids: BTreeSet<Hash32>,
+    /// Fee reward pool accumulated from priority fees, distributed to validators
+    /// at epoch boundaries.
+    pub fee_reward_pool: u128,
+    /// Append-only audit log of PDP decisions.
+    pub audit_log: AuditLog,
     /// When true, bypasses PDP validation for all transaction types.
     /// Used for development/testing when full PDP state (key bindings,
     /// nonce tracking, quota states) is not yet wired.
@@ -261,6 +276,8 @@ impl ConsensusDriver {
             consumed_plan_ids: BTreeSet::new(),
             pdp_bypass: false,
             git_head_commit: [0u8; 32],
+            fee_reward_pool: 0,
+            audit_log: AuditLog::new(),
             committee_history: BTreeMap::new(),
             epoch_validators: BTreeMap::new(),
         }
@@ -317,11 +334,11 @@ impl ConsensusDriver {
     /// Encodes the envelope, derives a tx hash, infers a TxTypeTag, and inserts
     /// into the fee-ordered mempool. Stores the full envelope for retrieval at
     /// block production time.
-    pub fn submit_tx(&mut self, tx: TransactionEnvelope) -> bool {
+    pub fn submit_tx(&mut self, tx: TransactionEnvelope) -> Result<Hash32, String> {
         let tx_data = tx.encode();
         let tx_hash = sha3_256_hash(&tx_data);
         if self.tx_store.contains_key(&tx_hash) {
-            return false;
+            return Err("duplicate tx".into());
         }
         let sender_id = self.extract_sender_id(&tx).unwrap_or([0u8; 32]);
         let tx_type_tag = match tx.tx_type {
@@ -339,7 +356,10 @@ impl ConsensusDriver {
             tx_data,
         };
         self.tx_store.insert(tx_hash, tx);
-        self.mempool.insert(mtx)
+        if !self.mempool.insert(mtx) {
+            return Err("mempool full".into());
+        }
+        Ok(tx_hash)
     }
 
     /// Extract the sender/agent ID from a transaction envelope for mempool routing.
@@ -362,8 +382,8 @@ impl ConsensusDriver {
                 Some(payload.delegator_id)
             }
             TxType::TaskCreateTx => {
-                let payload = TransferPayload::decode(&mut &tx.tx_payload[..]).ok()?;
-                Some(payload.sender_id)
+                let payload = TaskCreatePayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.creator_id)
             }
             TxType::ClaimTaskTx => {
                 let payload = ClaimTaskPayload::decode(&mut &tx.tx_payload[..]).ok()?;
@@ -373,7 +393,32 @@ impl ConsensusDriver {
                 let payload = FastPathPayload::decode(&mut &tx.tx_payload[..]).ok()?;
                 Some(payload.proposer_id)
             }
-            _ => None,
+            TxType::HeartbeatTx => {
+                let payload = HeartbeatTxPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                // HeartbeatTx uses lease_id as agent identifier; return None if no agent_id available.
+                let _ = payload.lease_id;
+                None
+            }
+            TxType::EvidenceTx => {
+                let payload = EvidencePayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.validator_id)
+            }
+            TxType::ReleaseTaskTx => {
+                let payload = ReleaseTaskPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.agent_id)
+            }
+            TxType::SplitTaskTx => {
+                let payload = SplitTaskPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.caller_id)
+            }
+            TxType::SubmitTaskTx => {
+                let payload = SubmitTaskPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.agent_id)
+            }
+            TxType::SubmitReviewTx => {
+                let payload = SubmitReviewPayload::decode(&mut &tx.tx_payload[..]).ok()?;
+                Some(payload.reviewer_id)
+            }
         }
     }
 
@@ -400,9 +445,38 @@ impl ConsensusDriver {
             txs
         };
 
-        // 1. Execute all transactions
+        // 1. Execute all transactions with PDP validation and fee burning
         for tx in &block_txs {
-            self.execute_tx(tx, ctx);
+            // Snapshot PDP state before validation for rollback on failure
+            let pdp_snapshot_nonces = self.agent_nonces.clone();
+            let pdp_snapshot_plan_ids = self.consumed_plan_ids.clone();
+            let pdp_snapshot_quotas = self.quota_states.clone();
+
+            // Run PDP validation — skip tx if it fails
+            if !self.validate_tx_pdp(tx, ctx) {
+                continue;
+            }
+
+            let exec_result = self.execute_tx(tx, ctx);
+
+            match exec_result {
+                ExecutionResult::Success => {
+                    // Deduct base fee from sender's account
+                    if let Some(sender) = self.extract_sender_id(tx) {
+                        let fee = self.fee_state.base_fee;
+                        if self.state_machine.deduct_balance(&sender, fee) {
+                            self.fee_reward_pool = self.fee_reward_pool.saturating_add(fee);
+                            self.fee_state.accumulate_burn(fee);
+                        }
+                    }
+                }
+                ExecutionResult::Rejected => {
+                    // Rollback PDP state on transaction rejection
+                    self.agent_nonces = pdp_snapshot_nonces;
+                    self.consumed_plan_ids = pdp_snapshot_plan_ids;
+                    self.quota_states = pdp_snapshot_quotas;
+                }
+            }
         }
 
         // 2a. Check lease expiry for all active tasks
@@ -445,9 +519,12 @@ impl ConsensusDriver {
                 .sum();
             let active_ids = self.governance.active_proposal_ids();
             for pid in &active_ids {
-                if let Ok(outcome) =
-                    self.governance.finalize_proposal(*pid, new_height, total_stake, self.epoch_length)
-                {
+                if let Ok(outcome) = self.governance.finalize_proposal(
+                    *pid,
+                    new_height,
+                    total_stake,
+                    self.epoch_length,
+                ) {
                     tracing::info!(
                         "Governance proposal {:?} finalized: {:?}",
                         hex::encode(*pid),
@@ -455,6 +532,9 @@ impl ConsensusDriver {
                     );
                 }
             }
+
+            // Distribute epoch-end fee rebates to active validators
+            self.state_machine.execute_distribute_rewards(&mut self.fee_reward_pool);
 
             // Execute passed proposals — update git:head when a proposal passes
             let passed_ids = self.governance.passed_proposal_ids();
@@ -493,7 +573,7 @@ impl ConsensusDriver {
                 parent_hash,
                 state_root,
                 transaction_root,
-                committee_id: 0,
+                committee_id: new_epoch, // committee_id matches epoch number; committee_history tracks epoch hashes
                 proposer_id: [0u8; 32],
                 timestamp,
                 epoch: new_epoch,
@@ -545,10 +625,10 @@ impl ConsensusDriver {
 
     /// Dispatch a single transaction to the appropriate state machine method
     /// or subsystem engine (governance, fast-path).
-    fn execute_tx(&mut self, tx: &TransactionEnvelope, ctx: ExecutionContext) {
+    fn execute_tx(&mut self, tx: &TransactionEnvelope, ctx: ExecutionContext) -> ExecutionResult {
         // Run PDP pre-validation (integration point — currently pass-through)
         if !self.validate_tx_pdp(tx, ctx) {
-            return;
+            return ExecutionResult::Rejected;
         }
 
         match tx.tx_type {
@@ -560,12 +640,13 @@ impl ConsensusDriver {
                         payload.amount,
                         payload.nonce,
                         ctx,
-                    );
+                    )
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::GovernanceTx(GovernanceAction::Propose) => {
                 if let Ok(payload) = GovernancePayload::decode(&mut &tx.tx_payload[..]) {
-                    // Hash description to produce bundle_manifest_hash
                     let bundle_manifest_hash = sha3_256_hash(&payload.description_hash);
                     let current_epoch = ctx.height / self.epoch_length;
                     match self.governance.submit_proposal(
@@ -573,10 +654,10 @@ impl ConsensusDriver {
                         payload.proposer_id,
                         payload.target_hash,
                         bundle_manifest_hash,
-                        self.git_head_commit, // git:head tracking — updated when proposal passes tally
+                        self.git_head_commit,
                         ctx.height,
                         current_epoch,
-                        0, // total_snapshot_stake: not yet tracked
+                        0,
                     ) {
                         Ok(proposal) => {
                             tracing::info!(
@@ -585,10 +666,7 @@ impl ConsensusDriver {
                                 hex::encode(proposal.proposer_id),
                                 proposal.status,
                             );
-                            // TODO: When governance tally passes a proposal, update
-                            // self.git_head_commit = proposal.target_hash.
-                            // This requires integration with GovernanceEngine::tally()
-                            // which is deferred (no tally-triggered callback yet).
+                            ExecutionResult::Success
                         }
                         Err(e) => {
                             tracing::warn!(
@@ -597,8 +675,11 @@ impl ConsensusDriver {
                                 hex::encode(payload.proposer_id),
                                 e,
                             );
+                            ExecutionResult::Rejected
                         }
                     }
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::GovernanceTx(GovernanceAction::Vote) => {
@@ -625,6 +706,7 @@ impl ConsensusDriver {
                                 hex::encode(payload.proposal_id),
                                 hex::encode(payload.proposer_id),
                             );
+                            ExecutionResult::Success
                         }
                         Err(e) => {
                             tracing::warn!(
@@ -632,8 +714,11 @@ impl ConsensusDriver {
                                 hex::encode(payload.proposal_id),
                                 e,
                             );
+                            ExecutionResult::Rejected
                         }
                     }
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::FastPathTx => {
@@ -655,6 +740,7 @@ impl ConsensusDriver {
                                     hex::encode(payload.proposal_id),
                                     hex::encode(payload.proposer_id),
                                 );
+                                ExecutionResult::Success
                             }
                             Err(e) => {
                                 tracing::warn!(
@@ -662,6 +748,7 @@ impl ConsensusDriver {
                                     hex::encode(payload.proposal_id),
                                     e,
                                 );
+                                ExecutionResult::Rejected
                             }
                         }
                     } else {
@@ -682,6 +769,7 @@ impl ConsensusDriver {
                                     hex::encode(payload.proposal_id),
                                     hex::encode(payload.topic_id),
                                 );
+                                ExecutionResult::Success
                             }
                             Err(e) => {
                                 tracing::warn!(
@@ -689,76 +777,69 @@ impl ConsensusDriver {
                                     hex::encode(payload.proposal_id),
                                     e,
                                 );
+                                ExecutionResult::Rejected
                             }
                         }
                     }
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             // Staking transactions — validator lifecycle (bond/unbond/withdraw/renew)
             TxType::StakingTx(action) => {
                 if let Ok(payload) = StakingPayload::decode(&mut &tx.tx_payload[..]) {
                     match action {
-                        StakingAction::Bond => {
-                            self.state_machine.execute_bond(
-                                payload.validator_id,
-                                payload.amount,
-                                payload.nonce,
-                                self.staking_params.min_self_bond,
-                                ctx.height,
-                                ctx,
-                            );
-                        }
-                        StakingAction::Unbond => {
-                            self.state_machine.execute_unbond(
-                                payload.validator_id,
-                                payload.nonce,
-                                ctx.height,
-                                ctx,
-                            );
-                        }
-                        StakingAction::Withdraw => {
-                            self.state_machine.execute_withdraw(
-                                payload.validator_id,
-                                payload.nonce,
-                                ctx.height,
-                                self.staking_params.unbond_delay,
-                                ctx,
-                            );
-                        }
-                        StakingAction::Renew => {
-                            self.state_machine.execute_renew(
-                                payload.validator_id,
-                                payload.nonce,
-                                ctx.height,
-                                ctx,
-                            );
-                        }
+                        StakingAction::Bond => self.state_machine.execute_bond(
+                            payload.validator_id,
+                            payload.amount,
+                            payload.nonce,
+                            self.staking_params.min_self_bond,
+                            ctx.height,
+                            ctx,
+                        ),
+                        StakingAction::Unbond => self.state_machine.execute_unbond(
+                            payload.validator_id,
+                            payload.nonce,
+                            ctx.height,
+                            ctx,
+                        ),
+                        StakingAction::Withdraw => self.state_machine.execute_withdraw(
+                            payload.validator_id,
+                            payload.nonce,
+                            ctx.height,
+                            self.staking_params.unbond_delay,
+                            ctx,
+                        ),
+                        StakingAction::Renew => self.state_machine.execute_renew(
+                            payload.validator_id,
+                            payload.nonce,
+                            ctx.height,
+                            ctx,
+                        ),
                     }
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             // Delegation transactions — delegator/validator relationship management
             TxType::DelegationTx(action) => {
                 if let Ok(payload) = DelegationPayload::decode(&mut &tx.tx_payload[..]) {
                     match action {
-                        DelegationAction::Delegate => {
-                            self.state_machine.execute_delegate(
-                                payload.delegator_id,
-                                payload.validator_id,
-                                payload.amount,
-                                payload.nonce,
-                                self.staking_params.min_delegation,
-                                ctx,
-                            );
-                        }
-                        DelegationAction::Undelegate => {
-                            self.state_machine.execute_undelegate(
-                                payload.delegator_id,
-                                payload.validator_id,
-                                payload.nonce,
-                                ctx.height,
-                                ctx,
-                            );
-                        }
+                        DelegationAction::Delegate => self.state_machine.execute_delegate(
+                            payload.delegator_id,
+                            payload.validator_id,
+                            payload.amount,
+                            payload.nonce,
+                            self.staking_params.min_delegation,
+                            ctx,
+                        ),
+                        DelegationAction::Undelegate => self.state_machine.execute_undelegate(
+                            payload.delegator_id,
+                            payload.validator_id,
+                            payload.nonce,
+                            ctx.height,
+                            ctx,
+                        ),
                         DelegationAction::WithdrawDelegation => {
                             self.state_machine.execute_withdraw_delegation(
                                 payload.delegator_id,
@@ -767,7 +848,7 @@ impl ConsensusDriver {
                                 ctx.height,
                                 self.staking_params.delegation_unbond_delay,
                                 ctx,
-                            );
+                            )
                         }
                         DelegationAction::SetCommission => {
                             let commission_rate = payload.amount.min(100) as u8;
@@ -777,21 +858,23 @@ impl ConsensusDriver {
                                 payload.nonce,
                                 self.staking_params.max_commission_rate,
                                 ctx,
-                            );
+                            )
                         }
                     }
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::TaskCreateTx => {
-                if let Ok(payload) = TransferPayload::decode(&mut &tx.tx_payload[..]) {
+                if let Ok(payload) = TaskCreatePayload::decode(&mut &tx.tx_payload[..]) {
                     let task_id = sha3_256_hash(&tx.tx_payload);
                     self.state_machine.execute_task_create(
-                        payload.sender_id,
-                        payload.amount,
+                        payload.creator_id,
+                        payload.bounty_agx,
                         0, // fee: not yet tracked in payload
                         task_id,
                         payload.nonce,
-                        [0u8; 32], // seed_ref placeholder
+                        payload.seed_ref,
                         [0u8; 32], // topic_id placeholder
                         [0u8; 32], // metadata_hash placeholder
                         [0u8; 32], // required_skills_hash placeholder
@@ -799,7 +882,9 @@ impl ConsensusDriver {
                         [0u8; 32], // requester_pubkey placeholder
                         ctx.height,
                         ctx,
-                    );
+                    )
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::ClaimTaskTx => {
@@ -816,7 +901,9 @@ impl ConsensusDriver {
                         ctx.height,
                         trust_stage,
                         ctx,
-                    );
+                    )
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::HeartbeatTx => {
@@ -828,12 +915,16 @@ impl ConsensusDriver {
                         test_result_ref: payload.test_result_ref,
                         signature: payload.signature,
                     };
-                    self.state_machine.execute_heartbeat(heartbeat, ctx.height, ctx);
+                    self.state_machine.execute_heartbeat(heartbeat, ctx.height, ctx)
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::ReleaseTaskTx => {
                 if let Ok(payload) = ReleaseTaskPayload::decode(&mut &tx.tx_payload[..]) {
-                    self.state_machine.execute_release_task(payload.task_id, payload.agent_id, ctx);
+                    self.state_machine.execute_release_task(payload.task_id, payload.agent_id, ctx)
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::SubmitTaskTx => {
@@ -843,7 +934,9 @@ impl ConsensusDriver {
                         payload.agent_id,
                         ctx.height,
                         ctx,
-                    );
+                    )
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::SubmitReviewTx => {
@@ -860,7 +953,9 @@ impl ConsensusDriver {
                         payload.evidence_hash,
                         ctx.height,
                         ctx,
-                    );
+                    )
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::SplitTaskTx => {
@@ -881,7 +976,9 @@ impl ConsensusDriver {
                         children,
                         ctx.height,
                         ctx,
-                    );
+                    )
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
             TxType::EvidenceTx => {
@@ -889,32 +986,31 @@ impl ConsensusDriver {
                     const MIN_JAIL_BLOCKS: u64 = 5000;
                     const PAUSE_THRESHOLD_PCT: u64 = 20;
                     match payload.evidence_type {
-                        0 => {
-                            self.state_machine.execute_slash_equivocation(
-                                payload.validator_id,
-                                payload.evidence_height,
-                                MIN_JAIL_BLOCKS,
-                                ctx.height,
-                            );
-                        }
-                        1 => {
-                            self.state_machine.execute_slash_downtime(
-                                payload.validator_id,
-                                payload.missed_blocks,
-                                payload.total_window_blocks,
-                                payload.evidence_height,
-                                PAUSE_THRESHOLD_PCT,
-                                MIN_JAIL_BLOCKS,
-                                ctx.height,
-                            );
-                        }
+                        0 => self.state_machine.execute_slash_equivocation(
+                            payload.validator_id,
+                            payload.evidence_height,
+                            MIN_JAIL_BLOCKS,
+                            ctx.height,
+                        ),
+                        1 => self.state_machine.execute_slash_downtime(
+                            payload.validator_id,
+                            payload.missed_blocks,
+                            payload.total_window_blocks,
+                            payload.evidence_height,
+                            PAUSE_THRESHOLD_PCT,
+                            MIN_JAIL_BLOCKS,
+                            ctx.height,
+                        ),
                         _ => {
                             tracing::warn!(
                                 "EvidenceTx: unknown evidence type {}",
                                 payload.evidence_type
                             );
+                            ExecutionResult::Rejected
                         }
                     }
+                } else {
+                    ExecutionResult::Rejected
                 }
             }
         }
@@ -938,13 +1034,17 @@ impl ConsensusDriver {
             TxType::GovernanceTx(GovernanceAction::Propose) => ActionType::SubmitGovernanceProposal,
             TxType::GovernanceTx(GovernanceAction::Vote) => ActionType::CastGovernanceVote,
             TxType::FastPathTx => ActionType::SubmitFastPathMerge,
-            TxType::TransferTx => ActionType::ClaimTaskLease,
+            TxType::TransferTx => ActionType::Transfer,
             TxType::TaskCreateTx => ActionType::CreateTask,
             TxType::ClaimTaskTx => ActionType::ClaimTaskLease,
             TxType::HeartbeatTx => ActionType::RenewTaskLease,
-            TxType::SubmitTaskTx => ActionType::PublishTopicMessage,
-            TxType::SubmitReviewTx => ActionType::SubmitGovernanceProposal,
-            _ => return true,
+            TxType::SubmitTaskTx => ActionType::SubmitTaskCompletion,
+            TxType::SubmitReviewTx => ActionType::SubmitReview,
+            TxType::StakingTx(_) => ActionType::StakeOperation,
+            TxType::DelegationTx(_) => ActionType::DelegateOperation,
+            TxType::EvidenceTx => ActionType::SubmitEvidence,
+            TxType::ReleaseTaskTx => ActionType::ReleaseTask,
+            TxType::SplitTaskTx => ActionType::CreateTask,
         };
 
         let agent_id = self.extract_sender_id(tx).unwrap_or([0u8; 32]);
@@ -994,7 +1094,7 @@ impl ConsensusDriver {
             agent_signature: vec![],
         };
 
-        let response = rule_chain::evaluate(&request, &pdp_ctx);
+        let response = rule_chain::evaluate(&request, &pdp_ctx, &mut self.audit_log);
 
         if matches!(response.decision, Decision::Approved) {
             if let Some(ref consumed) = response.consumed_quota {
@@ -1155,7 +1255,13 @@ impl ConsensusDriver {
 
             let start_height: u64;
             {
-                let d = driver.lock().unwrap();
+                let d = match driver.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        tracing::warn!("driver mutex poisoned, recovering");
+                        poisoned.into_inner()
+                    }
+                };
                 start_height = d.height.saturating_add(1);
             }
 
@@ -1436,12 +1542,14 @@ mod tests {
             approved_plan_id: None,
             gateway_signature: None,
         };
-        assert!(driver.submit_tx(tx));
+        assert!(driver.submit_tx(tx).is_ok());
 
         let block = driver.produce_block(vec![], 1);
         let root_after = block.header.state_root;
 
-        assert_eq!(driver.account_balance(&alice_id), Some(900_000_000_000_000_000_000u128));
+        // Balance after transfer (100 AGX) minus base fee deduction (1_000_000 atto-AGX)
+        let expected_alice = 900_000_000_000_000_000_000u128 - driver.fee_state.base_fee;
+        assert_eq!(driver.account_balance(&alice_id), Some(expected_alice));
         assert_eq!(driver.account_balance(&bob_id), Some(100_000_000_000_000_000_000u128));
         assert_ne!(root_after, root_before);
         assert_ne!(root_after, [0u8; 32]);

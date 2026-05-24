@@ -184,10 +184,7 @@ fn route_and_handle(path: &str, body: &str, driver: &Arc<Mutex<ConsensusDriver>>
             };
             dispatch_read(path, body, &guard)
         }
-        "/tx/submit"
-        | "/governance/propose"
-        | "/governance/vote"
-        | "/fastpath/approve" => {
+        "/tx/submit" | "/governance/propose" | "/governance/vote" | "/fastpath/approve" => {
             // Mutation endpoints
             let mut guard = match driver.lock() {
                 Ok(g) => g,
@@ -409,7 +406,7 @@ fn handle_tx_submit(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
     };
 
     // Submit to driver (validates + queues in mempool for next block)
-    let accepted = driver.submit_tx(tx.clone());
+    let accepted = driver.submit_tx(tx.clone()).is_ok();
     let tx_hash = {
         use sha3::Digest;
         let encoded = tx.encode();
@@ -551,7 +548,7 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
         gateway_signature: None,
     };
 
-    let accepted = driver.submit_tx(tx);
+    let accepted = driver.submit_tx(tx).is_ok();
     let json = serde_json::json!({
         "status": if accepted { "submitted_to_mempool" } else { "rejected" },
         "proposer": hex::encode(proposer),
@@ -607,7 +604,7 @@ fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, Str
         gateway_signature: None,
     };
 
-    let accepted = driver.submit_tx(tx);
+    let accepted = driver.submit_tx(tx).is_ok();
     let json = serde_json::json!({
         "proposal_id": hex::encode(proposal_id),
         "voter": hex::encode(voter),
@@ -646,10 +643,8 @@ fn handle_query_committee(driver: &ConsensusDriver, body: &str) -> (u16, String)
     };
     let epoch = req.get("epoch").and_then(|v| v.as_u64()).unwrap_or(driver.epoch);
     let committee_hash = driver.committee_history.get(&epoch).copied();
-    let validators = driver
-        .epoch_validators
-        .get(&epoch)
-        .map(|v| v.iter().map(hex::encode).collect::<Vec<_>>());
+    let validators =
+        driver.epoch_validators.get(&epoch).map(|v| v.iter().map(hex::encode).collect::<Vec<_>>());
     let json = serde_json::json!({
         "epoch": epoch,
         "current_epoch": driver.epoch,
@@ -685,12 +680,11 @@ fn handle_task_list(driver: &ConsensusDriver, body: &str) -> (u16, String) {
     let tasks: Vec<serde_json::Value> = driver
         .state_machine
         .tasks_iter()
-        .filter(|t| status_filter.is_none_or(|s| {
-            format!("{:?}", t.status).to_lowercase() == s.to_lowercase()
-        }))
-        .filter(|t| seed_filter.is_none_or(|s| {
-            hex::encode(t.seed_ref).starts_with(s)
-        }))
+        .filter(|t| {
+            status_filter
+                .is_none_or(|s| format!("{:?}", t.status).to_lowercase() == s.to_lowercase())
+        })
+        .filter(|t| seed_filter.is_none_or(|s| hex::encode(t.seed_ref).starts_with(s)))
         .map(|t| {
             serde_json::json!({
                 "task_id": hex::encode(t.task_id),

@@ -245,7 +245,7 @@ fn e2e_10_task_create_duplicate_rejected() {
     );
     assert_eq!(r1, ExecutionResult::Success);
 
-    sm.init_account(new_account(8, 10_000_000_000_000_000_000, 1));
+    // Second attempt with same task_id is rejected (task already exists)
     let r2 = sm.execute_task_create(
         [8u8; 32],
         1_000_000,

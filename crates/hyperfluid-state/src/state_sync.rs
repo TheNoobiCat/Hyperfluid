@@ -43,6 +43,8 @@ pub struct SyncState {
 /// consumed plans, task IDs) into the snapshot's `sst_keys` using SCALE encoding.
 /// Builds an SMT from all keys and commits the root.
 /// Must include every collection that `StateMachine::compute_state_root()` uses.
+/// Staged for state sync (caller wiring pending).
+#[allow(dead_code)]
 pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Hash32) -> Snapshot {
     let mut smt = SparseMerkleTree::new();
     let mut sst_keys = Vec::new();
@@ -120,12 +122,35 @@ pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Ha
         sst_keys.push((key, value));
     }
 
+    for (work_task_id, records) in sm.review_records_iter() {
+        let key = crate::state_key(crate::KeyPrefix::ReviewRecord, work_task_id);
+        let value = records.encode();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for (review_task_id, work_task_id) in sm.review_task_map_iter() {
+        let key = crate::state_key(crate::KeyPrefix::ReviewTaskMap, review_task_id);
+        let value = work_task_id.to_vec();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    {
+        let key = crate::state_key(crate::KeyPrefix::FeeBurnAccumulator, &[0u8; 32]);
+        let value = sm.fee_burn_accumulator.to_le_bytes().to_vec();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
     let state_root = smt.root();
 
     Snapshot { epoch, height, state_root, block_hash, sst_keys, merkle_proof_batch: Vec::new() }
 }
 
 /// Rebuild an SMT root from a set of (key, value) pairs and return the root.
+/// Staged for state sync rebuild.
+#[allow(dead_code)]
 pub fn build_smt_from_keys(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
     let mut smt = SparseMerkleTree::new();
     for (key, value) in keys {
@@ -147,10 +172,15 @@ pub fn verify_state_root_quorum(
 
 /// Compute a checksum over snapshot keys for integrity verification.
 /// Uses SHA3-256 over: count, key, value for each tuple.
+/// Staged for state sync.
+#[allow(dead_code)]
 pub fn compute_state_checksum(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
     let mut hasher = Sha3_256::new();
     Digest::update(&mut hasher, (keys.len() as u64).to_le_bytes());
-    for (key, value) in keys {
+    // Sort by key bytes to ensure deterministic ordering regardless of source iteration order.
+    let mut sorted: Vec<&(Hash32, Vec<u8>)> = keys.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    for (key, value) in &sorted {
         Digest::update(&mut hasher, key);
         Digest::update(&mut hasher, (value.len() as u64).to_le_bytes());
         Digest::update(&mut hasher, value);
@@ -161,6 +191,8 @@ pub fn compute_state_checksum(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
 }
 
 /// Verify that a set of snapshot keys matches a given checksum.
+/// Staged for state sync verification.
+#[allow(dead_code)]
 pub fn verify_snapshot_checksum(keys: &[(Hash32, Vec<u8>)], expected_checksum: Hash32) -> bool {
     compute_state_checksum(keys) == expected_checksum
 }

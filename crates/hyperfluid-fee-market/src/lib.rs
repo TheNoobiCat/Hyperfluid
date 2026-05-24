@@ -94,16 +94,22 @@ pub fn compute_next_base_fee(
 }
 
 /// Compute total transaction cost: (base_fee + priority_fee)
+/// Staged for fee deduction at tx execution.
+#[allow(dead_code)]
 pub fn compute_tx_fee(base_fee: u128, priority_fee: u128) -> u128 {
     base_fee.saturating_add(priority_fee)
 }
 
 /// Determine if a transaction meets the minimum fee requirement.
+/// Staged for mempool admission gate.
+#[allow(dead_code)]
 pub fn tx_meets_min_fee(max_fee: u128, base_fee: u128) -> bool {
     max_fee >= base_fee
 }
 
 /// Compute the burn portion of a transaction fee.
+/// Staged for fee burning at tx execution.
+#[allow(dead_code)]
 pub fn compute_burn_amount(base_fee: u128, gas_used: u64) -> u128 {
     base_fee.saturating_mul(gas_used as u128)
 }
@@ -116,6 +122,8 @@ impl FeeMarketState {
 
 /// Compute validator rebate from total priority fees across epoch.
 /// Proportional to validator's stake share of total bonded stake.
+/// Staged for reward distribution.
+#[allow(dead_code)]
 pub fn compute_validator_rebate(
     validator_stake: u128,
     total_bonded_stake: u128,
@@ -128,6 +136,8 @@ pub fn compute_validator_rebate(
 }
 
 /// Check per-sender mempool transaction limit.
+/// Staged for mempool admission.
+#[allow(dead_code)]
 pub fn sender_within_mempool_limit(tx_count: u32, config: &FeeConfig) -> bool {
     tx_count <= config.max_per_sender_tx
 }

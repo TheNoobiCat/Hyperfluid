@@ -104,7 +104,7 @@ The Malachite type adapters exist (697 lines) but there is no propose/vote/commi
 
 ### Week 9–10: Real PDP + CLI + TUI + Telegram + Inbox + Soak
 
-1. **PDP signature verification (step 2):** Wire ML-DSA-65 signature checking into the PDP rule chain. `key_bindings` maintained in `ConsensusDriver` with key rotation support. Set `pdp_bypass = false`.
+1. **PDP signature verification (step 2):** Wire ML-DSA-65 signature checking into the PDP rule chain. `key_bindings` maintained in `ConsensusDriver`. Set `pdp_bypass = false`.
 2. **`hyperfluid` CLI crate:** Implement all 7 top-level subcommands (tx, query, task, review, governance, agent, idea) with clap argument parsing. Machine-parseable JSON output. All mutating commands route through PDP.
 3. **CLI → PDP → state machine pipeline:** End-to-end test of `hyperfluid tx transfer` constructing an `ActionPlanRequest`, PDP evaluating it, state machine executing it.
 4. **TUI setup wizard (ratatui):** First-launch config flow (project name, agent name, LLM provider/URL/key, capability tags, optional Telegram config). Writes `config.toml`. Reads existing config for re-entry.

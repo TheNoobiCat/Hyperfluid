@@ -2,6 +2,7 @@
 //
 // Source: docs/04-specifications/runtime/agent-runtime-spec.md Section 2
 
+use crate::db::Database;
 use crate::types::*;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -39,6 +40,7 @@ pub fn dispatch_tool(
     tool_name: &str,
     arguments: &serde_json::Value,
     working_dir: &Path,
+    db: &Database,
 ) -> ToolOutput {
     if let Err(e) = validate_tool_input(tool_name, arguments) {
         return ToolOutput::Error(e.message);
@@ -62,14 +64,14 @@ pub fn dispatch_tool(
                 Ok(v) => v,
                 Err(e) => return deserialize_err(e.to_string().as_str()),
             };
-            execute_todo_write(&input)
+            execute_todo_write(&input, db)
         }
         "todo_update" => {
             let input: TodoUpdateInput = match serde_json::from_value(arguments.clone()) {
                 Ok(v) => v,
                 Err(e) => return deserialize_err(e.to_string().as_str()),
             };
-            execute_todo_update(&input)
+            execute_todo_update(&input, db)
         }
         "remember" => {
             let input: RememberInput = match serde_json::from_value(arguments.clone()) {
@@ -83,7 +85,7 @@ pub fn dispatch_tool(
                 Ok(v) => v,
                 Err(e) => return deserialize_err(e.to_string().as_str()),
             };
-            execute_forget(&input)
+            execute_forget(&input, db)
         }
         "read" => {
             let input: ReadToolInput = match serde_json::from_value(arguments.clone()) {
@@ -481,11 +483,23 @@ fn truncate_bytes(data: &mut Vec<u8>) -> bool {
 
 // ── Todo tools ──
 
-pub fn execute_todo_write(input: &TodoWriteInput) -> ToolOutput {
+pub fn execute_todo_write(input: &TodoWriteInput, db: &Database) -> ToolOutput {
+    for item in &input.items {
+        if let Err(e) = db.insert_todo(item) {
+            return ToolOutput::Error(format!("todo_write persistence failed: {}", e));
+        }
+    }
     ToolOutput::TodoWrite(input.items.clone())
 }
 
-pub fn execute_todo_update(input: &TodoUpdateInput) -> ToolOutput {
+pub fn execute_todo_update(input: &TodoUpdateInput, db: &Database) -> ToolOutput {
+    for update in &input.updates {
+        if let Err(e) =
+            db.update_todo_status(&update.id, update.new_status, update.context_update.as_deref())
+        {
+            return ToolOutput::Error(format!("todo_update persistence failed: {}", e));
+        }
+    }
     ToolOutput::TodoUpdate(input.updates.clone())
 }
 
@@ -511,8 +525,23 @@ pub fn execute_remember(input: &RememberInput) -> ToolOutput {
     })
 }
 
-pub fn execute_forget(_input: &ForgetInput) -> ToolOutput {
-    ToolOutput::Forget(true)
+pub fn execute_forget(input: &ForgetInput, db: &Database) -> ToolOutput {
+    let id_bytes = match hex::decode(&input.id) {
+        Ok(b) => b,
+        Err(e) => return ToolOutput::Error(format!("invalid forget id (must be hex): {}", e)),
+    };
+    if id_bytes.len() != 32 {
+        return ToolOutput::Error(format!(
+            "forget id must be 32 bytes (64 hex chars), got {} bytes",
+            id_bytes.len()
+        ));
+    }
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&id_bytes);
+    match db.forget_knowledge(&hash) {
+        Ok(found) => ToolOutput::Forget(found),
+        Err(e) => ToolOutput::Error(format!("forget failed: {}", e)),
+    }
 }
 
 // ── File tools ──

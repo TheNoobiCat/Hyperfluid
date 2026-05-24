@@ -159,12 +159,20 @@ impl StateMachine {
     }
 
     /// Bootstrap accounts from genesis configuration.
+    /// Panics if the account ID already exists (duplicate genesis entry).
     pub fn init_account(&mut self, account: Account) {
+        if self.accounts.contains_key(&account.account_id) {
+            panic!("duplicate genesis account: {:?}", hex::encode(account.account_id));
+        }
         self.accounts.insert(account.account_id, account);
     }
 
     /// Bootstrap a validator from genesis configuration.
+    /// Panics if the validator ID already exists (duplicate genesis entry).
     pub fn init_validator(&mut self, validator_id: Hash32, self_bond: u128, bonding_height: u64) {
+        if self.validators.contains_key(&validator_id) {
+            panic!("duplicate genesis validator: {:?}", hex::encode(validator_id));
+        }
         self.validators.insert(
             validator_id,
             ValidatorTracker {
@@ -186,6 +194,21 @@ impl StateMachine {
     /// Get a reference to an account.
     pub fn get_account(&self, account_id: &Hash32) -> Option<&Account> {
         self.accounts.get(account_id)
+    }
+
+    /// Deduct `amount` from an account's balance (for fee burning).
+    /// Returns `true` if the account exists and had sufficient balance.
+    pub fn deduct_balance(&mut self, account_id: &Hash32, amount: u128) -> bool {
+        if let Some(account) = self.accounts.get_mut(account_id) {
+            if account.balance >= amount {
+                account.balance = account.balance.saturating_sub(amount);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 
     /// Execute a transfer from sender to recipient.
@@ -252,6 +275,8 @@ impl StateMachine {
 
     /// Mark an action plan as consumed for replay protection.
     /// Returns Rejected if the plan_id was already consumed. (spec 2.7 hook 4)
+    /// Staged for PDP integration.
+    #[allow(dead_code)]
     pub fn consume_plan_id(&mut self, plan_id: Hash32, _ctx: ExecutionContext) -> ExecutionResult {
         if self.consumed_plans.contains(&plan_id) {
             return ExecutionResult::Rejected;
@@ -1170,6 +1195,8 @@ impl StateMachine {
 
     /// Consume a freshness nonce for artifact replay prevention.
     /// Returns Rejected if nonce already consumed (replay detected).
+    /// Staged for artifact replay protection.
+    #[allow(dead_code)]
     pub fn consume_freshness_nonce(
         &mut self,
         task_id: Hash32,
@@ -1384,6 +1411,22 @@ impl StateMachine {
             tree.insert(key, vec![1u8]);
         }
 
+        for (work_task_id, records) in &self.review_records {
+            let key = state_key(KeyPrefix::ReviewRecord, work_task_id);
+            let value = records.encode();
+            tree.insert(key, value);
+        }
+
+        for (review_task_id, work_task_id) in &self.review_task_map {
+            let key = state_key(KeyPrefix::ReviewTaskMap, review_task_id);
+            tree.insert(key, work_task_id.to_vec());
+        }
+
+        {
+            let key = state_key(KeyPrefix::FeeBurnAccumulator, &[0u8; 32]);
+            tree.insert(key, self.fee_burn_accumulator.to_le_bytes().to_vec());
+        }
+
         tree.root()
     }
 
@@ -1422,6 +1465,16 @@ impl StateMachine {
     /// Iterate over all validators.
     pub fn validators_iter(&self) -> impl Iterator<Item = (&Hash32, &ValidatorTracker)> {
         self.validators.iter()
+    }
+
+    /// Iterate over all review records (work_task_id -> Vec<ReviewRecord>).
+    pub fn review_records_iter(&self) -> impl Iterator<Item = (&Hash32, &Vec<ReviewRecord>)> {
+        self.review_records.iter()
+    }
+
+    /// Iterate over all review task map entries (review_task_id -> work_task_id).
+    pub fn review_task_map_iter(&self) -> impl Iterator<Item = (&Hash32, &Hash32)> {
+        self.review_task_map.iter()
     }
 
     pub fn delegations_count(&self) -> usize {
@@ -1474,6 +1527,26 @@ impl StateMachine {
 
         // Add to total burned counter
         self.fee_burn_accumulator = self.fee_burn_accumulator.saturating_add(slash_amount);
+
+        // Slash delegations proportionally (10%)
+        let delegator_ids: Vec<Hash32> = self
+            .delegations
+            .iter()
+            .filter(|((_, vid), _)| *vid == validator_id)
+            .map(|((did, _), _)| *did)
+            .collect();
+        let mut total_slashed_delegations: u128 = 0;
+        for delegator_id in &delegator_ids {
+            if let Some(del) = self.delegations.get_mut(&(*delegator_id, validator_id)) {
+                let delegation_slash = del.amount / 10;
+                del.amount = del.amount.saturating_sub(delegation_slash);
+                total_slashed_delegations =
+                    total_slashed_delegations.saturating_add(delegation_slash);
+            }
+        }
+        if let Some(vt) = self.validators.get_mut(&validator_id) {
+            vt.total_delegated = vt.total_delegated.saturating_sub(total_slashed_delegations);
+        }
 
         ExecutionResult::Success
     }
@@ -1535,6 +1608,26 @@ impl StateMachine {
         }
 
         self.fee_burn_accumulator = self.fee_burn_accumulator.saturating_add(slash_amount);
+
+        // Slash delegations proportionally using the same slash_basis_points
+        let delegator_ids: Vec<Hash32> = self
+            .delegations
+            .iter()
+            .filter(|((_, vid), _)| *vid == validator_id)
+            .map(|((did, _), _)| *did)
+            .collect();
+        let mut total_slashed_delegations: u128 = 0;
+        for delegator_id in &delegator_ids {
+            if let Some(del) = self.delegations.get_mut(&(*delegator_id, validator_id)) {
+                let delegation_slash = (del.amount * slash_basis_points as u128) / 10000;
+                del.amount = del.amount.saturating_sub(delegation_slash);
+                total_slashed_delegations =
+                    total_slashed_delegations.saturating_add(delegation_slash);
+            }
+        }
+        if let Some(vt) = self.validators.get_mut(&validator_id) {
+            vt.total_delegated = vt.total_delegated.saturating_sub(total_slashed_delegations);
+        }
 
         ExecutionResult::Success
     }
@@ -1759,7 +1852,7 @@ mod tests {
         );
         assert_eq!(r1, ExecutionResult::Success);
 
-        sm.init_account(test_account(1, 2000, 1));
+        // Second attempt with same task_id is rejected (task already exists)
         let r2 = sm.execute_task_create(
             [1u8; 32],
             100,

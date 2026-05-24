@@ -264,8 +264,11 @@ impl FastPathEngine {
             .find(|c| c.proposal_id == rollback.proposal_id)
             .ok_or(FastPathError::CertificateNotFound)?;
 
-        let proposal =
-            self.proposals.iter_mut().find(|p| p.proposal_id == rollback.proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .iter_mut()
+            .find(|p| p.proposal_id == rollback.proposal_id)
+            .ok_or(FastPathError::ProposalNotFound)?;
 
         if rollback.topic_id != cert.topic_id {
             return Err(FastPathError::TopicMismatch);
@@ -326,6 +329,9 @@ impl FastPathEngine {
     }
 }
 
+/// Compute a proposal ID from its content.
+/// Staged for client-side ID derivation.
+#[allow(dead_code)]
 pub fn compute_proposal_id(
     topic_id: &Hash32,
     proposer_id: &Hash32,

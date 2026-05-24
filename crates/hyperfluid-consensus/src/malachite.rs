@@ -425,7 +425,18 @@ impl Context for HyperfluidContext {
     ) -> &'a Self::Validator {
         let count = validator_set.count();
         if count == 0 {
-            panic!("select_proposer called on empty validator set (bug: no validators in set)");
+            tracing::error!(
+                "select_proposer called on empty validator set — no validators available"
+            );
+            // Return a reference to a static fallback validator to avoid panic.
+            // This is a safe guard: an empty set should never reach this point in
+            // production; the call site must ensure at least one active validator.
+            static FALLBACK: HyperfluidValidator = HyperfluidValidator {
+                addr: Address32::new([0u8; 32]),
+                pubkey: MlDsa65PublicKey(Vec::new()),
+                voting_power: 0u64,
+            };
+            return &FALLBACK;
         }
 
         use sha3::{Digest, Sha3_256};
