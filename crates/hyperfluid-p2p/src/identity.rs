@@ -40,6 +40,7 @@ impl Identity {
     /// Used to load a persisted identity from a keystore. The seed is the
     /// raw private key material — it must be kept secret and never derived
     /// from public data like PeerIds.
+    #[allow(dead_code)]
     pub fn from_seed(seed_bytes: &[u8; 32]) -> Self {
         let seed = Seed::try_from(seed_bytes.as_slice()).expect("seed must be 32 bytes");
         let signing_key = SigningKey::<MlDsa65>::from_seed(&seed);
@@ -55,12 +56,14 @@ impl Identity {
 
     /// Sign a message with ML-DSA-65 (randomized).
     #[must_use]
+    #[allow(dead_code)]
     pub fn sign(&self, message: &[u8]) -> Vec<u8> {
         self.signing_key.sign(message).to_vec()
     }
 
     /// Verify a signature against this identity's public key.
     #[must_use]
+    #[allow(dead_code)]
     pub fn verify(&self, message: &[u8], signature_bytes: &[u8]) -> bool {
         let sig = match Signature::<MlDsa65>::try_from(signature_bytes) {
             Ok(s) => s,
@@ -71,6 +74,7 @@ impl Identity {
 
     /// Verify a signature given a raw verifying key encoding.
     #[must_use]
+    #[allow(dead_code)]
     pub fn verify_with_pubkey(
         pubkey_encoded: &[u8],
         message: &[u8],
@@ -90,11 +94,13 @@ impl Identity {
     }
 
     /// Encoded verifying key bytes (ML-DSA-65, 1952 bytes).
+    #[allow(dead_code)]
     pub fn verifying_key_encoded(&self) -> Vec<u8> {
         self.verifying_key.encode().as_slice().to_vec()
     }
 
     /// The signing key seed (32 bytes).
+    #[allow(dead_code)]
     pub fn to_seed(&self) -> [u8; 32] {
         let seed = self.signing_key.to_seed();
         let mut out = [0u8; 32];

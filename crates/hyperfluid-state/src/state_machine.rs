@@ -229,7 +229,7 @@ impl StateMachine {
         // Sender nonce enforcement (spec 2.7 hook 3)
         let sender_nonce = self.accounts.get(&sender_id).map(|a| a.nonce).unwrap_or(0);
 
-        if nonce != sender_nonce + 1 {
+        if nonce != sender_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -242,7 +242,7 @@ impl StateMachine {
 
         // Debit sender
         if let Some(sender) = self.accounts.get_mut(&sender_id) {
-            sender.balance -= amount;
+            sender.balance = sender.balance.saturating_sub(amount);
             sender.nonce = nonce;
             // First-spend: reveal pubkey (spec 2.7 hook 5)
             if sender.pubkey.is_none() {
@@ -261,14 +261,17 @@ impl StateMachine {
         }
 
         // Credit recipient (auto-create if needed, per spec 2.4)
-        let recipient = self.accounts.entry(recipient_id).or_insert_with(|| Account {
-            account_id: recipient_id,
-            balance: 0,
-            nonce: 0,
-            pubkey_hash: [0u8; 32],
-            pubkey: None,
-        });
-        recipient.balance = recipient.balance.saturating_add(amount);
+        // Guard: only auto-create if amount > 0 to prevent state trie bloat
+        if amount > 0 {
+            let recipient = self.accounts.entry(recipient_id).or_insert_with(|| Account {
+                account_id: recipient_id,
+                balance: 0,
+                nonce: 0,
+                pubkey_hash: [0u8; 32],
+                pubkey: None,
+            });
+            recipient.balance = recipient.balance.saturating_add(amount);
+        }
 
         ExecutionResult::Success
     }
@@ -309,7 +312,7 @@ impl StateMachine {
         }
 
         let creator_nonce = self.accounts.get(&creator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != creator_nonce + 1 {
+        if nonce != creator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -321,7 +324,7 @@ impl StateMachine {
 
         match self.accounts.get_mut(&creator_id) {
             Some(creator) => {
-                creator.balance -= total_cost;
+                creator.balance = creator.balance.saturating_sub(total_cost);
                 creator.nonce = nonce;
             }
             None => return ExecutionResult::Rejected,
@@ -366,6 +369,7 @@ impl StateMachine {
         parent_task_id: Hash32,
         caller_id: Hash32,
         children: Vec<SplitChildSpec>,
+        nonce: u64,
         current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
@@ -386,6 +390,12 @@ impl StateMachine {
         };
 
         if children.is_empty() {
+            return ExecutionResult::Rejected;
+        }
+
+        // Nonce enforcement for caller
+        let caller_nonce = self.accounts.get(&caller_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != caller_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -411,6 +421,11 @@ impl StateMachine {
 
         // 5. Atomic execution: create children, mark parent Decomposed
         let parent_bounty = parent.bounty_agx;
+
+        // Update caller nonce
+        if let Some(caller) = self.accounts.get_mut(&caller_id) {
+            caller.nonce = nonce;
+        }
         let parent_metadata = parent.metadata_hash;
         let parent_seed = parent.seed_ref;
         let parent_topic = parent.topic_id;
@@ -420,7 +435,9 @@ impl StateMachine {
         let _ = parent;
 
         for child in &children {
-            let child_bounty = (parent_bounty * child.bounty_share_pct as u128) / 100u128;
+            let child_bounty =
+                parent_bounty.saturating_mul(child.bounty_share_pct as u128)
+                    / 100u128;
             let child_task = Task {
                 task_id: child.task_id,
                 topic_id: parent_topic,
@@ -466,6 +483,9 @@ impl StateMachine {
         if amount < min_delegation {
             return ExecutionResult::Rejected;
         }
+        if amount == 0 {
+            return ExecutionResult::Rejected;
+        }
         if delegator_id == validator_id {
             return ExecutionResult::Rejected;
         }
@@ -474,7 +494,7 @@ impl StateMachine {
         }
 
         let delegator_nonce = self.accounts.get(&delegator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != delegator_nonce + 1 {
+        if nonce != delegator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -484,7 +504,7 @@ impl StateMachine {
         }
 
         if let Some(delegator) = self.accounts.get_mut(&delegator_id) {
-            delegator.balance -= amount;
+            delegator.balance = delegator.balance.saturating_sub(amount);
             delegator.nonce = nonce;
         } else {
             return ExecutionResult::Rejected;
@@ -513,7 +533,7 @@ impl StateMachine {
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let delegator_nonce = self.accounts.get(&delegator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != delegator_nonce + 1 {
+        if nonce != delegator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -557,7 +577,7 @@ impl StateMachine {
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let delegator_nonce = self.accounts.get(&delegator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != delegator_nonce + 1 {
+        if nonce != delegator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -600,7 +620,7 @@ impl StateMachine {
         }
 
         let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != validator_nonce + 1 {
+        if nonce != validator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -637,7 +657,7 @@ impl StateMachine {
         }
 
         let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != validator_nonce + 1 {
+        if nonce != validator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -647,7 +667,7 @@ impl StateMachine {
         }
 
         if let Some(validator) = self.accounts.get_mut(&validator_id) {
-            validator.balance -= amount;
+            validator.balance = validator.balance.saturating_sub(amount);
             validator.nonce = nonce;
         } else {
             return ExecutionResult::Rejected;
@@ -684,7 +704,7 @@ impl StateMachine {
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != validator_nonce + 1 {
+        if nonce != validator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -723,7 +743,7 @@ impl StateMachine {
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != validator_nonce + 1 {
+        if nonce != validator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -766,7 +786,7 @@ impl StateMachine {
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let validator_nonce = self.accounts.get(&validator_id).map(|a| a.nonce).unwrap_or(0);
-        if nonce != validator_nonce + 1 {
+        if nonce != validator_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -804,6 +824,7 @@ impl StateMachine {
         task_id: Hash32,
         agent_id: Hash32,
         collateral: u128,
+        nonce: u64,
         current_height: u64,
         trust_stage: TrustStageEnum,
         _ctx: ExecutionContext,
@@ -842,9 +863,20 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
 
+        // Nonce enforcement for agent
+        let agent_nonce = self.accounts.get(&agent_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != agent_nonce.saturating_add(1) {
+            return ExecutionResult::Rejected;
+        }
+
         task.status = TaskStatus::Claimed;
         task.primary_owner = agent_id;
         task.lease_expires_height = current_height + 120;
+
+        // Update agent nonce
+        if let Some(agent) = self.accounts.get_mut(&agent_id) {
+            agent.nonce = nonce;
+        }
 
         let lease_id = crate::sha3_256(
             &[task_id.as_slice(), agent_id.as_slice(), &current_height.to_le_bytes()].concat(),
@@ -868,6 +900,7 @@ impl StateMachine {
     pub fn execute_heartbeat(
         &mut self,
         heartbeat: HeartbeatPayload,
+        nonce: u64,
         current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
@@ -875,6 +908,12 @@ impl StateMachine {
             Some(l) => l,
             None => return ExecutionResult::Rejected,
         };
+
+        // Nonce enforcement for lease owner
+        let owner_nonce = self.accounts.get(&lease.owner_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != owner_nonce.saturating_add(1) {
+            return ExecutionResult::Rejected;
+        }
 
         if heartbeat.artifact_hash.is_none()
             && heartbeat.diff_pointer.is_none()
@@ -886,6 +925,11 @@ impl StateMachine {
         lease.last_heartbeat_height = current_height;
         lease.heartbeats_received += 1;
         lease.expires_at_height = current_height.saturating_add(120);
+
+        // Update owner nonce
+        if let Some(owner) = self.accounts.get_mut(&lease.owner_id) {
+            owner.nonce = nonce;
+        }
 
         if let Some(task) = self.tasks.get_mut(&lease.task_id) {
             task.lease_expires_height = lease.expires_at_height;
@@ -902,6 +946,7 @@ impl StateMachine {
         &mut self,
         task_id: Hash32,
         agent_id: Hash32,
+        nonce: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
         let task = match self.tasks.get_mut(&task_id) {
@@ -909,6 +954,12 @@ impl StateMachine {
             _ => return ExecutionResult::Rejected,
         };
         if !matches!(task.status, TaskStatus::Claimed | TaskStatus::InProgress) {
+            return ExecutionResult::Rejected;
+        }
+
+        // Nonce enforcement for agent
+        let agent_nonce = self.accounts.get(&agent_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != agent_nonce.saturating_add(1) {
             return ExecutionResult::Rejected;
         }
 
@@ -920,6 +971,12 @@ impl StateMachine {
 
         task.primary_owner = [0u8; 32];
         task.status = TaskStatus::Open;
+
+        // Update agent nonce
+        if let Some(agent) = self.accounts.get_mut(&agent_id) {
+            agent.nonce = nonce;
+        }
+
         ExecutionResult::Success
     }
 
@@ -931,6 +988,7 @@ impl StateMachine {
         &mut self,
         task_id: Hash32,
         agent_id: Hash32,
+        nonce: u64,
         current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
@@ -940,6 +998,17 @@ impl StateMachine {
         };
         if !matches!(task.status, TaskStatus::InProgress) {
             return ExecutionResult::Rejected;
+        }
+
+        // Nonce enforcement for agent
+        let agent_nonce = self.accounts.get(&agent_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != agent_nonce.saturating_add(1) {
+            return ExecutionResult::Rejected;
+        }
+
+        // Update agent nonce
+        if let Some(agent) = self.accounts.get_mut(&agent_id) {
+            agent.nonce = nonce;
         }
 
         // Extract needed data before creating review tasks
@@ -999,6 +1068,7 @@ impl StateMachine {
         reviewer_id: Hash32,
         verdict: ReviewVerdict,
         evidence_hash: Hash32,
+        nonce: u64,
         current_height: u64,
         _ctx: ExecutionContext,
     ) -> ExecutionResult {
@@ -1006,6 +1076,12 @@ impl StateMachine {
             Some(id) => id,
             None => return ExecutionResult::Rejected,
         };
+
+        // Nonce enforcement for reviewer
+        let reviewer_nonce = self.accounts.get(&reviewer_id).map(|a| a.nonce).unwrap_or(0);
+        if nonce != reviewer_nonce.saturating_add(1) {
+            return ExecutionResult::Rejected;
+        }
 
         // Reviewer must be the primary owner of the review task
         let _review_task = match self.tasks.get(&review_task_id) {
@@ -1029,6 +1105,12 @@ impl StateMachine {
 
         // Store verdict
         self.review_records.entry(work_task_id).or_default().push(record);
+
+        // Update reviewer nonce
+        if let Some(reviewer) = self.accounts.get_mut(&reviewer_id) {
+            reviewer.nonce = nonce;
+        }
+
         // Mark review task done
         if let Some(rt) = self.tasks.get_mut(&review_task_id) {
             rt.status = TaskStatus::Done;
@@ -1062,8 +1144,9 @@ impl StateMachine {
 
         if let Some(task) = self.tasks.get_mut(&work_task_id) {
             let total_bounty = task.bounty_agx;
-            let review_pool = total_bounty * 10 / 100; // 10% for reviewers
-            let per_reviewer = review_pool / verdicts.len() as u128;
+            let review_pool = total_bounty.saturating_mul(10) / 100; // 10% for reviewers
+            let per_reviewer =
+                if verdicts.is_empty() { 0 } else { review_pool / verdicts.len() as u128 };
 
             if accepted {
                 // Worker gets 90%
@@ -1242,6 +1325,10 @@ impl StateMachine {
 
     /// Run trust promotion at epoch boundary.
     /// Promotes untrusted agents with >= 10 accepted work and 0 abuse flags.
+    ///
+    /// Determinism: All operations are commutative — iteration order over the
+    /// HashMap does not affect final state. If future logic adds order-dependent
+    /// behaviour, keys MUST be sorted before iteration.
     pub fn run_trust_promotion(&mut self) -> Vec<Hash32> {
         let to_promote: Vec<Hash32> = self
             .trust_stages
@@ -1290,6 +1377,10 @@ impl StateMachine {
     }
 
     /// Run topic decay at epoch boundary.
+    ///
+    /// Determinism: All operations are commutative — iteration order over the
+    /// HashMap does not affect final state. If future logic adds order-dependent
+    /// behaviour, keys MUST be sorted before iteration.
     pub fn run_topic_decay(&mut self, current_height: u64) {
         let decay_rate: u64 = 1000;
         for topic in self.topic_records.values_mut() {
@@ -1636,6 +1727,10 @@ impl StateMachine {
     /// self-bonded stake. Active validators receive rebates from the fee pool.
     ///
     /// Fee pool is consumed (set to zero) after distribution.
+    ///
+    /// Determinism: All operations are commutative — iteration order over the
+    /// HashMap does not affect final state. If future logic adds order-dependent
+    /// behaviour, keys MUST be sorted before iteration.
     pub fn execute_distribute_rewards(&mut self, epoch_fee_pool: &mut u128) -> ExecutionResult {
         if *epoch_fee_pool == 0 {
             return ExecutionResult::Success;
@@ -1934,6 +2029,7 @@ mod tests {
             task_id,
             agent_id,
             min_collateral,
+            1,
             100,
             TrustStageEnum::Trusted,
             ctx(100),
@@ -1974,8 +2070,8 @@ mod tests {
             task_id,
             1,
             [0xBBu8; 32],
-            [0u8; 32],
-            [0u8; 32],
+            [0xCCu8; 32],
+            [0xDDu8; 32],
             [0u8; 32],
             [0u8; 32],
             [0u8; 32],
@@ -1988,6 +2084,7 @@ mod tests {
             task_id,
             agent_id,
             min_collateral,
+            1,
             100,
             TrustStageEnum::Trusted,
             ctx(100),
@@ -2041,6 +2138,7 @@ mod tests {
             task_id,
             agent_id,
             min_collateral,
+            1,
             100,
             TrustStageEnum::Trusted,
             ctx(100),

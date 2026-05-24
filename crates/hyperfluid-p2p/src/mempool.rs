@@ -158,7 +158,7 @@ impl Mempool {
     /// Source: p2p-wire-spec.md Section 2.4 step 5.
     pub fn select_for_block(&mut self, max_count: usize) -> Vec<MempoolTx> {
         let mut temp: Vec<FeeOrdered> = self.txs.drain().collect();
-        temp.sort_by_key(|b| std::cmp::Reverse(b.1));
+        temp.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.tx_hash.cmp(&b.0.tx_hash)));
 
         let selected: Vec<FeeOrdered> = temp.drain(0..max_count.min(temp.len())).collect();
         let remaining: Vec<FeeOrdered> = temp;
@@ -179,7 +179,7 @@ impl Mempool {
     /// Evict the globally lowest-fee transaction regardless of type.
     fn evict_lowest(&mut self) {
         let mut temp: Vec<FeeOrdered> = self.txs.drain().collect();
-        temp.sort_by_key(|b| std::cmp::Reverse(b.1));
+        temp.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.tx_hash.cmp(&b.0.tx_hash)));
         if let Some(evicted) = temp.pop() {
             self.tx_hashes.remove(&evicted.0.tx_hash);
             let sender = evicted.0.sender_id;

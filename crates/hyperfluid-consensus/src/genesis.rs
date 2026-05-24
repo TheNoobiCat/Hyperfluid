@@ -31,7 +31,9 @@ pub struct GenesisValidator {
 /// format; the testnet scaffold uses the exact same structure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenesisConfig {
-    // TODO: should be Hash32 for deterministic encoding; currently String for ergonomic config parsing
+    // NOTE: chain_id is String for ergonomic config parsing (TOML, JSON).
+    // It is not committed to the state root. If ever needed for consensus,
+    // change to Hash32 with SCALE encoding.
     pub chain_id: String,
     pub timestamp: u64,
     pub epoch_length: u64,

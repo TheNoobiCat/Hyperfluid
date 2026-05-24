@@ -33,7 +33,10 @@ use crate::types::{
     TransactionEnvelope, TxType,
 };
 use hyperfluid_fastpath::lifecycle::FastPathEngine;
-use hyperfluid_fastpath::types::{FastPathChallengeTx, FastPathParams, FastPathProposal};
+use hyperfluid_fastpath::types::{
+    FastPathChallengeTx, FastPathParams, FastPathProposal, FastPathRollbackTx, ReviewerSignature,
+    ReviewerVote,
+};
 use hyperfluid_governance::proposal::GovernanceEngine;
 use hyperfluid_governance::types::{GovernanceParams, GovernanceVote, VoteOption};
 use hyperfluid_pdp::rule_chain;
@@ -125,6 +128,7 @@ struct ClaimTaskPayload {
     agent_id: Hash32,
     collateral: u128,
     trust_stage_flag: bool, // false = Untrusted, true = Trusted
+    nonce: u64,
 }
 
 /// Payload format for HeartbeatTx transactions.
@@ -135,6 +139,7 @@ struct HeartbeatTxPayload {
     diff_pointer: Option<Hash32>,
     test_result_ref: Option<Hash32>,
     signature: Vec<u8>,
+    nonce: u64,
 }
 
 /// Payload format for ReleaseTaskTx transactions.
@@ -142,6 +147,7 @@ struct HeartbeatTxPayload {
 struct ReleaseTaskPayload {
     task_id: Hash32,
     agent_id: Hash32,
+    nonce: u64,
 }
 
 /// Payload format for SubmitTaskTx transactions.
@@ -149,6 +155,7 @@ struct ReleaseTaskPayload {
 struct SubmitTaskPayload {
     task_id: Hash32,
     agent_id: Hash32,
+    nonce: u64,
 }
 
 /// Payload format for SplitTaskTx transactions.
@@ -158,6 +165,7 @@ struct SplitTaskPayload {
     parent_task_id: Hash32,
     caller_id: Hash32,
     children: Vec<SplitChildPayload>,
+    nonce: u64,
 }
 
 #[derive(Encode, Decode)]
@@ -184,6 +192,7 @@ struct SubmitReviewPayload {
     reviewer_id: Hash32,
     verdict_accept: bool, // true = Accept, false = Reject
     evidence_hash: Hash32,
+    nonce: u64,
 }
 
 /// Payload format for EvidenceTx transactions.
@@ -548,6 +557,28 @@ impl ConsensusDriver {
                     );
                 }
             }
+
+            // Finalize fast-path certificates that have passed the challenge window
+            for fpid in self.fastpath.proposal_ids() {
+                if self.fastpath.get_certificate(&fpid).is_some() {
+                    match self.fastpath.finalize_certificate(fpid, new_height) {
+                        Ok(new_head) => {
+                            tracing::info!(
+                                "Fast-path certificate finalized: proposal={:?} new_head={:?}",
+                                hex::encode(fpid),
+                                hex::encode(new_head),
+                            );
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Fast-path certificate not finalized for proposal {:?}: {:?}",
+                                hex::encode(fpid),
+                                e,
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         // 3. Compute SMT root from post-execution state
@@ -675,6 +706,18 @@ impl ConsensusDriver {
                                 hex::encode(payload.proposer_id),
                                 e,
                             );
+                            // Mark the proposal as invalid if it was stored before the error
+                            if let Err(mark_err) = self.governance.mark_invalid(
+                                payload.proposal_id,
+                                ctx.height,
+                                self.epoch_length,
+                            ) {
+                                tracing::debug!(
+                                    "mark_invalid skipped for proposal {}: {:?}",
+                                    hex::encode(payload.proposal_id),
+                                    mark_err,
+                                );
+                            }
                             ExecutionResult::Rejected
                         }
                     }
@@ -740,6 +783,26 @@ impl ConsensusDriver {
                                     hex::encode(payload.proposal_id),
                                     hex::encode(payload.proposer_id),
                                 );
+                                // Rollback the challenged proposal
+                                let rollback_to_head = self
+                                    .fastpath
+                                    .get_proposal(&payload.proposal_id)
+                                    .map(|p| p.base_topic_head)
+                                    .unwrap_or([0u8; 32]);
+                                let rollback_tx = FastPathRollbackTx {
+                                    proposal_id: payload.proposal_id,
+                                    topic_id: payload.topic_id,
+                                    rollback_to_head,
+                                    arbiter_certificate: vec![],
+                                    signature: vec![],
+                                };
+                                if let Err(e) = self.fastpath.rollback(rollback_tx) {
+                                    tracing::warn!(
+                                        "Fast-path rollback failed for proposal {}: {:?}",
+                                        hex::encode(payload.proposal_id),
+                                        e,
+                                    );
+                                }
                                 ExecutionResult::Success
                             }
                             Err(e) => {
@@ -769,6 +832,26 @@ impl ConsensusDriver {
                                     hex::encode(payload.proposal_id),
                                     hex::encode(payload.topic_id),
                                 );
+                                // Auto-issue a certificate with proposer as first approver
+                                let self_approval = ReviewerSignature {
+                                    reviewer_id: payload.proposer_id,
+                                    vote: ReviewerVote::Approve,
+                                    reason_hash: [0u8; 32],
+                                    signature: vec![],
+                                };
+                                if let Err(e) = self.fastpath.issue_certificate(
+                                    payload.proposal_id,
+                                    vec![self_approval],
+                                    [0u8; 32], // signer_set_hash placeholder
+                                    ctx.height,
+                                    1, // topic_snapshot_weight = 1 → quorum = 1
+                                ) {
+                                    tracing::warn!(
+                                        "Fast-path certificate issuance deferred for proposal {}: {:?}",
+                                        hex::encode(payload.proposal_id),
+                                        e,
+                                    );
+                                }
                                 ExecutionResult::Success
                             }
                             Err(e) => {
@@ -898,6 +981,7 @@ impl ConsensusDriver {
                         payload.task_id,
                         payload.agent_id,
                         payload.collateral,
+                        payload.nonce,
                         ctx.height,
                         trust_stage,
                         ctx,
@@ -915,14 +999,19 @@ impl ConsensusDriver {
                         test_result_ref: payload.test_result_ref,
                         signature: payload.signature,
                     };
-                    self.state_machine.execute_heartbeat(heartbeat, ctx.height, ctx)
+                    self.state_machine.execute_heartbeat(heartbeat, payload.nonce, ctx.height, ctx)
                 } else {
                     ExecutionResult::Rejected
                 }
             }
             TxType::ReleaseTaskTx => {
                 if let Ok(payload) = ReleaseTaskPayload::decode(&mut &tx.tx_payload[..]) {
-                    self.state_machine.execute_release_task(payload.task_id, payload.agent_id, ctx)
+                    self.state_machine.execute_release_task(
+                        payload.task_id,
+                        payload.agent_id,
+                        payload.nonce,
+                        ctx,
+                    )
                 } else {
                     ExecutionResult::Rejected
                 }
@@ -932,6 +1021,7 @@ impl ConsensusDriver {
                     self.state_machine.execute_submit_completion(
                         payload.task_id,
                         payload.agent_id,
+                        payload.nonce,
                         ctx.height,
                         ctx,
                     )
@@ -951,6 +1041,7 @@ impl ConsensusDriver {
                         payload.reviewer_id,
                         verdict,
                         payload.evidence_hash,
+                        payload.nonce,
                         ctx.height,
                         ctx,
                     )
@@ -974,6 +1065,7 @@ impl ConsensusDriver {
                         payload.parent_task_id,
                         payload.caller_id,
                         children,
+                        payload.nonce,
                         ctx.height,
                         ctx,
                     )

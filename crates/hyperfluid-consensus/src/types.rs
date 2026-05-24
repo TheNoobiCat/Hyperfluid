@@ -18,7 +18,7 @@ fn hash_bytes(data: &[u8]) -> Hash32 {
 }
 
 /// Epoch committee. Source: consensus-spec.md Section 1.3
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Committee {
     pub epoch: u64,
     pub seed: Hash32,

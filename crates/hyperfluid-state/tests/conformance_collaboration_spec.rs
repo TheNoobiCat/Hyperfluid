@@ -51,11 +51,12 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
     let task = sm.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
     assert_eq!(task.status, TaskStatus::Open);
 
-    // Claimed
+    // Claimed (agent nonce after task_create: 0→1, so claim nonce = 2)
     let r = sm.execute_claim_task(
         task_id,
         agent,
         MIN_COLLATERAL,
+        2,
         20,
         TrustStageEnum::Untrusted,
         ctx(20),
@@ -64,7 +65,7 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
     let task = sm.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
     assert_eq!(task.status, TaskStatus::Claimed);
 
-    // InProgress via valid heartbeat
+    // InProgress via valid heartbeat (agent nonce after claim: 1→2, so heartbeat nonce = 3)
     let lease = sm.leases_iter().next().expect("lease must exist");
     let hb = HeartbeatPayload {
         lease_id: lease.lease_id,
@@ -73,13 +74,13 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    let r = sm.execute_heartbeat(hb, 30, ctx(30));
+    let r = sm.execute_heartbeat(hb, 3, 30, ctx(30));
     assert_eq!(r, ExecutionResult::Success);
     let task = sm.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
     assert_eq!(task.status, TaskStatus::InProgress);
 
-    // InReview via submit completion
-    let r = sm.execute_submit_completion(task_id, agent, 40, ctx(40));
+    // InReview via submit completion (agent nonce after heartbeat: 2→3, so completion nonce = 4)
+    let r = sm.execute_submit_completion(task_id, agent, 4, 40, ctx(40));
     assert_eq!(r, ExecutionResult::Success);
     let task = sm.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
     assert_eq!(task.status, TaskStatus::InReview);
@@ -102,7 +103,15 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
         10,
         ctx(10),
     );
-    sm2.execute_claim_task(task_id, agent, MIN_COLLATERAL, 20, TrustStageEnum::Untrusted, ctx(20));
+    sm2.execute_claim_task(
+        task_id,
+        agent,
+        MIN_COLLATERAL,
+        2,
+        20,
+        TrustStageEnum::Untrusted,
+        ctx(20),
+    );
     let l2 = sm2.leases_iter().next().expect("lease must exist");
     let hb2 = HeartbeatPayload {
         lease_id: l2.lease_id,
@@ -111,8 +120,8 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    sm2.execute_heartbeat(hb2, 30, ctx(30));
-    sm2.execute_submit_completion(task_id, agent, 40, ctx(40));
+    sm2.execute_heartbeat(hb2, 3, 30, ctx(30));
+    sm2.execute_submit_completion(task_id, agent, 4, 40, ctx(40));
     let t2 = sm2.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
     assert_eq!(t2.status, TaskStatus::InReview);
 }
@@ -232,24 +241,35 @@ fn conforms_to_collaboration_spec_1_7_3_lease_ttl_enforced() {
         10,
         ctx(10),
     );
-    sm.execute_claim_task(task_id, a1, MIN_COLLATERAL, 20, TrustStageEnum::Untrusted, ctx(20));
+    // a1 nonce after task_create: 0→1, so claim nonce = 2
+    sm.execute_claim_task(task_id, a1, MIN_COLLATERAL, 2, 20, TrustStageEnum::Untrusted, ctx(20));
 
     let task = sm.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
     assert_eq!(task.status, TaskStatus::Claimed);
     // Lease expires at height 140 (20 + 120)
     assert_eq!(task.lease_expires_height, 140);
 
-    // At height 30, lease is still active — second agent cannot claim
-    let r =
-        sm.execute_claim_task(task_id, a2, MIN_COLLATERAL, 30, TrustStageEnum::Untrusted, ctx(30));
-    assert_eq!(r, ExecutionResult::Rejected, "active lease must block second claim");
-
-    // At height 200, lease has expired — second agent CAN claim
-    sm.execute_release_task(task_id, a1, ctx(200));
+    // At height 30, lease is still active — second agent cannot claim (a2 nonce=0, so claim nonce = 1)
     let r = sm.execute_claim_task(
         task_id,
         a2,
         MIN_COLLATERAL,
+        1,
+        30,
+        TrustStageEnum::Untrusted,
+        ctx(30),
+    );
+    assert_eq!(r, ExecutionResult::Rejected, "active lease must block second claim");
+
+    // At height 200, lease has expired — second agent CAN claim
+    // a1 nonce after claim: 1→2, so release nonce = 3
+    sm.execute_release_task(task_id, a1, 3, ctx(200));
+    // a2 nonce still 0 (failed claim didn't consume), so claim nonce = 1
+    let r = sm.execute_claim_task(
+        task_id,
+        a2,
+        MIN_COLLATERAL,
+        1,
         200,
         TrustStageEnum::Untrusted,
         ctx(200),
@@ -284,7 +304,16 @@ fn conforms_to_collaboration_spec_1_7_4_empty_heartbeat_rejected() {
         10,
         ctx(10),
     );
-    sm.execute_claim_task(task_id, agent, MIN_COLLATERAL, 20, TrustStageEnum::Untrusted, ctx(20));
+    // agent nonce after task_create: 0→1, so claim nonce = 2
+    sm.execute_claim_task(
+        task_id,
+        agent,
+        MIN_COLLATERAL,
+        2,
+        20,
+        TrustStageEnum::Untrusted,
+        ctx(20),
+    );
 
     let lease = sm.leases_iter().next().expect("lease must exist");
     let hb = HeartbeatPayload {
@@ -294,7 +323,8 @@ fn conforms_to_collaboration_spec_1_7_4_empty_heartbeat_rejected() {
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    let r = sm.execute_heartbeat(hb, 30, ctx(30));
+    // agent nonce after claim: 1→2, so heartbeat nonce = 3 (fails due to empty content, nonce stays 2)
+    let r = sm.execute_heartbeat(hb, 3, 30, ctx(30));
     assert_eq!(r, ExecutionResult::Rejected, "empty heartbeat must be rejected");
 }
 
@@ -321,7 +351,16 @@ fn conforms_to_collaboration_spec_1_7_4_valid_heartbeat_accepted() {
         10,
         ctx(10),
     );
-    sm.execute_claim_task(task_id, agent, MIN_COLLATERAL, 20, TrustStageEnum::Untrusted, ctx(20));
+    // agent nonce after task_create: 0→1, so claim nonce = 2
+    sm.execute_claim_task(
+        task_id,
+        agent,
+        MIN_COLLATERAL,
+        2,
+        20,
+        TrustStageEnum::Untrusted,
+        ctx(20),
+    );
 
     let lease = sm.leases_iter().next().expect("lease must exist");
     let hb = HeartbeatPayload {
@@ -331,7 +370,8 @@ fn conforms_to_collaboration_spec_1_7_4_valid_heartbeat_accepted() {
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    let r = sm.execute_heartbeat(hb, 30, ctx(30));
+    // agent nonce after claim: 1→2, so heartbeat nonce = 3
+    let r = sm.execute_heartbeat(hb, 3, 30, ctx(30));
     assert_eq!(r, ExecutionResult::Success, "heartbeat with evidence must be accepted");
 }
 
@@ -343,6 +383,8 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
     fund_account(&mut sm, agent, 1_000_000_000_000_000_000_000, 0);
 
     // Untrusted: max 2 leases
+    // Nonce tracking: fund_account sets nonce=0. Each iteration consumes 2 nonces
+    // (one for task_create, one for claim). So task_create nonce = 2*i+1, claim nonce = 2*i+2.
     for i in 0..3 {
         let task_id = [0x01 + i as u8; 32];
         sm.execute_task_create(
@@ -350,7 +392,7 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
             100_000_000_000_000_000_000,
             0,
             task_id,
-            (i + 1) as u64,
+            (2 * i + 1) as u64,
             [0xBBu8; 32],
             [0xCCu8; 32],
             [0xDDu8; 32],
@@ -364,6 +406,7 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
             task_id,
             agent,
             MIN_COLLATERAL,
+            (2 * i + 2) as u64,
             (i + 10) as u64,
             TrustStageEnum::Untrusted,
             ctx(10),
@@ -386,7 +429,7 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
             100_000_000_000_000_000_000,
             0,
             task_id,
-            (i + 1) as u64,
+            (2 * i + 1) as u64,
             [0xBBu8; 32],
             [0xCCu8; 32],
             [0xDDu8; 32],
@@ -400,6 +443,7 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
             task_id,
             agent,
             MIN_COLLATERAL,
+            (2 * i + 2) as u64,
             (i + 10) as u64,
             TrustStageEnum::Trusted,
             ctx(10),
@@ -437,19 +481,20 @@ fn conforms_to_collaboration_spec_1_7_6_lease_collateral_requirement() {
         ctx(10),
     );
 
-    // Insufficient collateral → rejected
+    // Insufficient collateral → rejected (agent nonce = 0, so claim nonce = 1)
     let min_collateral = 10_000_000_000_000_000_000u128.max(large_bounty * 5 / 1000);
     let r = sm.execute_claim_task(
         task_id,
         agent,
         min_collateral - 1,
+        1,
         20,
         TrustStageEnum::Untrusted,
         ctx(20),
     );
     assert_eq!(r, ExecutionResult::Rejected, "insufficient collateral must be rejected");
 
-    // Sufficient collateral → accepted
+    // Sufficient collateral → accepted (fresh state machine, agent nonce = 0, so claim nonce = 1)
     let mut sm = StateMachine::new();
     fund_account(&mut sm, agent, 1_000_000_000_000_000_000_000_000, 0);
     sm.execute_task_create(
@@ -467,10 +512,12 @@ fn conforms_to_collaboration_spec_1_7_6_lease_collateral_requirement() {
         10,
         ctx(10),
     );
+    // agent nonce after task_create: 0→1, so claim nonce = 2
     let r = sm.execute_claim_task(
         task_id,
         agent,
         min_collateral,
+        2,
         20,
         TrustStageEnum::Untrusted,
         ctx(20),
@@ -496,10 +543,12 @@ fn conforms_to_collaboration_spec_1_7_6_lease_collateral_requirement() {
         10,
         ctx(10),
     );
+    // agent nonce after task_create: 0→1, so claim nonce = 2
     let r = sm.execute_claim_task(
         task_id2,
         agent,
         9_000_000_000_000_000_000,
+        2,
         20,
         TrustStageEnum::Untrusted,
         ctx(20),
@@ -589,11 +638,18 @@ fn conforms_to_collaboration_spec_1_7_7_claiming_task_no_active_lease() {
         10,
         ctx(10),
     );
-    // First agent claims
-    sm.execute_claim_task(task_id, a1, MIN_COLLATERAL, 20, TrustStageEnum::Untrusted, ctx(20));
-    // Second agent tries to claim same task
-    let r =
-        sm.execute_claim_task(task_id, a2, MIN_COLLATERAL, 20, TrustStageEnum::Untrusted, ctx(20));
+    // First agent claims (a1 nonce after task_create: 0→1, so claim nonce = 2)
+    sm.execute_claim_task(task_id, a1, MIN_COLLATERAL, 2, 20, TrustStageEnum::Untrusted, ctx(20));
+    // Second agent tries to claim same task (a2 nonce = 0, so claim nonce = 1)
+    let r = sm.execute_claim_task(
+        task_id,
+        a2,
+        MIN_COLLATERAL,
+        1,
+        20,
+        TrustStageEnum::Untrusted,
+        ctx(20),
+    );
     assert_eq!(r, ExecutionResult::Rejected, "already-claimed task must be rejected");
 }
 

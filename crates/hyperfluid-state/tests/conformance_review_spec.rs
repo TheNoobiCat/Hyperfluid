@@ -19,6 +19,7 @@ fn fund_account(sm: &mut StateMachine, id: [u8; 32], balance: u128, nonce: u64) 
 
 /// Create a task, claim it, heartbeat it to InProgress, then submit for review.
 /// Returns the review task IDs that were created.
+/// Nonce sequence: fund_account sets nonce=0, then task_create=1, claim=2, heartbeat=3, submit_completion=4.
 fn setup_review_ready_state(
     sm: &mut StateMachine,
     worker_id: [u8; 32],
@@ -44,6 +45,7 @@ fn setup_review_ready_state(
         task_id,
         worker_id,
         MIN_COLLATERAL,
+        2, // nonce: 0→1 after task_create, so nonce=2
         height,
         TrustStageEnum::Untrusted,
         ctx(height),
@@ -58,10 +60,10 @@ fn setup_review_ready_state(
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    sm.execute_heartbeat(hb, height + 1, ctx(height + 1));
+    sm.execute_heartbeat(hb, 3, height + 1, ctx(height + 1));
 
     // Submit completion → InReview + 2 review tasks created
-    sm.execute_submit_completion(task_id, worker_id, height + 2, ctx(height + 2));
+    sm.execute_submit_completion(task_id, worker_id, 4, height + 2, ctx(height + 2));
 
     // Collect review task IDs
     sm.tasks_iter()
@@ -94,9 +96,18 @@ fn conforms_to_review_spec_1_7_1_task_enters_inreview_on_completion() {
         10,
         ctx(10),
     );
-    sm.execute_claim_task(task_id, worker, MIN_COLLATERAL, 10, TrustStageEnum::Untrusted, ctx(10));
+    // worker nonce after task_create: 0→1, so claim nonce = 2
+    sm.execute_claim_task(
+        task_id,
+        worker,
+        MIN_COLLATERAL,
+        2,
+        10,
+        TrustStageEnum::Untrusted,
+        ctx(10),
+    );
 
-    // Heartbeat to InProgress
+    // Heartbeat to InProgress (worker nonce after claim: 1→2, so heartbeat nonce = 3)
     let lease = sm.leases_iter().next().expect("lease must exist");
     let hb = hyperfluid_state::HeartbeatPayload {
         lease_id: lease.lease_id,
@@ -105,10 +116,10 @@ fn conforms_to_review_spec_1_7_1_task_enters_inreview_on_completion() {
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    sm.execute_heartbeat(hb, 11, ctx(11));
+    sm.execute_heartbeat(hb, 3, 11, ctx(11));
 
-    // Submit completion
-    let r = sm.execute_submit_completion(task_id, worker, 12, ctx(12));
+    // Submit completion (worker nonce after heartbeat: 2→3, so completion nonce = 4)
+    let r = sm.execute_submit_completion(task_id, worker, 4, 12, ctx(12));
     assert_eq!(r, ExecutionResult::Success);
 
     let task = sm.tasks_iter().find(|t| t.task_id == task_id).expect("task must exist");
@@ -147,7 +158,16 @@ fn conforms_to_review_spec_1_7_1_completion_rejected_wrong_owner() {
         10,
         ctx(10),
     );
-    sm.execute_claim_task(task_id, worker, MIN_COLLATERAL, 10, TrustStageEnum::Untrusted, ctx(10));
+    // worker nonce after task_create: 0→1, so claim nonce = 2
+    sm.execute_claim_task(
+        task_id,
+        worker,
+        MIN_COLLATERAL,
+        2,
+        10,
+        TrustStageEnum::Untrusted,
+        ctx(10),
+    );
 
     let lease = sm.leases_iter().next().expect("lease must exist");
     let hb = hyperfluid_state::HeartbeatPayload {
@@ -157,10 +177,11 @@ fn conforms_to_review_spec_1_7_1_completion_rejected_wrong_owner() {
         test_result_ref: None,
         signature: vec![1, 2, 3],
     };
-    sm.execute_heartbeat(hb, 11, ctx(11));
+    // worker nonce after claim: 1→2, so heartbeat nonce = 3
+    sm.execute_heartbeat(hb, 3, 11, ctx(11));
 
-    // Attacker tries to submit completion
-    let r = sm.execute_submit_completion(task_id, attacker, 12, ctx(12));
+    // Attacker tries to submit completion (attacker nonce = 0, so nonce = 1)
+    let r = sm.execute_submit_completion(task_id, attacker, 1, 12, ctx(12));
     assert_eq!(r, ExecutionResult::Rejected, "non-owner must be rejected");
 }
 
@@ -176,11 +197,12 @@ fn conforms_to_review_spec_1_7_2_untrusted_rejected_claiming_review_task() {
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
     assert_eq!(review_task_ids.len(), 2);
 
-    // Untrusted agent tries to claim a review task
+    // Untrusted agent tries to claim a review task (nonce: untrusted has nonce 0 → claim nonce = 1)
     let r = sm.execute_claim_task(
         review_task_ids[0],
         untrusted,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Untrusted,
         ctx(14),
@@ -200,11 +222,12 @@ fn conforms_to_review_spec_1_7_2_trusted_can_claim_review_task() {
 
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
 
-    // Trusted agent claims a review task
+    // Trusted agent claims a review task (nonce: reviewer has nonce 0 → claim nonce = 1)
     let r = sm.execute_claim_task(
         review_task_ids[0],
         reviewer,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -233,10 +256,12 @@ fn conforms_to_review_spec_1_7_3_accept_majority_payout() {
     assert_eq!(review_task_ids.len(), 2);
 
     // Both reviewers (trusted) claim and submit Accept
+    // Reviewers start with nonce 0 → claim nonce = 1, submit_review nonce = 2
     sm.execute_claim_task(
         review_task_ids[0],
         r1,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -245,6 +270,7 @@ fn conforms_to_review_spec_1_7_3_accept_majority_payout() {
         review_task_ids[1],
         r2,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -255,6 +281,7 @@ fn conforms_to_review_spec_1_7_3_accept_majority_payout() {
         r1,
         ReviewVerdict::Accept,
         [0x01u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -264,6 +291,7 @@ fn conforms_to_review_spec_1_7_3_accept_majority_payout() {
         r2,
         ReviewVerdict::Accept,
         [0x02u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -303,10 +331,12 @@ fn conforms_to_review_spec_1_7_4_reject_majority_returns_to_open() {
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
 
     // Both reviewers submit Reject
+    // Reviewers start with nonce 0 → claim nonce = 1, submit_review nonce = 2
     sm.execute_claim_task(
         review_task_ids[0],
         r1,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -315,6 +345,7 @@ fn conforms_to_review_spec_1_7_4_reject_majority_returns_to_open() {
         review_task_ids[1],
         r2,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -325,6 +356,7 @@ fn conforms_to_review_spec_1_7_4_reject_majority_returns_to_open() {
         r1,
         ReviewVerdict::Reject,
         [0x01u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -333,6 +365,7 @@ fn conforms_to_review_spec_1_7_4_reject_majority_returns_to_open() {
         r2,
         ReviewVerdict::Reject,
         [0x02u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -361,10 +394,12 @@ fn conforms_to_review_spec_1_7_5_tie_vote_counts_as_reject() {
 
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
 
+    // Reviewers start with nonce 0 → claim nonce = 1, submit_review nonce = 2
     sm.execute_claim_task(
         review_task_ids[0],
         r1,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -373,6 +408,7 @@ fn conforms_to_review_spec_1_7_5_tie_vote_counts_as_reject() {
         review_task_ids[1],
         r2,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -384,6 +420,7 @@ fn conforms_to_review_spec_1_7_5_tie_vote_counts_as_reject() {
         r1,
         ReviewVerdict::Accept,
         [0x01u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -392,6 +429,7 @@ fn conforms_to_review_spec_1_7_5_tie_vote_counts_as_reject() {
         r2,
         ReviewVerdict::Reject,
         [0x02u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -418,11 +456,12 @@ fn conforms_to_review_spec_1_7_5_single_verdict_does_not_settle() {
 
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
 
-    // Only 1 reviewer submits
+    // Only 1 reviewer submits (r1 nonce: 0 → claim nonce = 1, submit_review nonce = 2)
     sm.execute_claim_task(
         review_task_ids[0],
         r1,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -432,6 +471,7 @@ fn conforms_to_review_spec_1_7_5_single_verdict_does_not_settle() {
         r1,
         ReviewVerdict::Accept,
         [0x01u8; 32],
+        2,
         15,
         ctx(15),
     );
@@ -454,11 +494,12 @@ fn conforms_to_review_spec_1_7_6_review_expiry_returns_to_open() {
 
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
 
-    // Reviewer claims but does NOT submit — lease will expire
+    // Reviewer claims but does NOT submit — lease will expire (r1 nonce: 0 → claim nonce = 1)
     sm.execute_claim_task(
         review_task_ids[0],
         r1,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),
@@ -485,10 +526,12 @@ fn conforms_to_review_spec_1_7_6_review_not_expired_before_ttl() {
     fund_account(&mut sm, r1, 1_000_000_000_000_000_000_000, 0);
 
     let review_task_ids = setup_review_ready_state(&mut sm, worker, task_id, 10);
+    // r1 nonce: 0 → claim nonce = 1
     sm.execute_claim_task(
         review_task_ids[0],
         r1,
         MIN_COLLATERAL,
+        1,
         14,
         TrustStageEnum::Trusted,
         ctx(14),

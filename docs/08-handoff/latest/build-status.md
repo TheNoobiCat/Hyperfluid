@@ -340,6 +340,8 @@ All 28 gaps from the 2026-05-24 comprehensive audit are now resolved. See `docs/
 | Multi-node BFT soak test | Blocked on above two items |
 | Full soak test (24h) | Requires production networking setup |
 | ClatterHandshake ML-DSA-65 identity binding | Not implemented — `_identity` parameter is unused staging artifact; no plan |
+| GAP-N03 Custom BFT wire encoding | `network_bridge.rs` uses hand-rolled binary format, not SCALE. Third-party BFT reimplementations will partition. Rewrite (~250 lines) when BFT networking is wired. |
+| GAP-N10 `hyperfluid-artifact` crate dev-dep only | Entire crate compiles but is never linked into production binary. Promote to real dep + wire into node when artifact storage is needed. |
 **CLOSED GAPS (2026-05-19 Overengineering Cleanup):**
 Per `checkpoint-2026-05-19-cleanup.md` (~1,300 lines of stub code removed, 7 docs deleted):
 

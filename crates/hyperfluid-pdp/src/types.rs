@@ -52,6 +52,7 @@ pub enum ActionType {
     SubmitTaskCompletion,
     Transfer,
     // Original variants
+    #[allow(dead_code)]
     PublishTopicMessage,
     ClaimTaskLease,
     RenewTaskLease,
