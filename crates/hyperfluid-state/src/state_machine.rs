@@ -1670,7 +1670,7 @@ impl StateMachine {
         }
 
         let downtime_pct =
-            if total_window_blocks > 0 { (missed_blocks * 100) / total_window_blocks } else { 0 };
+            (missed_blocks * 100).checked_div(total_window_blocks).unwrap_or(0);
 
         if downtime_pct < pause_threshold_pct {
             return ExecutionResult::Success; // Below threshold, no action
