@@ -46,10 +46,11 @@ pub struct LlmSection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TelegramSection {
+    pub token: String,
     #[serde(default)]
-    pub token: Option<String>,
+    pub user_id: u64,
     #[serde(default)]
-    pub chat_id: Option<String>,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,8 +212,9 @@ mod tests {
                 context_limit_tokens: 32768,
             },
             telegram: Some(TelegramSection {
-                token: Some("tg-token".into()),
-                chat_id: Some("chat-42".into()),
+                token: "tg-token".into(),
+                user_id: 42,
+                enabled: true,
             }),
             limits: LimitsSection {
                 loop_interval_ms: 10_000,
@@ -265,7 +267,8 @@ context_limit_tokens = 16384
 
 [telegram]
 token = "tg-bot-token"
-chat_id = "chat-99"
+user_id = 99
+enabled = true
 
 [limits]
 loop_interval_ms = 3000
@@ -287,7 +290,7 @@ max_concurrent_connections = 50
         assert_eq!(cfg.llm.context_limit_tokens, 16384);
         assert!(cfg.telegram.is_some());
         let tg = cfg.telegram.unwrap();
-        assert_eq!(tg.token.unwrap(), "tg-bot-token");
+        assert_eq!(tg.token, "tg-bot-token");
         assert_eq!(cfg.limits.max_ram_bytes, 2_147_483_648);
     }
 

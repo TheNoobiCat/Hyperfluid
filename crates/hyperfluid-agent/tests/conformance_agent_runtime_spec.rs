@@ -915,8 +915,9 @@ fn conforms_to_agent_runtime_spec_5_3_telegram_token_not_in_output() {
     // Setup: config with telegram token
     let cfg = Config {
         telegram: Some(hyperfluid_agent::config::TelegramSection {
-            token: Some(tg_token.to_string()),
-            chat_id: Some("chat-42".to_string()),
+            token: tg_token.to_string(),
+            user_id: 42,
+            enabled: true,
         }),
         ..Default::default()
     };

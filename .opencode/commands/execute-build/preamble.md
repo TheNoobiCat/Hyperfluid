@@ -12,3 +12,6 @@ Before implementing this week's tasks, verify the upstream components you depend
 entering step 2 (read-and-implement). Every task in the current week's stage file
 MUST be either built or proven unbuildable (missing dependency at file:line level).
 Do not enter the delegation phase without knowing which tasks fall into which bucket.
+
+**ALWAYS PARALLELISE**
+When the instructions say to use build-workers: you MUST USE THEM. It is SIGNIFICANTLY more efficient.

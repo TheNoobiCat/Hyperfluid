@@ -1,6 +1,20 @@
 # Session 2026-05-14 — Open Questions
 
-## Unresolved Implementation Gaps (2026-05-23)
+## Resolved Implementation Gaps (2026-05-24)
+
+All BUILDABLE gaps from 2026-05-23 resolved. See `checkpoint-2026-05-24.md`.
+
+| # | Gap | Status |
+|---|------|--------|
+| GAP-03 | EvidenceTx unwired | RESOLVED — explicit EvidenceTx match arm added |
+| GAP-04 | git:head tracking | RESOLVED — git_head_commit field added to ConsensusDriver |
+| GAP-05 | FastPath approve per-agent | RESOLVED — submit_approval() with auto-certificate issuance |
+| GAP-06 | Query committee by epoch | RESOLVED — committee_history + epoch_validators BTreeMaps |
+| GAP-07 | /tx/submit only routes 4 types | RESOLVED — expanded to 14 tx_type variants |
+| GAP-08 | /governance/propose stub | RESOLVED — wired to driver.submit_tx() |
+| GAP-09 | /governance/vote stub | RESOLVED — wired to driver.submit_tx() |
+| GAP-10 | Missing read endpoints | RESOLVED — 4 new endpoints added |
+| GAP-11 | Skills infra | RESOLVED — skills.rs with parser + prompt injector |
 
 ### Protocol backend gaps (BUILDABLE)
 

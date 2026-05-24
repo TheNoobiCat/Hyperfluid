@@ -37,6 +37,9 @@ clatter = { version = "2.2", default-features = false, features = ["std", "use-2
 ml-dsa = { version = "0.1.0-rc.11", default-features = false, features = ["alloc", "getrandom", "pkcs8"] }
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+ratatui = "0.29"
+crossterm = "0.28"
+module-lattice = { version = "0.2.3", default-features = false, features = ["alloc"] }
 
 [profile.dev]
 opt-level = 0

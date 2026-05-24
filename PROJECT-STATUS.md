@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-2 libraries complete + wired. Stage 02 Week 3-4 Agent Runtime C10 library COMPLETE 2026-05-18. Stage 02 Week 5-6 COMPLETE 2026-05-20 — 27 conformance tests + P2P TCP transport + mempool + PDP context state wired into node. Stage 02 Week 7-8 COMPLETE 2026-05-21 — BftDriver + Malachite Driver integration + run_bft_loop + ~750 lines, 10 tests.) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-10 COMPLETE 2026-05-24 — see checkpoint-2026-05-24.md. TUI, Telegram, sandbox, network bridge, protocol/RPC backend gaps, skills infra, FastPath approval accumulation. All CI green. 551 tests.) |
 
 ---
 

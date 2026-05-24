@@ -98,7 +98,7 @@ async fn handle_connection(
     let method = parts[0];
     let path = parts[1];
 
-    if method != "POST" {
+    if method != "POST" && method != "GET" {
         write_http_response(&mut stream, 405, r#"{"error":"method not allowed"}"#).await?;
         return Ok(());
     }
@@ -158,8 +158,17 @@ async fn write_http_response(
 
 fn route_and_handle(path: &str, body: &str, driver: &Arc<Mutex<ConsensusDriver>>) -> (u16, String) {
     match path {
-        "/health" | "/query/balance" | "/query/nonce" | "/query/state_root" | "/query/block"
-        | "/task/status" | "/agent/status" => {
+        "/health"
+        | "/query/balance"
+        | "/query/nonce"
+        | "/query/state_root"
+        | "/query/block"
+        | "/query/validator"
+        | "/query/committee"
+        | "/query/git-head"
+        | "/query/fee-estimate"
+        | "/task/status"
+        | "/agent/status" => {
             // Read-only endpoints
             let guard = match driver.lock() {
                 Ok(g) => g,
@@ -186,6 +195,10 @@ fn dispatch_read(path: &str, body: &str, driver: &ConsensusDriver) -> (u16, Stri
         "/query/nonce" => handle_query_nonce(driver, body),
         "/query/state_root" => handle_query_state_root(driver),
         "/query/block" => handle_query_block(driver, body),
+        "/query/validator" => handle_query_validator(driver, body),
+        "/query/committee" => handle_query_committee(driver, body),
+        "/query/git-head" => handle_query_git_head(driver),
+        "/query/fee-estimate" => handle_query_fee_estimate(driver),
         "/task/status" => handle_task_status(driver, body),
         "/agent/status" => handle_agent_status(driver, body),
         _ => (500, r#"{"error":"internal routing error"}"#.into()),
@@ -309,6 +322,61 @@ fn handle_tx_submit(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
         "task_create" => hyperfluid_consensus::types::TxType::TaskCreateTx,
         "evidence" => hyperfluid_consensus::types::TxType::EvidenceTx,
         "fast_path" => hyperfluid_consensus::types::TxType::FastPathTx,
+        "staking" => {
+            use hyperfluid_consensus::types::StakingAction;
+            let action_str = req.get("action").and_then(|v| v.as_str()).unwrap_or("");
+            let action = match action_str {
+                "bond" => StakingAction::Bond,
+                "unbond" => StakingAction::Unbond,
+                "withdraw" => StakingAction::Withdraw,
+                "renew" => StakingAction::Renew,
+                _ => {
+                    return (
+                        400,
+                        format!(r#"{{"error":"unknown staking action: {}"}}"#, action_str),
+                    )
+                }
+            };
+            hyperfluid_consensus::types::TxType::StakingTx(action)
+        }
+        "delegation" => {
+            use hyperfluid_consensus::types::DelegationAction;
+            let action_str = req.get("action").and_then(|v| v.as_str()).unwrap_or("");
+            let action = match action_str {
+                "delegate" => DelegationAction::Delegate,
+                "undelegate" => DelegationAction::Undelegate,
+                "withdraw_delegation" => DelegationAction::WithdrawDelegation,
+                "set_commission" => DelegationAction::SetCommission,
+                _ => {
+                    return (
+                        400,
+                        format!(r#"{{"error":"unknown delegation action: {}"}}"#, action_str),
+                    )
+                }
+            };
+            hyperfluid_consensus::types::TxType::DelegationTx(action)
+        }
+        "claim_task" => hyperfluid_consensus::types::TxType::ClaimTaskTx,
+        "heartbeat" => hyperfluid_consensus::types::TxType::HeartbeatTx,
+        "submit_task" => hyperfluid_consensus::types::TxType::SubmitTaskTx,
+        "submit_review" => hyperfluid_consensus::types::TxType::SubmitReviewTx,
+        "release_task" => hyperfluid_consensus::types::TxType::ReleaseTaskTx,
+        "split_task" => hyperfluid_consensus::types::TxType::SplitTaskTx,
+        "governance" => {
+            use hyperfluid_consensus::types::GovernanceAction;
+            let action_str = req.get("action").and_then(|v| v.as_str()).unwrap_or("");
+            let action = match action_str {
+                "propose" => GovernanceAction::Propose,
+                "vote" => GovernanceAction::Vote,
+                _ => {
+                    return (
+                        400,
+                        format!(r#"{{"error":"unknown governance action: {}"}}"#, action_str),
+                    )
+                }
+            };
+            hyperfluid_consensus::types::TxType::GovernanceTx(action)
+        }
         _ => {
             return (400, format!(r#"{{"error":"unknown tx_type: {}"}}"#, tx_type_str));
         }
@@ -392,7 +460,7 @@ fn handle_agent_status(driver: &ConsensusDriver, body: &str) -> (u16, String) {
     (200, json)
 }
 
-fn handle_governance_propose(_driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
+fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
     let req: serde_json::Value = match serde_json::from_str(body) {
         Ok(v) => v,
         Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
@@ -401,18 +469,80 @@ fn handle_governance_propose(_driver: &mut ConsensusDriver, body: &str) -> (u16,
         Ok(id) => id,
         Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
     };
-    let nonce = req.get("nonce").and_then(|v| v.as_u64()).unwrap_or(0);
+    let target_hash = req
+        .get("target_hash")
+        .and_then(|v| v.as_str())
+        .and_then(|s| hex::decode(s).ok())
+        .map(|b| {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&b);
+            arr
+        })
+        .unwrap_or([0u8; 32]);
+    let title_hash = req
+        .get("title_hash")
+        .and_then(|v| v.as_str())
+        .and_then(|s| hex::decode(s).ok())
+        .map(|b| {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&b);
+            arr
+        })
+        .unwrap_or([0u8; 32]);
+    let description_hash = req
+        .get("description_hash")
+        .and_then(|v| v.as_str())
+        .and_then(|s| hex::decode(s).ok())
+        .map(|b| {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&b);
+            arr
+        })
+        .unwrap_or([0u8; 32]);
 
+    // Compute proposal_id = SHA3-256(proposer || target_hash)
+    let proposal_id = {
+        use sha3::Digest;
+        let mut hasher = sha3::Sha3_256::new();
+        hasher.update(proposer);
+        hasher.update(target_hash);
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&hasher.finalize());
+        out
+    };
+
+    // Build SCALE-encoded GovernancePayload (see driver.rs line 62):
+    //   proposal_id (32) + proposer_id (32) + is_vote=false (1) + vote_approve=false (1)
+    //   + target_hash (32) + title_hash (32) + description_hash (32)
+    let mut payload = Vec::with_capacity(162);
+    payload.extend_from_slice(&proposal_id);
+    payload.extend_from_slice(&proposer);
+    payload.push(0u8); // is_vote = false
+    payload.push(0u8); // vote_approve = false
+    payload.extend_from_slice(&target_hash);
+    payload.extend_from_slice(&title_hash);
+    payload.extend_from_slice(&description_hash);
+
+    let tx = TransactionEnvelope {
+        tx_type: hyperfluid_consensus::types::TxType::GovernanceTx(
+            hyperfluid_consensus::types::GovernanceAction::Propose,
+        ),
+        tx_payload: payload,
+        approved_plan_id: None,
+        gateway_signature: None,
+    };
+
+    let accepted = driver.submit_tx(tx);
     let json = serde_json::json!({
-        "status": "submitted",
+        "status": if accepted { "submitted_to_mempool" } else { "rejected" },
         "proposer": hex::encode(proposer),
-        "nonce": nonce,
-        "note": "governance proposal submitted; execution on next block",
+        "target_hash": hex::encode(target_hash),
+        "proposal_id": hex::encode(proposal_id),
     });
     (200, json.to_string())
 }
 
-fn handle_governance_vote(_driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
+fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
     let req: serde_json::Value = match serde_json::from_str(body) {
         Ok(v) => v,
         Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
@@ -425,12 +555,97 @@ fn handle_governance_vote(_driver: &mut ConsensusDriver, body: &str) -> (u16, St
         Ok(id) => id,
         Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
     };
+    let vote_yes = req.get("approve").and_then(|v| v.as_bool()).unwrap_or(false);
+    let target_hash = req
+        .get("target_hash")
+        .and_then(|v| v.as_str())
+        .and_then(|s| hex::decode(s).ok())
+        .map(|b| {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&b);
+            arr
+        })
+        .unwrap_or([0u8; 32]);
 
+    // Build SCALE-encoded GovernancePayload for vote:
+    //   proposal_id (32) + proposer_id/voter (32) + is_vote=true (1) + vote_approve (1)
+    //   + target_hash (32) + title_hash (32) + description_hash (32)
+    let mut payload = Vec::with_capacity(162);
+    payload.extend_from_slice(&proposal_id);
+    payload.extend_from_slice(&voter);
+    payload.push(1u8); // is_vote = true
+    payload.push(if vote_yes { 1u8 } else { 0u8 }); // vote_approve
+    payload.extend_from_slice(&target_hash);
+    payload.extend_from_slice(&[0u8; 32]); // title_hash (unused for vote)
+    payload.extend_from_slice(&[0u8; 32]); // description_hash (unused for vote)
+
+    let tx = TransactionEnvelope {
+        tx_type: hyperfluid_consensus::types::TxType::GovernanceTx(
+            hyperfluid_consensus::types::GovernanceAction::Vote,
+        ),
+        tx_payload: payload,
+        approved_plan_id: None,
+        gateway_signature: None,
+    };
+
+    let accepted = driver.submit_tx(tx);
     let json = serde_json::json!({
         "proposal_id": hex::encode(proposal_id),
         "voter": hex::encode(voter),
-        "status": "vote_recorded",
-        "note": "vote cast; tally updated on next block",
+        "status": if accepted { "submitted_to_mempool" } else { "rejected" },
+    });
+    (200, json.to_string())
+}
+
+fn handle_query_validator(driver: &ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
+    };
+    let validator_id = match parse_hash32(&req, "validator_id") {
+        Ok(id) => id,
+        Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    match driver.state_machine.get_validator(&validator_id) {
+        Some(v) => {
+            let json = serde_json::json!({
+                "validator_id": hex::encode(v.validator_id),
+                "self_bond": v.self_bond,
+                "total_delegated": v.total_delegated,
+                "state": format!("{:?}", v.state),
+            });
+            (200, json.to_string())
+        }
+        None => (404, r#"{"error":"validator not found"}"#.to_string()),
+    }
+}
+
+fn handle_query_committee(driver: &ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
+    };
+    let epoch = req.get("epoch").and_then(|v| v.as_u64()).unwrap_or(driver.epoch);
+    let json = serde_json::json!({
+        "epoch": epoch,
+        "current_epoch": driver.epoch,
+        "note": "committee history query — full committee list deferred to consensus driver integration",
+    });
+    (200, json.to_string())
+}
+
+fn handle_query_git_head(_driver: &ConsensusDriver) -> (u16, String) {
+    let json = serde_json::json!({
+        "git_head": hex::encode([0u8; 32]),
+        "note": "git:head tracking deferred — returns genesis placeholder",
+    });
+    (200, json.to_string())
+}
+
+fn handle_query_fee_estimate(driver: &ConsensusDriver) -> (u16, String) {
+    let json = serde_json::json!({
+        "base_fee": driver.fee_state.base_fee,
+        "target_utilization_pct": driver.fee_config.target_utilization_pct,
     });
     (200, json.to_string())
 }

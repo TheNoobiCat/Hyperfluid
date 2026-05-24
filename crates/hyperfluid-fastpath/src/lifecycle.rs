@@ -2,7 +2,7 @@
 //
 // Source: fastpath-spec.md §1.4 State Transitions
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::types::{
     FastPathCertificate, FastPathChallengeTx, FastPathParams, FastPathProposal, FastPathRollbackTx,
@@ -19,6 +19,9 @@ pub struct FastPathEngine {
     challenge_counts: Vec<(Hash32, u64, u64)>, // (challenger_id, epoch, count)
     /// Track which proposals have been successfully challenged (cannot be finalized).
     challenged_proposals: BTreeSet<Hash32>,
+    /// Accumulated approval signatures per proposal, keyed by proposal_id.
+    /// Used by submit_approval() to reach quorum before auto-issuing.
+    pending_approvals: BTreeMap<Hash32, Vec<ReviewerSignature>>,
 }
 
 impl FastPathEngine {
@@ -29,6 +32,7 @@ impl FastPathEngine {
             certificates: Vec::new(),
             challenge_counts: Vec::new(),
             challenged_proposals: BTreeSet::new(),
+            pending_approvals: BTreeMap::new(),
         }
     }
 
@@ -114,6 +118,105 @@ impl FastPathEngine {
 
         self.certificates.push(certificate);
         Ok(self.certificates.last().unwrap())
+    }
+
+    // ── Per-Reviewer Approval Accumulation ───────────────────────────────
+
+    /// Submit an individual reviewer's approval for a fast-path proposal.
+    /// Accumulates approvals until quorum is reached, then auto-issues
+    /// the certificate.
+    ///
+    /// Returns `Ok(None)` while quorum has not yet been met.
+    /// Returns `Ok(Some(&certificate))` once quorum is reached and the
+    /// certificate is issued.
+    ///
+    /// # Errors
+    /// - `ProposalNotFound` if no proposal with `proposal_id` exists.
+    /// - `ReviewerNotIndependent` if the same reviewer submits twice, or
+    ///   if all approvers are the proposer.
+    pub fn submit_approval(
+        &mut self,
+        proposal_id: Hash32,
+        approval: ReviewerSignature,
+        current_height: u64,
+        topic_snapshot_weight: u128,
+    ) -> Result<Option<&FastPathCertificate>, FastPathError> {
+        // 1. Verify proposal exists
+        if !self.proposals.iter().any(|p| p.proposal_id == proposal_id) {
+            return Err(FastPathError::ProposalNotFound);
+        }
+
+        // 2. Only count Approve votes — rejections handled by challenge mechanism
+        if approval.vote != ReviewerVote::Approve {
+            return Ok(None);
+        }
+
+        // 3. Check for duplicate and add to pending
+        let mut has_duplicate = false;
+        {
+            let pending = self.pending_approvals.entry(proposal_id).or_default();
+            if pending.iter().any(|s| s.reviewer_id == approval.reviewer_id) {
+                has_duplicate = true;
+            } else {
+                pending.push(approval);
+            }
+        }
+
+        if has_duplicate {
+            return Err(FastPathError::ReviewerNotIndependent);
+        }
+
+        // 4. Snapshot the accumulated approvals to free the mutable borrow
+        let all_approvals = self.pending_approvals.get(&proposal_id).cloned().unwrap_or_default();
+
+        // 5. Check quorum: need 2f+1 weighted approvals
+        let total_approvals = all_approvals.len() as u128;
+        let quorum_weight =
+            (topic_snapshot_weight * self.params.quorum_threshold_num as u128) / 100;
+        if total_approvals < quorum_weight {
+            return Ok(None);
+        }
+
+        // 6. Independence check: at least one approver is not the proposer
+        let Some(proposal) = self.proposals.iter().find(|p| p.proposal_id == proposal_id) else {
+            return Err(FastPathError::ProposalNotFound);
+        };
+        if !all_approvals.iter().any(|sig| sig.reviewer_id != proposal.proposer_id) {
+            return Err(FastPathError::ReviewerNotIndependent);
+        }
+
+        // 7. Derive signer_set_hash deterministically from the reviewer set
+        let mut hasher = Sha3_256::new();
+        let mut reviewer_ids: Vec<&Hash32> = all_approvals.iter().map(|a| &a.reviewer_id).collect();
+        reviewer_ids.sort();
+        for id in &reviewer_ids {
+            hasher.update(id);
+        }
+        let signer_set_hash = {
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&hasher.finalize());
+            out
+        };
+
+        // 8. Issue the certificate (re-validates internally).
+        //    Match explicitly to drop the cert reference before clearing pending,
+        //    avoiding a borrow conflict with the mutable self access below.
+        let issue_result = self.issue_certificate(
+            proposal_id,
+            all_approvals,
+            signer_set_hash,
+            current_height,
+            topic_snapshot_weight,
+        );
+
+        match issue_result {
+            Ok(_) => {
+                // Clear pending — certificate is now stored in self.certificates
+                self.pending_approvals.remove(&proposal_id);
+                Ok(Some(self.certificates.last().unwrap()))
+            }
+            Err(e) => Err(e),
+        }
     }
 
     // ── Challenge ────────────────────────────────────────────────────────
@@ -503,5 +606,145 @@ mod tests {
         // Verify topic head advanced
         let prop = engine.get_proposal(&p_id).unwrap();
         assert_eq!(prop.base_topic_head, [0xFF; 32]);
+    }
+
+    // ── submit_approval tests ─────────────────────────────────────────────
+
+    #[test]
+    fn conforms_to_fastpath_spec_section1_7_submit_approval_accumulates() {
+        let mut engine = FastPathEngine::new(FastPathParams::default());
+        let p_id = [0x10; 32];
+        let proposer_id = [0xBB; 32];
+
+        let proposal = FastPathProposal {
+            proposal_id: p_id,
+            topic_id: [0xAA; 32],
+            proposer_id,
+            base_topic_head: [0x00; 32],
+            proposed_head: [0xFF; 32],
+            bundle_manifest_hash: [0; 32],
+            expires_at_height: 1000,
+            proposer_signature: vec![],
+        };
+        engine.submit_proposal(proposal, 100).unwrap();
+
+        // topic_snapshot_weight = 5 → quorum = (5 * 67) / 100 = 3
+        let weight = 5u128;
+
+        // First approval: 1 < 3 → Ok(None)
+        let result = engine.submit_approval(
+            p_id,
+            ReviewerSignature {
+                reviewer_id: [1; 32],
+                vote: ReviewerVote::Approve,
+                reason_hash: [0; 32],
+                signature: vec![],
+            },
+            200,
+            weight,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        // Second approval: 2 < 3 → Ok(None)
+        let result = engine.submit_approval(
+            p_id,
+            ReviewerSignature {
+                reviewer_id: [2; 32],
+                vote: ReviewerVote::Approve,
+                reason_hash: [0; 32],
+                signature: vec![],
+            },
+            200,
+            weight,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        // Third approval: 3 >= 3 → Ok(Some(cert))
+        let result = engine.submit_approval(
+            p_id,
+            ReviewerSignature {
+                reviewer_id: [3; 32],
+                vote: ReviewerVote::Approve,
+                reason_hash: [0; 32],
+                signature: vec![],
+            },
+            200,
+            weight,
+        );
+        assert!(result.is_ok());
+        let opt = result.unwrap();
+        assert!(opt.is_some());
+        let cert = opt.unwrap();
+        assert_eq!(cert.proposal_id, p_id);
+        assert_eq!(cert.challenge_until_height, 200 + 144);
+    }
+
+    #[test]
+    fn conforms_to_fastpath_spec_section1_7_duplicate_approval_rejected() {
+        let mut engine = FastPathEngine::new(FastPathParams::default());
+        let p_id = [0x11; 32];
+
+        let proposal = FastPathProposal {
+            proposal_id: p_id,
+            topic_id: [0xAA; 32],
+            proposer_id: [0xBB; 32],
+            base_topic_head: [0x00; 32],
+            proposed_head: [0xFF; 32],
+            bundle_manifest_hash: [0; 32],
+            expires_at_height: 1000,
+            proposer_signature: vec![],
+        };
+        engine.submit_proposal(proposal, 100).unwrap();
+
+        let approval = ReviewerSignature {
+            reviewer_id: [1; 32],
+            vote: ReviewerVote::Approve,
+            reason_hash: [0; 32],
+            signature: vec![],
+        };
+
+        // First submission: Ok(None) — not enough quorum yet
+        let result = engine.submit_approval(p_id, approval.clone(), 200, 5);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+
+        // Duplicate same reviewer: Err(ReviewerNotIndependent)
+        let result = engine.submit_approval(p_id, approval, 200, 5);
+        assert_eq!(result, Err(FastPathError::ReviewerNotIndependent));
+    }
+
+    #[test]
+    fn conforms_to_fastpath_spec_section1_7_approve_vote_required() {
+        let mut engine = FastPathEngine::new(FastPathParams::default());
+        let p_id = [0x12; 32];
+
+        let proposal = FastPathProposal {
+            proposal_id: p_id,
+            topic_id: [0xAA; 32],
+            proposer_id: [0xBB; 32],
+            base_topic_head: [0x00; 32],
+            proposed_head: [0xFF; 32],
+            bundle_manifest_hash: [0; 32],
+            expires_at_height: 1000,
+            proposer_signature: vec![],
+        };
+        engine.submit_proposal(proposal, 100).unwrap();
+
+        // Deny vote should not count toward quorum → Ok(None)
+        let result = engine.submit_approval(
+            p_id,
+            ReviewerSignature {
+                reviewer_id: [1; 32],
+                vote: ReviewerVote::Deny,
+                reason_hash: [0; 32],
+                signature: vec![],
+            },
+            200,
+            5,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

@@ -6,4 +6,5 @@ pub mod driver;
 pub mod genesis;
 pub mod malachite;
 pub mod malachite_consensus;
+pub mod network_bridge;
 pub mod types;

@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use parity_scale_codec::{Decode, Encode};
 use sha3::{Digest, Sha3_256};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,7 +20,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use hyperfluid_fee_market::{compute_next_base_fee, FeeConfig, FeeMarketState};
 use hyperfluid_p2p::mempool::{Mempool, MempoolConfig, MempoolTx, TxTypeTag};
 use hyperfluid_staking::SystemParameters;
-use hyperfluid_state::state_machine::{ExecutionContext, SplitChildSpec, StateMachine};
+use hyperfluid_state::state_machine::{
+    ExecutionContext, SplitChildSpec, StateMachine, ValidatorLifecycleState,
+};
 use hyperfluid_state::{Account, HeartbeatPayload, ReviewVerdict, TaskStatus, TrustStageEnum};
 
 use crate::genesis::GenesisConfig;
@@ -208,6 +211,14 @@ pub struct ConsensusDriver {
     /// Used for development/testing when full PDP state (key bindings,
     /// nonce tracking, quota states) is not yet wired.
     pub pdp_bypass: bool,
+    /// Tracks the approved git:head commit for on-chain governance.
+    /// Updated when a governance proposal passes tally.
+    pub git_head_commit: Hash32,
+    /// Committee epoch history: epoch -> committee_id hash.
+    /// Populated at epoch boundaries in produce_block.
+    pub committee_history: BTreeMap<u64, Hash32>,
+    /// Validator set per epoch: epoch -> validator public keys.
+    pub epoch_validators: BTreeMap<u64, Vec<Hash32>>,
 }
 
 impl ConsensusDriver {
@@ -233,6 +244,9 @@ impl ConsensusDriver {
             quota_states: BTreeMap::new(),
             consumed_plan_ids: BTreeSet::new(),
             pdp_bypass: false,
+            git_head_commit: [0u8; 32],
+            committee_history: BTreeMap::new(),
+            epoch_validators: BTreeMap::new(),
         }
     }
 
@@ -256,6 +270,8 @@ impl ConsensusDriver {
             self.state_machine.init_validator(gv.validator_id, gv.bonded_stake, genesis.timestamp);
         }
 
+        // git_head_commit initialised to [0u8; 32] in new(); genesis config does not
+        // carry a git:head field yet (deferred: governance tally integration)
         let state_root = self.state_machine.compute_state_root();
         let transaction_root = [0u8; 32];
 
@@ -437,9 +453,27 @@ impl ConsensusDriver {
         };
 
         // 6. Store and advance
+        let prev_epoch = self.epoch;
         self.block_store.push(block.clone());
         self.height = new_height;
         self.epoch = new_epoch;
+
+        // 6b. Snapshot committee at epoch boundary
+        if new_epoch != prev_epoch || self.committee_history.is_empty() {
+            let committee_hash = sha3_256_hash(&new_epoch.to_le_bytes());
+            self.committee_history.insert(new_epoch, committee_hash);
+
+            // Populate epoch_validators from state machine validator set
+            let validators_this_epoch: Vec<Hash32> = self
+                .state_machine
+                .validators_iter()
+                .filter(|(_, vt)| vt.state == ValidatorLifecycleState::Active)
+                .map(|(id, _)| *id)
+                .collect();
+            if !validators_this_epoch.is_empty() {
+                self.epoch_validators.insert(new_epoch, validators_this_epoch);
+            }
+        }
 
         block
     }
@@ -490,7 +524,7 @@ impl ConsensusDriver {
                         payload.proposer_id,
                         payload.target_hash,
                         bundle_manifest_hash,
-                        [0u8; 32], // current_commit: git:head tracking not yet wired
+                        self.git_head_commit, // git:head tracking — updated when proposal passes tally
                         ctx.height,
                         current_epoch,
                         0, // total_snapshot_stake: not yet tracked
@@ -502,11 +536,16 @@ impl ConsensusDriver {
                                 hex::encode(proposal.proposer_id),
                                 proposal.status,
                             );
+                            // TODO: When governance tally passes a proposal, update
+                            // self.git_head_commit = proposal.target_hash.
+                            // This requires integration with GovernanceEngine::tally()
+                            // which is deferred (no tally-triggered callback yet).
                         }
                         Err(e) => {
                             tracing::warn!(
-                                "Governance proposal rejected: id={} error={:?}",
+                                "Governance proposal rejected: id={} proposer={} error={:?}",
                                 hex::encode(payload.proposal_id),
+                                hex::encode(payload.proposer_id),
                                 e,
                             );
                         }
@@ -791,8 +830,16 @@ impl ConsensusDriver {
                     );
                 }
             }
-            // EvidenceTx not yet wired
-            _ => {}
+            TxType::EvidenceTx => {
+                // EvidenceTx carries slashing evidence payload
+                // Full dispatch deferred: payload format not yet defined.
+                // When wired, extract (validator_id, evidence_height) from payload
+                // and call:
+                //   self.state_machine.execute_slash_equivocation(
+                //       validator_id, evidence_height, min_jail_blocks, ctx.height
+                //   );
+                tracing::debug!("EvidenceTx: slashing evidence received (full dispatch deferred)");
+            }
         }
     }
 
@@ -947,6 +994,12 @@ impl ConsensusDriver {
         self.state_machine.get_account(account_id).map(|a| a.nonce)
     }
 
+    /// Return the current approved git:head commit hash.
+    /// Updated when a governance proposal passes tally.
+    pub fn git_head(&self) -> Hash32 {
+        self.git_head_commit
+    }
+
     /// Start an async block production loop (single-validator mode, pre-BFT).
     ///
     /// When no BFT consensus is needed, this loop produces blocks autonomously
@@ -985,6 +1038,7 @@ impl ConsensusDriver {
     /// via the consensus protocol rather than a fixed timer.
     ///
     /// Stage 02 Week 7-8 per ADR-0018.
+    #[allow(clippy::too_many_arguments)]
     pub fn run_bft_loop(
         driver: Arc<Mutex<ConsensusDriver>>,
         running: Arc<AtomicBool>,
@@ -994,14 +1048,35 @@ impl ConsensusDriver {
         node_addr: crate::malachite::Address32,
         validator_set: crate::malachite::HyperfluidValidatorSet,
         proposer_seed: [u8; 32],
+        peer_tx_rx_pairs: Option<
+            Vec<(mpsc::UnboundedSender<Vec<u8>>, mpsc::UnboundedReceiver<Vec<u8>>)>,
+        >,
     ) -> JoinHandle<()> {
         use crate::malachite_consensus::BftDriver;
+        use crate::network_bridge;
 
         tokio::spawn(async move {
             let mut bft = BftDriver::new(validator_set.clone(), proposer_seed, keypair, node_addr);
 
+            // -- Network bridge setup --
+            // Clone incoming_tx before partial moves from channels
+            let incoming_tx_for_peers = channels.incoming_tx.clone();
             let mut incoming = channels.incoming_rx;
-            let outgoing = channels.outgoing_tx;
+
+            let outgoing = if let Some(pairs) = peer_tx_rx_pairs {
+                let (senders, receivers): (Vec<_>, Vec<_>) = pairs.into_iter().unzip();
+                let (bridge_tx, bridge_rx) = mpsc::unbounded_channel();
+                let bridge = Arc::new(Mutex::new(network_bridge::NetworkBridge {
+                    outgoing: channels.outgoing_tx,
+                    peers: senders,
+                }));
+                let _sender_handle = network_bridge::run_sender(Arc::clone(&bridge), bridge_rx);
+                let _receiver_handle =
+                    network_bridge::run_receiver(receivers, incoming_tx_for_peers);
+                bridge_tx
+            } else {
+                channels.outgoing_tx
+            };
 
             let start_height: u64;
             {

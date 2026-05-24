@@ -153,6 +153,13 @@ impl BlockValue {
         let hash = ValueHash(block.header.block_hash());
         Self { block, hash }
     }
+
+    /// Create a BlockValue with a specific hash.
+    /// Used by the network bridge to reconstruct proposals from wire data
+    /// where the original block data is not available — only the value hash.
+    pub fn with_hash(block: Block, hash: ValueHash) -> Self {
+        Self { block, hash }
+    }
 }
 
 impl PartialEq for BlockValue {

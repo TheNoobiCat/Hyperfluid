@@ -112,8 +112,9 @@ impl AgentRuntime {
         // API keys and Telegram tokens are NOT stored in the database —
         // they are loaded from the config file on restart.
         let safe_telegram = config.telegram.as_ref().map(|t| TelegramSection {
-            token: None, // redacted — reloaded from config file
-            chat_id: t.chat_id.clone(),
+            token: String::new(), // redacted — reloaded from config file
+            user_id: t.user_id,
+            enabled: t.enabled,
         });
         let safe_config = Config {
             agent: config.agent.clone(),
