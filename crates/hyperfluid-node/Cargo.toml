@@ -20,6 +20,8 @@ hyperfluid-consensus = { path = "../hyperfluid-consensus" }
 hyperfluid-state = { path = "../hyperfluid-state" }
 hyperfluid-staking = { path = "../hyperfluid-staking" }
 hyperfluid-p2p = { path = "../hyperfluid-p2p" }
+hyperfluid-fastpath = { path = "../hyperfluid-fastpath" }
+hyperfluid-governance = { path = "../hyperfluid-governance" }
 serde.workspace = true
 serde_json.workspace = true
 hex.workspace = true

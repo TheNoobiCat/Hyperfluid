@@ -739,5 +739,239 @@ All remaining Week 9-10 tasks completed. See `checkpoint-2026-05-24.md` for deta
 
 **Total:** ~1,260 lines of new code, 43 new tests.
 
+---
+
+## NEWLY IDENTIFIED GAPS (2026-05-24 — comprehensive audit)
+
+These gaps were discovered during a full spec-vs-code requirements trace. They are NOT deferred, NOT noted as overengineering, and NOT in any plan.
+
+### CRITICAL — P2P remote connectivity broken
+
+| Gap | File | Impact |
+|-----|------|--------|
+| P2P listener bound to `127.0.0.1` | `hyperfluid-node/src/main.rs:138` | No remote peer can connect — multi-validator impossible until fixed |
+| `key_provider` returns `None` for all peers | `hyperfluid-node/src/main.rs:159` | Every inbound connection is rejected during handshake |
+
+Together these two lines make the entire P2P layer (TCP sockets, clatter handshake, secure channels, network bridge, BftDriver) non-functional for remote communication.
+
+**Fix:** Bind P2P to `0.0.0.0` via config/env-var; populate `key_provider` from genesis validators or keystore.
+
+### CRITICAL — PDP has no effect for 6 transaction types
+
+| Gap | File | Impact |
+|-----|------|--------|
+| Evidence, Staking, Delegation, Heartbeat, Release, Split hit `_ => return true` | `driver.rs:947` | No nonce check, no quota enforcement, no replay protection for these types |
+| `TransferTx` → `ActionType::ClaimTaskLease` (wrong) | `driver.rs:941-946` | Cross-resource security: transfers evaluated against task-claim rules |
+| `SubmitReviewTx` → `ActionType::SubmitGovernanceProposal` (wrong) | `driver.rs:941-946` | Review submissions evaluated against governance rules |
+
+**Fix:** Add explicit PDP arms for all TxTypes; fix action-type mapping; add sender extraction for missing types.
+
+### CRITICAL — State machine errors silently discarded
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `execute_tx()` returns `()` | `driver.rs:548` | Every `execute_transfer()`, `execute_bond()`, etc. returns `ExecutionResult` — all ignored. Failed transactions vanish from blocks with zero audit trail |
+| `submit_tx()` returns `bool` | `driver.rs:320` | RPC receives only "submitted" vs "rejected" with no error reason |
+
+**Fix:** Change `execute_tx()` to return `Result`; change `submit_tx()` to return `Result<Hash32, Error>`; propagate failures through RPC.
+
+### MAJOR — Economic mechanisms that exist but are not wired
+
+| Gap | What exists | What's missing |
+|-----|-------------|----------------|
+| Fee burning | `accumulate_burn()` exists | No transaction deducts base fee from sender accounts |
+| Priority fee to proposer | Mempool orders by fee | Never credited to block proposer |
+| Validator rebates | `execute_distribute_rewards()` exists | Never called at epoch boundary |
+| Slashing propagation to delegators | `execute_slash_equivocation` exists | Only reduces `self_bond`, not delegated stakes |
+| Governance deposit | `deposit_amount` field | Never deducted from proposer, never returned/burned |
+| Challenge bonds | `challenger_bond` on `FastPathChallengeTx` | Never deducted, credited, or burned |
+| Commit-reveal seed | `compute_committee_seed()` has reveal params | No reveal infrastructure, no window enforcement |
+| seed_ref validation | `Task.seed_ref` accepted in `execute_task_create` | Never validated against canonical seed index |
+| Audit log integration | `AuditLog` fully implemented | `evaluate()` never calls `AuditLog::record()` |
+
+**Fix:** Wire each mechanism at its enforcement point. See Phase D in the execution plan.
+
+### CRITICAL — State root omits review records (consensus divergence)
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `compute_state_root()` omits `review_records`, `review_task_map`, `fee_burn_accumulator` | `state_machine.rs:1326-1388` | Two validators executing the same block containing review submissions compute **different state roots**. BFT consensus splits. |
+| `snapshot_state()` has the same gap | `state_sync.rs:46-126` | State sync diverges from canonical state root. |
+
+**Fix:** Add `review_records`, `review_task_map`, and `fee_burn_accumulator` to both `compute_state_root()` and `snapshot_state()` with appropriate key prefixes.
+
+### CRITICAL — PDP mutates state before tx execution with no rollback
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `validate_tx_pdp()` permanently modifies nonces, consumed_plan_ids, quotas **before** the state machine runs | `driver.rs:999-1004` | If state machine rejects the transaction, PDP changes are never rolled back. PDP nonce advances while account nonce stays unchanged — permanently blocks future legitimate txs from that agent. |
+
+**Fix:** Reorder: run state machine first, then commit PDP state only on success. Or snapshot PDP state before validation and rollback on failure.
+
+### HIGH — TaskCreateTx extracts sender with wrong payload type
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `extract_sender_id()` decodes **`TransferPayload`** for TaskCreateTx | `driver.rs:364` | TaskCreateTx has its own payload structure. Sender ID field overlaps with different fields, producing corrupted sender IDs silently. |
+
+**Fix:** Add a `TaskCreatePayload` struct and use it for sender extraction.
+
+### HIGH — `init_account()` / `init_validator()` silently overwrite duplicates
+
+| Gap | File | Impact |
+|-----|------|--------|
+| Genesis config with duplicate account/validator IDs — last entry silently wins | `state_machine.rs:162,167` | Can silently steal genesis-funded account balance by listing same ID twice with different balances. No error reported. |
+
+**Fix:** Check for existing entry before insert; reject duplicates with error.
+
+### HIGH — ClatterHandshake never verifies remote peer identity
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `ClatterHandshake::initiator()` takes `_identity: &Identity` — **unused**. `remote_id` is caller-supplied with zero cryptographic binding to DH/KEM key exchange. | `secure_channel.rs:122-204` | Active MITM can claim any peer ID. Consensus messages attributed to wrong validator. |
+
+**Fix:** Sign the DH/KEM handshake output with the claimed identity's ML-DSA-65 key; verify on the receiving end.
+
+### HIGH — `run_bft_loop()` never called from `main.rs`
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `main.rs` calls `run_block_loop()`, not `run_bft_loop()` | `main.rs:170`, `driver.rs:1117` | The entire BFT consensus code (BftDriver, malachite_consensus, network_bridge — ~1,200 lines) is **never executed in production**. Only test code runs BFT. The real node uses single-validator block production. |
+
+**Fix:** Wire `run_bft_loop()` into `main.rs` as the primary block production path (for multi-validator) or document that single-validator mode uses `run_block_loop()`.
+
+### HIGH — 18 orphan functions never called from production code
+
+| Orphan Function | File | What breaks |
+|----------------|------|-------------|
+| `execute_distribute_rewards()` | `state_machine.rs:1546` | Validator rewards never distributed at epoch boundary |
+| `accumulate_burn()` | `fee-market/src/lib.rs:112` | Fee burning never happens |
+| `compute_burn_amount()` | `fee-market/src/lib.rs:107` | Burn amount never computed |
+| `tx_meets_min_fee()` | `fee-market/src/lib.rs:102` | Fee floor never enforced on admission |
+| `sender_within_mempool_limit()` | `fee-market/src/lib.rs:131` | Per-sender mempool cap never enforced |
+| `compute_validator_rebate()` | `fee-market/src/lib.rs:119` | Validator rebate formula never called |
+| `compute_tx_fee()` | `fee-market/src/lib.rs:97` | Per-tx fee computation never runs |
+| `AuditLog::record()` | `pdp/src/audit.rs:23` | PDP audit trail empty — no decision recorded |
+| `snapshot_state()` | `state_sync.rs:46` | State sync snapshot never generated |
+| `build_smt_from_keys()` | `state_sync.rs:129` | SMT rebuild from snapshot never runs |
+| `verify_snapshot_checksum()` | `state_sync.rs:164` | Snapshot integrity never verified |
+| `compute_state_checksum()` | `state_sync.rs:150` | Checksum never computed |
+| `compute_committee_seed()` | `types.rs:42` | Anti-grinding commitment seed never computed |
+| `consume_plan_id()` | `state_machine.rs:255` | State-machine-level replay protection never runs |
+| `consume_freshness_nonce()` | `state_machine.rs:1173` | Artifact replay prevention never runs |
+| `compute_proposal_id()` (fastpath) | `lifecycle.rs:329` | FastPath proposal ID helper never called from driver |
+| `compute_proposal_id()` (governance) | `proposal.rs:262` | Governance proposal ID helper never called from driver |
+| `BftDriver.run_bft_loop()` | `driver.rs:1117` | BFT consensus never runs from node binary |
+
+**Fix:** Wire each function at its intended call site or document intentional disuse.
+
+### MEDIUM — Panic vectors in production code
+
+| Location | Code | Impact |
+|----------|------|--------|
+| `tcp.rs:431` | `.unwrap()` on preamble length (expects exactly 32 bytes) | Remote peer sends <32 bytes → node crash |
+| `fastpath/lifecycle.rs:268` | `.unwrap()` assumes proposal exists after finding it in certificates | Out-of-sync data structs → panic |
+| `proposal.rs:164` | `.unwrap()` assumes `active_proposal_ids()` all exist in proposals map | Index divergence → panic |
+| `driver.rs:1158` | `run_bft_loop` uses `lock().unwrap()` instead of `if let Ok` | Poisoned mutex → BFT loop crashes node |
+| `malachite.rs:428` | `panic!()` on empty validator set in `select_proposer` | No validators → node crash |
+
+**Fix:** Replace `.unwrap()` with match/if-let-error; replace `panic!()` with `Result` return.
+
+### MEDIUM — `committee_id` hardcoded to 0 in block header
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `committee_id: 0` always written | `driver.rs:496` | No committee rotation reflected in headers. `committee_history` stored but never used to populate header field. |
 
 ---
+
+## ADDITIONAL GAPS (2026-05-25 — agent runtime, config, staking, tool audit)
+
+### CRITICAL — Agent runtime memory (`todo_write`/`todo_update`) never persists
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `execute_todo_write()` and `execute_todo_update()` return input as tool output but **never call `db.insert_todo()`** | `tools.rs:484-490` | LLM writes todos that vanish on next iteration. Agent has zero working memory of tasks-to-do. Entire "agent remembers" feature is cosmetic. |
+| `execute_forget()` always returns `Forget(true)` regardless of DB result | `tools.rs:514-516` | Agent can't distinguish "successfully forgot" from "entry didn't exist." |
+
+**Fix:** Wire `execute_todo_write`/`execute_todo_update` to `db.insert_todo()`/`db.update_todo()`. Wire `execute_forget` return value to actual DB result.
+
+### CRITICAL — Crash recovery produces non-functional agent
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `recover_from_crash()` hardcodes `StubProvider` instead of using configured LLM | `loop_.rs:576-577` | After any crash, agent loops forever with stub returning empty responses. No useful work. |
+| Crash recovery loads **redacted** config (empty API keys) | `loop_.rs:539-542` | H-06 credential redaction was applied to DB-persisted config but `recover_from_crash()` was never updated to reload from the file. |
+
+**Fix:** Reload config from file on crash recovery instead of using DB-stored config. Use `provider_from_config()` instead of `StubProvider`.
+
+### CRITICAL — `hyperfluid agent register` is a complete no-op
+
+| Gap | File | Impact |
+|-----|------|--------|
+| Sends `"tx_type": "task_create"` with a registration-type payload that silently fails | `cli/agent.rs:37-46` | No `TxType::Register` exists. No agent-registration state machine exists. Command compiles, runs, and does **nothing** on-chain. |
+| `hyperfluid agent register` missing from CLI_SPEC entirely | `prompt.rs:14-121` | Even if backend were fixed, LLM would never know to call it. |
+
+**Fix:** Implement registration (state machine, TxType, RPC handler, CLI_SPEC entry) or remove the command.
+
+### CRITICAL — Testnet config monetary values wrong by 1000-1,000,000x
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `min_stake`, `proposal_deposit`, `total_agx_supply` all off by factors of 1000 to 1,000,000 vs Rust constants | `config/testnet-single.toml` | Config file is non-functional for any meaningful testnet. `min_stake` in config is 1000x too small, `total_agx_supply` is 1,000,000x too small. |
+
+**Fix:** Regenerate config from `genesis.rs:new_testnet_single_validator()` constants.
+
+### HIGH — Staking crate has 10 of 11 types unused cross-crate
+
+| Gap | File | Impact |
+|-----|------|--------|
+| Only `SystemParameters` used outside crate. `ValidatorRecord`, `ValidatorState`, `DelegationRecord`, `DelegationStatus`, `SlashRecord`, `FaultType`, `VoteOption`, `GovernanceVoteTx` are dead spec-artifact types | `staking/src/lib.rs` | State machine has its own parallel types (`ValidatorTracker`, `ValidatorLifecycleState`, `DelegationState`). Two parallel type hierarchies that will drift independently. |
+
+**Fix:** Remove dead types from staking crate; remove unused dev-dependencies (`hyperfluid-consensus`, `hyperfluid-state`).
+
+### HIGH — Agent sandbox `--sandbox-review` flag handled by nothing
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `run_sandbox()` spawns binary with `["--sandbox-review", ...]` but `main.rs` only handles `--setup` | `sandbox.rs:83-97`, `main.rs:1-10` | Sandbox always fails at runtime. `--sandbox-review` is dead code. |
+
+**Fix:** Either implement `--sandbox-review` handler in `main.rs` or remove the argument from `run_sandbox()`.
+
+### HIGH — 14 CLI_SPEC flag-name mismatches will confuse LLMs
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `prompt.rs` tells agents to use `--id` for task/claim/release/get; CLI implements `--task-id`, `--proposal-id`, etc. | `prompt.rs:14-121` vs all CLI command files | LLM generates flag names that don't exist. Every task claim/get/release/governance vote/fastpath command will error. |
+
+### MEDIUM — `module-lattice` workspace dep declared but never used
+
+| Gap | File | Impact |
+|-----|------|--------|
+| `module-lattice` in workspace deps | `Cargo.toml:42` | Zero imports across entire codebase. Wastes compile time. |
+
+**Fix:** Remove from workspace dependencies.
+
+### MEDIUM — `compute_state_checksum` is non-deterministic
+
+| Gap | File | Impact |
+|-----|------|--------|
+| Checksum computed over HashMap-ordered tuples | `state_sync.rs:150-161` | Different nodes compute different checksums for same state. Only works in local tests. |
+
+**Fix:** Sort keys before computing checksum.
+
+### MEDIUM — Duplicate type definitions across crates
+
+| Duplicate | Locations | Risk |
+|-----------|-----------|------|
+| `VoteOption` | `staking/src/lib.rs:85` AND `governance/src/types.rs:50` | Parallel enums drift independently |
+| `GovernanceVoteTx` / `GovernanceVote` | `staking/src/lib.rs:92` AND `governance/src/types.rs:57` | Same concept, two structs |
+| `ValidatorState` / `ValidatorLifecycleState` | `staking/src/lib.rs:21` AND `state_machine.rs:103` | Same 4-variant enum, two locations |
+
+**Fix:** Remove duplicates from staking crate; use governance/state types as canonical.
+
+---
+
+
+
+

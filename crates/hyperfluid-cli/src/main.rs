@@ -2,7 +2,7 @@
 //
 // Source: docs/05-planning/stages/stage-02-agent-runtime.md Week 9-10
 //
-// 7 top-level subcommands: tx, query, task, review, governance, agent, idea
+// 8 top-level subcommands: tx, query, task, review, governance, fastpath, agent, idea
 // All mutating commands route through PDP validation.
 // Machine-parseable JSON output via `--output json`.
 
@@ -30,32 +30,37 @@ enum OutputFormat {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Transaction commands: transfer, bond, unbond, withdraw, delegate, undelegate, commission
+    /// Transaction commands: transfer, bond, unbond, withdraw, renew, delegate, undelegate, withdraw-delegation, commission, evidence
     Tx {
         #[command(subcommand)]
         action: commands::tx::TxAction,
     },
-    /// Query chain state: balance, nonce, state-root, block
+    /// Query chain state: balance, nonce, state-root, block, validator, committee, git-head, fee-estimate
     Query {
         #[command(subcommand)]
         action: commands::query::QueryAction,
     },
-    /// Task management: create, status, claim, heartbeat, submit, sponsor
+    /// Task management: submit, status, claim, heartbeat, release, split, list, get
     Task {
         #[command(subcommand)]
         action: commands::task::TaskAction,
     },
-    /// Review management: claim, verdict
+    /// Review management: claim, verdict, list
     Review {
         #[command(subcommand)]
         action: commands::review::ReviewAction,
     },
-    /// Governance: propose, vote, status
+    /// Governance: propose, vote, list, get
     Governance {
         #[command(subcommand)]
         action: commands::governance::GovernanceAction,
     },
-    /// Agent management: status, register
+    /// Fast-Path topic merges: list, propose, approve, challenge, status
+    FastPath {
+        #[command(subcommand)]
+        action: commands::fastpath::FastPathAction,
+    },
+    /// Agent management: status, register, list-skills, load-skill
     Agent {
         #[command(subcommand)]
         action: commands::agent::AgentAction,
@@ -80,6 +85,9 @@ fn main() {
         Command::Review { action } => commands::review::run(action, cli.output, &client, &node_url),
         Command::Governance { action } => {
             commands::governance::run(action, cli.output, &client, &node_url)
+        }
+        Command::FastPath { action } => {
+            commands::fastpath::run(action, cli.output, &client, &node_url)
         }
         Command::Agent { action } => commands::agent::run(action, cli.output, &client, &node_url),
         Command::Idea { action } => commands::idea::run(action, cli.output, &client, &node_url),

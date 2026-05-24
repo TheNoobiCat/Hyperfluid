@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod fastpath;
 pub mod governance;
 pub mod idea;
 pub mod query;

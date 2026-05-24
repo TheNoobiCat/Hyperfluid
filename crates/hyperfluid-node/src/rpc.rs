@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 
 use hyperfluid_consensus::driver::ConsensusDriver;
 use hyperfluid_consensus::types::{Hash32, TransactionEnvelope};
+use hyperfluid_state::TaskStatus;
 use parity_scale_codec::Encode;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -168,6 +169,13 @@ fn route_and_handle(path: &str, body: &str, driver: &Arc<Mutex<ConsensusDriver>>
         | "/query/git-head"
         | "/query/fee-estimate"
         | "/task/status"
+        | "/task/list"
+        | "/task/get"
+        | "/review/list"
+        | "/governance/list"
+        | "/governance/get"
+        | "/fastpath/list"
+        | "/fastpath/status"
         | "/agent/status" => {
             // Read-only endpoints
             let guard = match driver.lock() {
@@ -176,7 +184,10 @@ fn route_and_handle(path: &str, body: &str, driver: &Arc<Mutex<ConsensusDriver>>
             };
             dispatch_read(path, body, &guard)
         }
-        "/tx/submit" | "/governance/propose" | "/governance/vote" => {
+        "/tx/submit"
+        | "/governance/propose"
+        | "/governance/vote"
+        | "/fastpath/approve" => {
             // Mutation endpoints
             let mut guard = match driver.lock() {
                 Ok(g) => g,
@@ -200,6 +211,13 @@ fn dispatch_read(path: &str, body: &str, driver: &ConsensusDriver) -> (u16, Stri
         "/query/git-head" => handle_query_git_head(driver),
         "/query/fee-estimate" => handle_query_fee_estimate(driver),
         "/task/status" => handle_task_status(driver, body),
+        "/task/list" => handle_task_list(driver, body),
+        "/task/get" => handle_task_status(driver, body),
+        "/review/list" => handle_review_list(driver),
+        "/governance/list" => handle_governance_list(driver),
+        "/governance/get" => handle_governance_get(driver, body),
+        "/fastpath/list" => handle_fastpath_list(driver),
+        "/fastpath/status" => handle_fastpath_status(driver, body),
         "/agent/status" => handle_agent_status(driver, body),
         _ => (500, r#"{"error":"internal routing error"}"#.into()),
     }
@@ -210,6 +228,7 @@ fn dispatch_write(path: &str, body: &str, driver: &mut ConsensusDriver) -> (u16,
         "/tx/submit" => handle_tx_submit(driver, body),
         "/governance/propose" => handle_governance_propose(driver, body),
         "/governance/vote" => handle_governance_vote(driver, body),
+        "/fastpath/approve" => handle_fastpath_approve(driver, body),
         _ => (500, r#"{"error":"internal routing error"}"#.into()),
     }
 }
@@ -626,18 +645,24 @@ fn handle_query_committee(driver: &ConsensusDriver, body: &str) -> (u16, String)
         Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
     };
     let epoch = req.get("epoch").and_then(|v| v.as_u64()).unwrap_or(driver.epoch);
+    let committee_hash = driver.committee_history.get(&epoch).copied();
+    let validators = driver
+        .epoch_validators
+        .get(&epoch)
+        .map(|v| v.iter().map(hex::encode).collect::<Vec<_>>());
     let json = serde_json::json!({
         "epoch": epoch,
         "current_epoch": driver.epoch,
-        "note": "committee history query — full committee list deferred to consensus driver integration",
+        "committee_hash": committee_hash.map(hex::encode),
+        "validator_count": validators.as_ref().map(|v| v.len()).unwrap_or(0),
+        "validators": validators,
     });
     (200, json.to_string())
 }
 
-fn handle_query_git_head(_driver: &ConsensusDriver) -> (u16, String) {
+fn handle_query_git_head(driver: &ConsensusDriver) -> (u16, String) {
     let json = serde_json::json!({
-        "git_head": hex::encode([0u8; 32]),
-        "note": "git:head tracking deferred — returns genesis placeholder",
+        "git_head": hex::encode(driver.git_head()),
     });
     (200, json.to_string())
 }
@@ -648,6 +673,189 @@ fn handle_query_fee_estimate(driver: &ConsensusDriver) -> (u16, String) {
         "target_utilization_pct": driver.fee_config.target_utilization_pct,
     });
     (200, json.to_string())
+}
+
+fn handle_task_list(driver: &ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => serde_json::Value::Null,
+    };
+    let status_filter = req.get("status").and_then(|v| v.as_str());
+    let seed_filter = req.get("seed_ref").and_then(|v| v.as_str());
+    let tasks: Vec<serde_json::Value> = driver
+        .state_machine
+        .tasks_iter()
+        .filter(|t| status_filter.is_none_or(|s| {
+            format!("{:?}", t.status).to_lowercase() == s.to_lowercase()
+        }))
+        .filter(|t| seed_filter.is_none_or(|s| {
+            hex::encode(t.seed_ref).starts_with(s)
+        }))
+        .map(|t| {
+            serde_json::json!({
+                "task_id": hex::encode(t.task_id),
+                "status": format!("{:?}", t.status),
+                "bounty_agx": t.bounty_agx,
+                "primary_owner": hex::encode(t.primary_owner),
+                "created_at_height": t.created_at_height,
+            })
+        })
+        .collect();
+    let json = serde_json::json!({
+        "tasks": tasks,
+        "count": tasks.len(),
+    });
+    (200, json.to_string())
+}
+
+fn handle_review_list(driver: &ConsensusDriver) -> (u16, String) {
+    let tasks: Vec<serde_json::Value> = driver
+        .state_machine
+        .tasks_iter()
+        .filter(|t| matches!(t.status, TaskStatus::InReview))
+        .map(|t| {
+            serde_json::json!({
+                "task_id": hex::encode(t.task_id),
+                "status": "InReview",
+                "bounty_agx": t.bounty_agx,
+                "created_at_height": t.created_at_height,
+            })
+        })
+        .collect();
+    let json = serde_json::json!({
+        "review_tasks": tasks,
+        "count": tasks.len(),
+    });
+    (200, json.to_string())
+}
+
+fn handle_governance_list(driver: &ConsensusDriver) -> (u16, String) {
+    let proposals: Vec<serde_json::Value> = driver
+        .governance
+        .proposal_ids()
+        .iter()
+        .filter_map(|id| {
+            driver.governance.get_proposal(id).map(|p| {
+                serde_json::json!({
+                    "proposal_id": hex::encode(p.proposal_id),
+                    "proposer_id": hex::encode(p.proposer_id),
+                    "status": format!("{:?}", p.status),
+                    "yes_weight": p.yes_weight,
+                    "no_weight": p.no_weight,
+                    "vote_end_height": p.vote_end_height,
+                })
+            })
+        })
+        .collect();
+    let json = serde_json::json!({
+        "proposals": proposals,
+        "count": proposals.len(),
+    });
+    (200, json.to_string())
+}
+
+fn handle_governance_get(driver: &ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
+    };
+    let proposal_id = match parse_hash32(&req, "proposal_id") {
+        Ok(id) => id,
+        Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    match driver.governance.get_proposal(&proposal_id) {
+        Some(p) => {
+            let json = serde_json::json!({
+                "proposal_id": hex::encode(p.proposal_id),
+                "proposer_id": hex::encode(p.proposer_id),
+                "proposed_commit": hex::encode(p.proposed_commit),
+                "current_commit": hex::encode(p.current_commit),
+                "status": format!("{:?}", p.status),
+                "yes_weight": p.yes_weight,
+                "no_weight": p.no_weight,
+                "vote_start_height": p.vote_start_height,
+                "vote_end_height": p.vote_end_height,
+            });
+            (200, json.to_string())
+        }
+        None => (404, r#"{"error":"proposal not found"}"#.to_string()),
+    }
+}
+
+fn handle_fastpath_list(driver: &ConsensusDriver) -> (u16, String) {
+    let proposals: Vec<serde_json::Value> = driver
+        .fastpath
+        .proposals_iter()
+        .map(|p| {
+            serde_json::json!({
+                "proposal_id": hex::encode(p.proposal_id),
+                "topic_id": hex::encode(p.topic_id),
+                "proposer_id": hex::encode(p.proposer_id),
+                "expires_at_height": p.expires_at_height,
+            })
+        })
+        .collect();
+    let json = serde_json::json!({
+        "proposals": proposals,
+        "count": proposals.len(),
+    });
+    (200, json.to_string())
+}
+
+fn handle_fastpath_status(driver: &ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
+    };
+    let proposal_id = match parse_hash32(&req, "proposal_id") {
+        Ok(id) => id,
+        Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    let proposal = driver.fastpath.get_proposal(&proposal_id);
+    let certificate = driver.fastpath.get_certificate(&proposal_id);
+    let json = serde_json::json!({
+        "proposal_id": hex::encode(proposal_id),
+        "proposal": proposal.map(|p| serde_json::json!({
+            "topic_id": hex::encode(p.topic_id),
+            "expires_at_height": p.expires_at_height,
+        })),
+        "certificate": certificate.map(|_c| serde_json::json!({"issued": true})),
+    });
+    (200, json.to_string())
+}
+
+fn handle_fastpath_approve(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
+    };
+    let proposal_id = match parse_hash32(&req, "proposal_id") {
+        Ok(id) => id,
+        Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    let reviewer_id = match parse_hash32(&req, "reviewer_id") {
+        Ok(id) => id,
+        Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    use hyperfluid_fastpath::types::{ReviewerSignature, ReviewerVote};
+    let approval = ReviewerSignature {
+        reviewer_id,
+        vote: ReviewerVote::Approve,
+        signature: vec![],
+        reason_hash: [0u8; 32],
+    };
+    let topic_weight: u128 = req.get("topic_weight").and_then(|v| v.as_u64()).unwrap_or(1) as u128;
+    match driver.fastpath.submit_approval(proposal_id, approval, driver.height, topic_weight) {
+        Ok(cert) => {
+            let json = serde_json::json!({
+                "status": "approved",
+                "proposal_id": hex::encode(proposal_id),
+                "certificate_issued": cert.is_some(),
+            });
+            (200, json.to_string())
+        }
+        Err(e) => (400, format!(r#"{{"error":"{:?}"}}"#, e)),
+    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

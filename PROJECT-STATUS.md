@@ -295,6 +295,60 @@ Process improvements: 5 new generic guards added to `execute-build.md` `checkpoi
 - Phase 4c: Multi-node BFT soak test — `crates/hyperfluid-node/tests/multi_node_bft_test.rs`
 - Phase 4d: PDP wiring in BFT — `crates/hyperfluid-consensus/src/driver.rs`
 
+## CRITICAL UNTRACKED GAPS (identified 2026-05-24, see `build-status.md` for full report)
+
+These gaps must be resolved before any new stage or week starts:
+
+### Order A — P2P Remote Connectivity (blocks multi-validator)
+1. `main.rs:138` — P2P listener binds to `127.0.0.1`, change to configurable address
+2. `main.rs:159` — `key_provider` returns `None` for all peers, populate from validator set
+
+### Order B — PDP Security Holes (blocks protocol security)
+3. Add explicit PDP arms for EvidenceTx, StakingTx, DelegationTx, HeartbeatTx, ReleaseTaskTx, SplitTaskTx (currently `_ => return true`)
+4. Fix `TransferTx` → `ClaimTaskLease` and `SubmitReviewTx` → `SubmitGovernanceProposal` mapping errors
+5. Add sender extraction for 6 TxTypes returning `None`
+
+### Order C — Error Propagation (blocks reliability)
+6. Change `execute_tx()` return from `()` to `Result`
+7. Change `submit_tx()` return from `bool` to `Result<Hash32, Error>`
+8. Wire failures through RPC
+
+### Order D — Economic Mechanisms (blocks spec compliance)
+9. Wire fee burning, priority fees, validator rebates, slashing propagation, governance deposits, challenge bonds, commit-reveal, seed_ref validation, audit log
+
+### Order E — State Root Completeness (blocks consensus)
+10. Add `review_records`, `review_task_map`, `fee_burn_accumulator` to `compute_state_root()` and `snapshot_state()` — currently missing, causes BFT divergence on blocks with review transactions
+
+### Order F — PDP Rollback (blocks correctness)
+11. Snapshot PDP state before `validate_tx_pdp()` and roll back on state machine rejection — currently nonces/plan_ids permanently advance even on failed txs
+
+### Order G — Identity Verification (blocks P2P security)
+12. Bind ClatterHandshake `remote_id` to cryptographic key exchange — currently `_identity` parameter unused, any caller can claim any peer ID
+
+### Order H — Production Code Paths (blocks reliability)
+13. Wire `run_bft_loop()` into `main.rs` — currently only test code runs BFT
+14. Fix `extract_sender_id` for TaskCreateTx (decodes wrong payload type)
+15. Fix `init_account()` / `init_validator()` overwrite on duplicates
+16. Replace panic vectors across 5 files (tcp.rs unwrap, fastpath unwrap, proposal unwrap, bft lock unwrap, select_proposer panic)
+17. Wire or document 18 orphan functions (see build-status.md for full list)
+18. Populate `committee_id` from committee history instead of hardcoded 0
+
+### Order I — Agent Runtime (blocks agent functionality)
+19. Wire `todo_write`/`todo_update` to database — currently lossy, agent has no working memory
+20. Fix crash recovery: reload config from file, use real LLM provider instead of StubProvider
+21. Fix `hyperfluid agent register` — currently a no-op (wrong tx_type, no backend)
+22. Fix sandbox `--sandbox-review` flag — currently handled by nothing, sandbox always fails
+23. Align 14 CLI_SPEC flag names with actual CLI implementation (`--id` vs `--task-id` etc.)
+
+### Order J — Config & Staking (blocks testnet)
+24. Regenerate `config/testnet-single.toml` with correct monetary values (off by 1000-1,000,000x)
+25. Remove dead staking crate types (10 of 11 unused cross-crate) and unused dev-dependencies
+26. Remove duplicate type definitions (`VoteOption`, `GovernanceVote*`, `ValidatorState` ×2)
+
+### Order K — Determinism & Dependencies (blocks reliability)
+27. Fix `compute_state_checksum` to sort keys before hashing (currently HashMap-order dependent)
+28. Remove unused `module-lattice` workspace dep
+
 ## Layer 4 Spec Inventory (delivered)
 
 | Spec | Covers (Component/FR) | Status |

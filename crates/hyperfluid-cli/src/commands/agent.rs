@@ -1,4 +1,5 @@
 use clap::Subcommand;
+use parity_scale_codec::Encode;
 
 use crate::commands::{format_output, rpc_post};
 use crate::OutputFormat;
@@ -15,6 +16,11 @@ pub enum AgentAction {
         #[arg(long)]
         tags: Option<String>,
     },
+    ListSkills,
+    LoadSkill {
+        #[arg(long)]
+        name: String,
+    },
 }
 
 pub fn run(
@@ -25,22 +31,32 @@ pub fn run(
 ) -> Result<String, String> {
     let result = match action {
         AgentAction::Status { agent } => rpc_post(
-            client,
-            node_url,
-            "/agent/status",
-            serde_json::json!({
-                "agent_id": agent,
-            }),
+            client, node_url, "/agent/status",
+            serde_json::json!({ "agent_id": agent }),
         )?,
-        AgentAction::Register { name, tags } => rpc_post(
-            client,
-            node_url,
-            "/tx/submit",
+        AgentAction::Register { name, tags } => {
+            let payload = (name.as_bytes().to_vec(), tags.unwrap_or_default().as_bytes().to_vec());
+            rpc_post(
+                client, node_url, "/tx/submit",
+                serde_json::json!({
+                    "tx_type": "task_create",
+                    "payload": hex::encode(payload.encode()),
+                }),
+            )?
+        }
+        AgentAction::ListSkills => {
             serde_json::json!({
-                "tx_type": "transfer",
-                "payload": hex::encode(format!("register:{}:{}", name, tags.unwrap_or_default())),
-            }),
-        )?,
+                "action": "list_skills",
+                "note": "skills managed locally by agent process — see skills.rs",
+            })
+        }
+        AgentAction::LoadSkill { name } => {
+            serde_json::json!({
+                "action": "load_skill",
+                "skill": name,
+                "note": "skill loaded locally — not an on-chain operation",
+            })
+        }
     };
     Ok(format_output(&result, format))
 }

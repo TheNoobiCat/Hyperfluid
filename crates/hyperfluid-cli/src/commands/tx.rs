@@ -1,7 +1,18 @@
 use clap::Subcommand;
+use parity_scale_codec::Encode;
 
 use crate::commands::{format_output, rpc_post};
 use crate::OutputFormat;
+
+fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
+    let bytes = hex::decode(hex_str).map_err(|e| format!("invalid hex: {}", e))?;
+    if bytes.len() != 32 {
+        return Err(format!("expected 32 bytes (64 hex chars), got {}", bytes.len()));
+    }
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&bytes);
+    Ok(out)
+}
 
 #[derive(Subcommand)]
 pub enum TxAction {
@@ -35,6 +46,12 @@ pub enum TxAction {
         #[arg(long)]
         nonce: u64,
     },
+    Renew {
+        #[arg(long)]
+        validator: String,
+        #[arg(long)]
+        nonce: u64,
+    },
     Delegate {
         #[arg(long)]
         delegator: String,
@@ -53,6 +70,14 @@ pub enum TxAction {
         #[arg(long)]
         nonce: u64,
     },
+    WithdrawDelegation {
+        #[arg(long)]
+        delegator: String,
+        #[arg(long)]
+        validator: String,
+        #[arg(long)]
+        nonce: u64,
+    },
     Commission {
         #[arg(long)]
         validator: String,
@@ -60,6 +85,18 @@ pub enum TxAction {
         rate: u16,
         #[arg(long)]
         nonce: u64,
+    },
+    Evidence {
+        #[arg(long)]
+        validator: String,
+        #[arg(long)]
+        evidence_type: u8,
+        #[arg(long)]
+        evidence_height: u64,
+        #[arg(long)]
+        missed_blocks: u64,
+        #[arg(long)]
+        total_window_blocks: u64,
     },
 }
 
@@ -71,115 +108,97 @@ pub fn run(
 ) -> Result<String, String> {
     let result = match action {
         TxAction::Transfer { sender, recipient, amount, nonce } => {
-            let payload = encode_transfer_payload(&sender, &recipient, amount, nonce)?;
-            rpc_post(
-                client,
-                node_url,
-                "/tx/submit",
-                serde_json::json!({
-                    "tx_type": "transfer",
-                    "payload": payload,
-                }),
-            )?
+            let sender_id = parse_hash32(&sender)?;
+            let recipient_id = parse_hash32(&recipient)?;
+            let payload = (sender_id, recipient_id, amount, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "transfer",
+                "payload": hex::encode(payload.encode()),
+            }))?
         }
         TxAction::Bond { validator, amount, nonce } => {
-            let payload = encode_staking_payload("bond", &validator, amount, nonce)?;
-            rpc_post(
-                client,
-                node_url,
-                "/tx/submit",
-                serde_json::json!({
-                    "tx_type": "staking",
-                    "payload": payload,
-                }),
-            )?
+            let v = parse_hash32(&validator)?;
+            let payload = (v, amount, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "staking",
+                "action": "bond",
+                "payload": hex::encode(payload.encode()),
+            }))?
         }
         TxAction::Unbond { validator, nonce } => {
-            let payload = encode_staking_payload("unbond", &validator, 0, nonce)?;
-            rpc_post(
-                client,
-                node_url,
-                "/tx/submit",
-                serde_json::json!({
-                    "tx_type": "staking",
-                    "payload": payload,
-                }),
-            )?
+            let v = parse_hash32(&validator)?;
+            let payload = (v, 0u128, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "staking",
+                "action": "unbond",
+                "payload": hex::encode(payload.encode()),
+            }))?
         }
         TxAction::Withdraw { validator, nonce } => {
-            let payload = encode_staking_payload("withdraw", &validator, 0, nonce)?;
-            rpc_post(
-                client,
-                node_url,
-                "/tx/submit",
-                serde_json::json!({
-                    "tx_type": "staking",
-                    "payload": payload,
-                }),
-            )?
+            let v = parse_hash32(&validator)?;
+            let payload = (v, 0u128, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "staking",
+                "action": "withdraw",
+                "payload": hex::encode(payload.encode()),
+            }))?
         }
-        TxAction::Delegate { delegator, validator, amount, nonce } => rpc_post(
-            client,
-            node_url,
-            "/tx/submit",
-            serde_json::json!({
+        TxAction::Renew { validator, nonce } => {
+            let v = parse_hash32(&validator)?;
+            let payload = (v, 0u128, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "staking",
+                "action": "renew",
+                "payload": hex::encode(payload.encode()),
+            }))?
+        }
+        TxAction::Delegate { delegator, validator, amount, nonce } => {
+            let d = parse_hash32(&delegator)?;
+            let v = parse_hash32(&validator)?;
+            let payload = (d, v, amount, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
                 "tx_type": "delegation",
-                "payload": hex::encode(format!("delegate:{}:{}:{}:{}", delegator, validator, amount, nonce)),
-            }),
-        )?,
-        TxAction::Undelegate { delegator, validator, nonce } => rpc_post(
-            client,
-            node_url,
-            "/tx/submit",
-            serde_json::json!({
+                "action": "delegate",
+                "payload": hex::encode(payload.encode()),
+            }))?
+        }
+        TxAction::Undelegate { delegator, validator, nonce } => {
+            let d = parse_hash32(&delegator)?;
+            let v = parse_hash32(&validator)?;
+            let payload = (d, v, 0u128, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
                 "tx_type": "delegation",
-                "payload": hex::encode(format!("undelegate:{}:{}:0:{}", delegator, validator, nonce)),
-            }),
-        )?,
-        TxAction::Commission { validator, rate, nonce } => rpc_post(
-            client,
-            node_url,
-            "/tx/submit",
-            serde_json::json!({
+                "action": "undelegate",
+                "payload": hex::encode(payload.encode()),
+            }))?
+        }
+        TxAction::WithdrawDelegation { delegator, validator, nonce } => {
+            let d = parse_hash32(&delegator)?;
+            let v = parse_hash32(&validator)?;
+            let payload = (d, v, 0u128, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
                 "tx_type": "delegation",
-                "payload": hex::encode(format!("commission:{}:{}:{}", validator, rate, nonce)),
-            }),
-        )?,
+                "action": "withdraw_delegation",
+                "payload": hex::encode(payload.encode()),
+            }))?
+        }
+        TxAction::Commission { validator, rate, nonce } => {
+            let v = parse_hash32(&validator)?;
+            let payload = ([0u8; 32], v, rate as u128, nonce);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "delegation",
+                "action": "set_commission",
+                "payload": hex::encode(payload.encode()),
+            }))?
+        }
+        TxAction::Evidence { validator, evidence_type, evidence_height, missed_blocks, total_window_blocks } => {
+            let v = parse_hash32(&validator)?;
+            let payload = (evidence_type, v, evidence_height, missed_blocks, total_window_blocks);
+            rpc_post(client, node_url, "/tx/submit", serde_json::json!({
+                "tx_type": "evidence",
+                "payload": hex::encode(payload.encode()),
+            }))?
+        }
     };
     Ok(format_output(&result, format))
-}
-
-fn encode_transfer_payload(
-    sender: &str,
-    recipient: &str,
-    amount: u128,
-    nonce: u64,
-) -> Result<String, String> {
-    use parity_scale_codec::Encode;
-    let sender_id = parse_hash32(sender)?;
-    let recipient_id = parse_hash32(recipient)?;
-    let payload = (sender_id, recipient_id, amount, nonce);
-    Ok(hex::encode(payload.encode()))
-}
-
-fn encode_staking_payload(
-    _action: &str,
-    validator: &str,
-    amount: u128,
-    nonce: u64,
-) -> Result<String, String> {
-    use parity_scale_codec::Encode;
-    let validator_id = parse_hash32(validator)?;
-    let payload = (validator_id, amount, nonce);
-    Ok(hex::encode(payload.encode()))
-}
-
-fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
-    let bytes = hex::decode(hex_str).map_err(|e| format!("invalid hex: {}", e))?;
-    if bytes.len() != 32 {
-        return Err(format!("expected 32 bytes (64 hex chars), got {}", bytes.len()));
-    }
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&bytes);
-    Ok(out)
 }

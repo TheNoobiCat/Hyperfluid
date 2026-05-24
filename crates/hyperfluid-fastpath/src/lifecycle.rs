@@ -316,6 +316,14 @@ impl FastPathEngine {
     pub fn get_certificate(&self, proposal_id: &Hash32) -> Option<&FastPathCertificate> {
         self.certificates.iter().find(|c| c.proposal_id == *proposal_id)
     }
+
+    pub fn proposal_ids(&self) -> Vec<Hash32> {
+        self.proposals.iter().map(|p| p.proposal_id).collect()
+    }
+
+    pub fn proposals_iter(&self) -> impl Iterator<Item = &FastPathProposal> {
+        self.proposals.iter()
+    }
 }
 
 pub fn compute_proposal_id(

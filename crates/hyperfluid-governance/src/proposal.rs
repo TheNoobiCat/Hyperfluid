@@ -236,6 +236,26 @@ impl GovernanceEngine {
     pub fn is_in_cooldown(&self, proposer_id: &Hash32, current_height: u64) -> bool {
         self.cooldowns.get(proposer_id).map(|&until| current_height < until).unwrap_or(false)
     }
+
+    pub fn proposal_ids(&self) -> Vec<Hash32> {
+        self.proposals.keys().copied().collect()
+    }
+
+    pub fn active_proposal_ids(&self) -> Vec<Hash32> {
+        self.proposals
+            .iter()
+            .filter(|(_, p)| p.status == ProposalStatus::Active)
+            .map(|(k, _)| *k)
+            .collect()
+    }
+
+    pub fn passed_proposal_ids(&self) -> Vec<Hash32> {
+        self.proposals
+            .iter()
+            .filter(|(_, p)| p.status == ProposalStatus::Passed)
+            .map(|(k, _)| *k)
+            .collect()
+    }
 }
 
 /// Compute a proposal ID from its content.

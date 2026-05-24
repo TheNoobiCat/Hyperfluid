@@ -176,6 +176,22 @@ struct SubmitReviewPayload {
     evidence_hash: Hash32,
 }
 
+/// Payload format for EvidenceTx transactions.
+///
+/// evidence_type:
+///   0 = equivocation (double-signing)
+///   1 = downtime (missed blocks)
+/// For equivocation: `evidence_height` = height of double-sign, `missed_blocks`/`total_window_blocks` ignored.
+/// For downtime: `missed_blocks` = count of missed, `total_window_blocks` = liveness window size.
+#[derive(Encode, Decode)]
+struct EvidencePayload {
+    evidence_type: u8,
+    validator_id: Hash32,
+    evidence_height: u64,
+    missed_blocks: u64,
+    total_window_blocks: u64,
+}
+
 /// Consensus driver that coordinates block production, transaction execution,
 /// and state management. Wraps the deterministic StateMachine and maintains
 /// the canonical block store.
@@ -414,11 +430,44 @@ impl ConsensusDriver {
             self.state_machine.run_review_expiry(task_id, new_height);
         }
 
-        // 2c. Run trust promotion and topic decay at epoch boundaries
+        // 2c. Run trust promotion, topic decay, and governance finalization at epoch boundaries
         let new_epoch = new_height / self.epoch_length;
         if new_height > 0 && new_height.is_multiple_of(self.epoch_length) {
             self.state_machine.run_trust_promotion();
             self.state_machine.run_topic_decay(new_height);
+
+            // Finalize governance proposals whose vote window has ended
+            let total_stake: u128 = self
+                .state_machine
+                .validators_iter()
+                .filter(|(_, vt)| vt.state == ValidatorLifecycleState::Active)
+                .map(|(_, vt)| vt.self_bond)
+                .sum();
+            let active_ids = self.governance.active_proposal_ids();
+            for pid in &active_ids {
+                if let Ok(outcome) =
+                    self.governance.finalize_proposal(*pid, new_height, total_stake, self.epoch_length)
+                {
+                    tracing::info!(
+                        "Governance proposal {:?} finalized: {:?}",
+                        hex::encode(*pid),
+                        outcome
+                    );
+                }
+            }
+
+            // Execute passed proposals — update git:head when a proposal passes
+            let passed_ids = self.governance.passed_proposal_ids();
+            for pid in &passed_ids {
+                if let Ok(proposed_commit) = self.governance.execute_proposal(*pid) {
+                    self.git_head_commit = proposed_commit;
+                    tracing::info!(
+                        "Governance proposal {:?} executed — git:head updated to {:?}",
+                        hex::encode(*pid),
+                        hex::encode(proposed_commit)
+                    );
+                }
+            }
         }
 
         // 3. Compute SMT root from post-execution state
@@ -556,12 +605,17 @@ impl ConsensusDriver {
                 if let Ok(payload) = GovernancePayload::decode(&mut &tx.tx_payload[..]) {
                     let vote_option =
                         if payload.vote_approve { VoteOption::Yes } else { VoteOption::No };
+                    let vote_weight = self
+                        .state_machine
+                        .get_validator(&payload.proposer_id)
+                        .map(|vt| vt.self_bond)
+                        .unwrap_or(1);
                     let vote = GovernanceVote {
                         proposal_id: payload.proposal_id,
                         voter_id: payload.proposer_id,
                         vote: vote_option,
                         reason_hash: payload.description_hash,
-                        vote_weight: 1, // default weight: 1 unit (stake tracking not yet wired)
+                        vote_weight,
                         signature: vec![],
                     };
                     match self.governance.cast_vote(vote, ctx.height) {
@@ -831,14 +885,37 @@ impl ConsensusDriver {
                 }
             }
             TxType::EvidenceTx => {
-                // EvidenceTx carries slashing evidence payload
-                // Full dispatch deferred: payload format not yet defined.
-                // When wired, extract (validator_id, evidence_height) from payload
-                // and call:
-                //   self.state_machine.execute_slash_equivocation(
-                //       validator_id, evidence_height, min_jail_blocks, ctx.height
-                //   );
-                tracing::debug!("EvidenceTx: slashing evidence received (full dispatch deferred)");
+                if let Ok(payload) = EvidencePayload::decode(&mut &tx.tx_payload[..]) {
+                    const MIN_JAIL_BLOCKS: u64 = 5000;
+                    const PAUSE_THRESHOLD_PCT: u64 = 20;
+                    match payload.evidence_type {
+                        0 => {
+                            self.state_machine.execute_slash_equivocation(
+                                payload.validator_id,
+                                payload.evidence_height,
+                                MIN_JAIL_BLOCKS,
+                                ctx.height,
+                            );
+                        }
+                        1 => {
+                            self.state_machine.execute_slash_downtime(
+                                payload.validator_id,
+                                payload.missed_blocks,
+                                payload.total_window_blocks,
+                                payload.evidence_height,
+                                PAUSE_THRESHOLD_PCT,
+                                MIN_JAIL_BLOCKS,
+                                ctx.height,
+                            );
+                        }
+                        _ => {
+                            tracing::warn!(
+                                "EvidenceTx: unknown evidence type {}",
+                                payload.evidence_type
+                            );
+                        }
+                    }
+                }
             }
         }
     }
