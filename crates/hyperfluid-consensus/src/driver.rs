@@ -8,7 +8,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use parity_scale_codec::{Decode, Encode};
 use sha3::{Digest, Sha3_256};
@@ -1011,11 +1011,9 @@ impl ConsensusDriver {
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             while running.load(Ordering::Acquire) {
-                let timestamp =
-                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-
                 if let Ok(mut d) = driver.lock() {
-                    let block = d.produce_block(vec![], timestamp);
+                    let height = d.height + 1;
+                    let block = d.produce_block(vec![], height);
                     tracing::info!(
                         "Produced block height={}, hash={}, state_root={}, mempool={}",
                         block.header.height,
@@ -1134,10 +1132,8 @@ impl ConsensusDriver {
     ) {
         match event {
             crate::malachite_consensus::ConsensusEvent::RequestBlock { height, round } => {
-                let timestamp =
-                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
                 let block = if let Ok(mut d) = driver.lock() {
-                    let block = d.produce_block(vec![], timestamp);
+                    let block = d.produce_block(vec![], height);
                     tracing::info!(
                         "BFT: built block height={} round={} hash={}",
                         height,

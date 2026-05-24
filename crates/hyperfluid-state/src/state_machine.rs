@@ -1407,6 +1407,11 @@ impl StateMachine {
         self.consumed_plans.iter()
     }
 
+    /// Iterate over all consumed freshness nonces.
+    pub fn consumed_nonces_iter(&self) -> impl Iterator<Item = &(Hash32, Hash32)> {
+        self.consumed_nonces.iter()
+    }
+
     /// Iterate over all delegation records.
     pub(crate) fn delegations_iter(
         &self,
@@ -1512,7 +1517,10 @@ impl StateMachine {
         let slash_basis_points = std::cmp::min(500, (vt.slash_count + 1) * 100);
         let slash_amount = (vt.self_bond * slash_basis_points as u128) / 10000;
 
-        let vt = self.validators.get_mut(&validator_id).unwrap();
+        let vt = match self.validators.get_mut(&validator_id) {
+            Some(vt) => vt,
+            None => return ExecutionResult::Rejected,
+        };
         vt.self_bond = vt.self_bond.saturating_sub(slash_amount);
 
         if downtime_pct >= pause_threshold_pct {

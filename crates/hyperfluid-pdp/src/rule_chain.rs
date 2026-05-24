@@ -12,9 +12,9 @@
 // Early exit on first failure with structured deny reason code.
 
 use crate::error::PdpError;
+use crate::quota::canonical_quota_entry;
 use crate::types::{
     ActionPlanRequest, ActionPlanResponse, ActionType, Decision, PdpContext, QuotaConsumption,
-    QuotaEntry,
 };
 
 /// Evaluates an action plan through the deterministic 5-step rule chain.
@@ -166,7 +166,10 @@ fn step4_quota_check(
     let trust_stage = ctx.trust_stage;
 
     for quota_id in &relevant_quota_ids {
-        let entry = get_quota_entry(quota_id);
+        let entry = match canonical_quota_entry(quota_id) {
+            Some(e) => e,
+            None => continue,
+        };
         let state = ctx.quota_states.iter().find(|qs| qs.quota_id == *quota_id);
 
         let consumed = state.map(|s| s.consumed).unwrap_or(0);
@@ -213,147 +216,6 @@ fn quota_ids_for_action(action_type: ActionType) -> Vec<String> {
         }
         ActionType::CreateTask => vec!["task_create_per_stage".to_string()],
         _ => vec![],
-    }
-}
-
-/// Returns the canonical quota entry for a given quota ID.
-/// Source: policy-engine-spec.md §2.4
-fn get_quota_entry(quota_id: &str) -> QuotaEntry {
-    use crate::types::TrustStage;
-    match quota_id {
-        "p2p_conn_per_identity" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "p2p_ingress".into(),
-            dimension: "per_identity".into(),
-            limit: 50,
-            window_blocks: 0,
-            stage_multipliers: vec![
-                (TrustStage::Untrusted, (10, 50)),
-                (TrustStage::Trusted, (50, 50)),
-            ],
-        },
-        "p2p_tx_burst" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "p2p_ingress".into(),
-            dimension: "per_identity".into(),
-            limit: 20,
-            window_blocks: 360,
-            stage_multipliers: vec![],
-        },
-        "p2p_gossip_budget" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "p2p_gossip".into(),
-            dimension: "per_sender".into(),
-            limit: 100,
-            window_blocks: 60,
-            stage_multipliers: vec![],
-        },
-        "inbox_msg_per_sender" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "inbox_router".into(),
-            dimension: "per_sender".into(),
-            limit: 60,
-            window_blocks: 60,
-            stage_multipliers: vec![
-                (TrustStage::Untrusted, (5, 60)),
-                (TrustStage::Trusted, (60, 60)),
-            ],
-        },
-        "inbox_global_per_agent" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "inbox_router".into(),
-            dimension: "per_agent".into(),
-            limit: 2000,
-            window_blocks: 3600,
-            stage_multipliers: vec![],
-        },
-        "topic_msg_global" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "topic_router".into(),
-            dimension: "per_topic".into(),
-            limit: 500,
-            window_blocks: 300,
-            stage_multipliers: vec![],
-        },
-        "fast_merge_per_topic" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "fast_path".into(),
-            dimension: "per_topic".into(),
-            limit: 20,
-            window_blocks: 3600,
-            stage_multipliers: vec![],
-        },
-        "fast_merge_per_identity" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "fast_path".into(),
-            dimension: "per_identity".into(),
-            limit: 5,
-            window_blocks: 3600,
-            stage_multipliers: vec![],
-        },
-        "gov_proposals_per_identity" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "governance".into(),
-            dimension: "per_identity".into(),
-            limit: 1,
-            window_blocks: 8192,
-            stage_multipliers: vec![],
-        },
-        "gov_open_proposals_global" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "governance".into(),
-            dimension: "network_wide".into(),
-            limit: 32,
-            window_blocks: 0,
-            stage_multipliers: vec![],
-        },
-        "review_concurrent_per_reviewer" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "review_assignment".into(),
-            dimension: "per_reviewer".into(),
-            limit: 5,
-            window_blocks: 0,
-            stage_multipliers: vec![],
-        },
-        "lease_active_per_agent" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "task_board".into(),
-            dimension: "per_agent".into(),
-            limit: 6,
-            window_blocks: 0,
-            stage_multipliers: vec![(TrustStage::Untrusted, (2, 6)), (TrustStage::Trusted, (6, 6))],
-        },
-        "challenge_per_identity" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "challenge".into(),
-            dimension: "per_identity".into(),
-            limit: 3,
-            window_blocks: 8192,
-            stage_multipliers: vec![],
-        },
-        "task_create_per_stage" => QuotaEntry {
-            quota_id: quota_id.into(),
-            enforcement_point: "pdp".into(),
-            dimension: "per_agent".into(),
-            limit: 10,
-            window_blocks: 0,
-            stage_multipliers: vec![
-                (TrustStage::Untrusted, (0, 10)),
-                (TrustStage::Trusted, (10, 10)),
-            ],
-        },
-        _ => {
-            // Unknown quota_id — deny by returning a zero-limit entry.
-            // This prevents silent unlimited access for unrecognised quota IDs.
-            QuotaEntry {
-                quota_id: quota_id.into(),
-                enforcement_point: "unknown".into(),
-                dimension: "unknown".into(),
-                limit: 0,
-                window_blocks: 0,
-                stage_multipliers: vec![],
-            }
-        }
     }
 }
 

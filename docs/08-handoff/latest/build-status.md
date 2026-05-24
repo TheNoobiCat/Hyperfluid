@@ -1,6 +1,6 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) COMPLETE
 
-**Last updated:** 2026-05-24 (Week 9-10 COMPLETE: TUI setup wizard, Telegram bot client, review sandbox subagent, network bridge, protocol backend gaps (GAP-03/04/06), RPC routing gaps (GAP-07/08/09/10), skills infrastructure, FastPath GAP-05 submit_approval. ~1,630 lines new code, 19 new tests. CI all-green.)
+**Last updated:** 2026-05-24 (Bug Audit Round 8: 8 bugs fixed across 7 crates. Block timestamp determinism, PDP quota unification, governance cooldown, snapshot_state completeness, quorum ceil, SMT debug_assert, get_mut unwrap, mark_invalid status guard. 4 new process guards added. CI all-green. 551 tests.)
 **Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards implemented, BFT consensus partially wired — Malachite multi-validator networking deferred to Stage 03)
 **Stage:** 02 — Agent Runtime — **COMPLETE** (all 10 weeks complete)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
@@ -142,8 +142,30 @@ See `docs/01-research/_audit-bugs-2026-05-18-r2.md` for full report.
 | Block loop `JoinHandle` result discarded — panicked task swallowed (I-10) | Medium | Changed to explicit match with `tracing::error!` in Err branch. |
 | Mutex poison silently masked at node shutdown (I-11) | Medium | Added `Err(_)` branch with `tracing::warn!` diagnostics. |
 | `hash_leaf` private but needed by `ProofOfPossession::build` (I-12) | High | Made `hash_leaf` pub, added to lib.rs re-exports. |
-
 See `docs/01-research/_audit-bugs-2026-05-23.md` for full report.
+
+## Resolved Issues (Bug Audit 2026-05-24 — Round 8)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| Consensus block timestamp uses `SystemTime::now()` (J-01) | Critical | Replaced with block height as timestamp — determinism violation across validators for BFT block production |
+| PDP canonical quota matrix duplicated in two locations (J-02) | Critical | Unified to single source of truth in `quota.rs::canonical_quota_entry()`; removed 137-line duplicate from rule_chain.rs |
+| Governance cooldown: 30 blocks instead of 3 epochs (J-03) | High | Renamed parameter `block_time_s` → `epoch_length_blocks` — cooldown was 500x shorter than intended |
+| snapshot_state() missing 4 SMT collections (G-03 regression) (J-04) | High | Added leases, trust stages, topic records, consumed nonces to snapshot; added `consumed_nonces_iter()` |
+| Fast-path quorum threshold uses floor division (J-05) | High | Changed to `.div_ceil(100)` — off-by-one quorum at small validator set weights |
+| SMT insert `debug_assert!` swallows errors in release (J-06) | High | Replaced with explicit `let _ =` — release builds would silently corrupt state on SMT failure |
+| `.unwrap()` on `get_mut` after `get` check in slashing (J-07) | High | Replaced with `match` + `Rejected` fallback in both `execute_slash_equivocation` and `execute_slash_downtime` |
+| `mark_invalid()` overwrites status without guard (J-08) | High | Added `ProposalNotActive` status guard — prevents silent downgrade of Passed/Executed proposals |
+
+See `docs/01-research/_audit-bugs-2026-05-24.md` for full report.
+
+## Process Improvements (2026-05-24)
+
+4 new generic guards added to `.opencode/commands/execute-build/checkpoint.md`:
+- duplicate-drift guard: grep for duplicate canonical data tables; unify or verify match
+- block-timestamp guard: grep consensus code for `SystemTime::now`; flag any in block production
+- quorum-ceil guard: verify supermajority formulas use ceiling division
+- parameter-unit guard: audit multiplication of differently-named quantities for unit correctness
 
 ## Process Improvements (2026-05-23)
 
@@ -153,6 +175,22 @@ See `docs/01-research/_audit-bugs-2026-05-23.md` for full report.
 - async-JoinHandle guard (discarded `JoinHandle.await` results)
 - mutex-poison guard (`if let Ok(guard) = lock()` without error branch)
 - dead-field read-side guard (fields populated but never read in production)
+
+## Verification (after Bug Audit Round 8 — 2026-05-24)
+
+| Check | Result |
+|-------|--------|
+| `cargo build --workspace` | PASS (13 crates, zero warnings) |
+| `cargo test --workspace` | PASS (all crates, 0 failures) |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS (zero) |
+| `cargo doc --workspace --no-deps --document-private-items` | PASS (2 pre-existing warnings in hyperfluid-state) |
+| `cargo deny check` | PASS |
+| `cargo bench --workspace --no-run` | PASS |
+| Determinism sweep (floating-point) | PASS (zero hits in protocol code) |
+| Determinism sweep (wall-clock/random) | PASS (SystemTime::now removed from consensus paths) |
+| `if let Some.get_mut` guard | PASS (all have rejecting else arms) |
+| `snapshot_state` completeness | PASS (now matches `compute_state_root`) |
 
 ## Verification (after fill-gaps 2026-05-23)
 

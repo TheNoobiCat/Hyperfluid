@@ -195,7 +195,13 @@ impl QuotaManager {
             .stage_multipliers
             .iter()
             .find(|(stage, _)| *stage == trust_stage)
-            .map(|(_, (num, den))| (entry.limit as u128 * *num as u128) / *den as u128)
+            .map(|(_, (num, den))| {
+                if *den == 0 {
+                    entry.limit as u128
+                } else {
+                    (entry.limit as u128 * *num as u128) / *den as u128
+                }
+            })
             .unwrap_or(entry.limit as u128) as u64;
 
         let state_key = format!("{principal_id}:{quota_id}");
@@ -278,6 +284,12 @@ impl Default for QuotaManager {
     fn default() -> Self {
         Self::with_canonical_entries()
     }
+}
+
+/// Look up a canonical quota entry by ID.
+/// This is the single source of truth for the quota matrix (spec §2.4).
+pub fn canonical_quota_entry(quota_id: &str) -> Option<QuotaEntry> {
+    QuotaManager::with_canonical_entries().get_entry(quota_id).cloned()
 }
 
 #[cfg(test)]

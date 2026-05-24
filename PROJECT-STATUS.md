@@ -241,6 +241,26 @@ Systemic patterns identified: fail-open when state absent, panic/assert in produ
 
 Process improvements: 7 new generic guards added to `execute-build.md` `checkpoint.md`.
 
+## Bug Audit (2026-05-24 — Round 8)
+
+**Result:** 8 bugs found and fixed across 7 crates and 1 process file. See `docs/01-research/_audit-bugs-2026-05-24.md` for full report.
+
+Key findings:
+1. **CRITICAL:** Consensus block timestamp used `SystemTime::now()` — validators produce divergent block hashes in BFT consensus (determinism violation).
+2. **CRITICAL:** PDP canonical quota matrix duplicated 137 lines in `rule_chain.rs` and `quota.rs` — any divergence would be consensus-breaking.
+3. **HIGH:** Governance cooldown computed as 30 blocks instead of 3 epochs (~15,120 blocks) — `block_time_s` × `cooldown_epochs` unit mismatch.
+4. **HIGH:** `snapshot_state()` missed 4 of 9 SMT collections (leases, trust stages, topics, consumed nonces) — G-03 recurrence.
+5. **HIGH:** Fast-path quorum threshold used floor division — off-by-one quorum at small validator weights.
+6. **HIGH:** SMT insert `debug_assert!` swallowed errors in release builds — state root could silently diverge.
+7. **HIGH:** `.unwrap()` on `get_mut` after prior `get` check in slashing handlers — maintenance hazard.
+8. **HIGH:** `mark_invalid()` overwrote proposal status without Active guard — could downgrade Passed/Executed.
+
+Systemic patterns: block-timestamp determinism, duplicate canonical data, parameter-unit mismatch, floor-division for supermajority, debug_assert release-mode blindness.
+
+Process improvements: 4 new generic guards added to `execute-build.md` `checkpoint.md` (duplicate-drift, block-timestamp, quorum-ceil, parameter-unit).
+
+CI mimic: fmt, clippy (zero warnings), test (all pass), doc, deny, bench-check — ALL PASS.
+
 ## Bug Audit (2026-05-23 — Round 7)
 
 **Result:** 12 bugs found and fixed across 4 crates and 1 process file. See `docs/01-research/_audit-bugs-2026-05-23.md` for full report.
@@ -389,4 +409,4 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-23 (fill-gaps audit. Phase 0 traceability: 3 unscheduled FRs resolved. GAP-01a host commit persistence wired. Vaporware: ProposalState dead enum removed, EscrowStatus::Refunded wired. Spec header drift fixed across 5 specs. 6 new tests. CI all-green.)*
+*Last updated: 2026-05-24 (Bug Audit Round 8: 8 bugs fixed across 7 crates. Consensus determinism, governance cooldown, snapshot_state completeness, PDP quota unification, quorum ceil, SMT release-mode error, state machine get_mut guards, mark_invalid guard. 4 new process guards. CI all-green. 551 tests.)*

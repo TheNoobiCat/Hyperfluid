@@ -140,7 +140,7 @@ impl GovernanceEngine {
         proposal_id: Hash32,
         current_height: u64,
         total_snapshot_stake: u128,
-        block_time_s: u64,
+        epoch_length_blocks: u64,
     ) -> Result<ProposalOutcome, ProposalError> {
         let proposal = self.proposals.get(&proposal_id).ok_or(ProposalError::ProposalNotFound)?;
 
@@ -175,7 +175,7 @@ impl GovernanceEngine {
             proposal.status = ProposalStatus::Rejected;
             self.cooldowns.insert(
                 proposal.proposer_id,
-                current_height + (self.params.rejected_cooldown_epochs * block_time_s),
+                current_height + (self.params.rejected_cooldown_epochs * epoch_length_blocks),
             );
             Ok(ProposalOutcome::Rejected {
                 yes_weight: proposal.yes_weight,
@@ -205,15 +205,19 @@ impl GovernanceEngine {
         &mut self,
         proposal_id: Hash32,
         current_height: u64,
-        block_time_s: u64,
+        epoch_length_blocks: u64,
     ) -> Result<(), ProposalError> {
         let proposal =
             self.proposals.get_mut(&proposal_id).ok_or(ProposalError::ProposalNotFound)?;
 
+        if proposal.status != ProposalStatus::Active {
+            return Err(ProposalError::ProposalNotActive);
+        }
+
         proposal.status = ProposalStatus::Rejected;
         self.cooldowns.insert(
             proposal.proposer_id,
-            current_height + (self.params.rejected_cooldown_epochs * block_time_s),
+            current_height + (self.params.rejected_cooldown_epochs * epoch_length_blocks),
         );
 
         Ok(())

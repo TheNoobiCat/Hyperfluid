@@ -88,6 +88,38 @@ pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Ha
         sst_keys.push((key, value));
     }
 
+    for lease in sm.leases_iter() {
+        let key = crate::state_key(crate::KeyPrefix::TaskLease, &lease.lease_id);
+        let value = lease.encode();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for record in sm.trust_stages_iter() {
+        let key = crate::state_key(crate::KeyPrefix::TrustStage, &record.agent_id);
+        let value = record.encode();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for record in sm.topic_records_iter() {
+        let key = crate::state_key(crate::KeyPrefix::Topic, &record.topic_id);
+        let value = record.encode();
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
+    for (task_id, nonce) in sm.consumed_nonces_iter() {
+        let mut preimage = Vec::with_capacity(64);
+        preimage.extend_from_slice(task_id);
+        preimage.extend_from_slice(nonce);
+        let id = crate::sha3_256(&preimage);
+        let key = crate::state_key(crate::KeyPrefix::ConsumedNonce, &id);
+        let value = vec![1u8];
+        smt.insert(key, value.clone());
+        sst_keys.push((key, value));
+    }
+
     let state_root = smt.root();
 
     Snapshot { epoch, height, state_root, block_hash, sst_keys, merkle_proof_batch: Vec::new() }

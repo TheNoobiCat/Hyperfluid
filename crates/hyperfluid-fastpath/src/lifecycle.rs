@@ -92,9 +92,9 @@ impl FastPathEngine {
             valid_approvals.push(sig.clone());
         }
 
-        // Check quorum: need 2f+1 weighted approvals
+        // Check quorum: need 2f+1 weighted approvals (ceil division)
         let quorum_weight =
-            (topic_snapshot_weight * self.params.quorum_threshold_num as u128) / 100;
+            (topic_snapshot_weight * self.params.quorum_threshold_num as u128).div_ceil(100);
         if total_approvals < quorum_weight {
             return Err(FastPathError::InsufficientQuorum);
         }
@@ -172,7 +172,7 @@ impl FastPathEngine {
         // 5. Check quorum: need 2f+1 weighted approvals
         let total_approvals = all_approvals.len() as u128;
         let quorum_weight =
-            (topic_snapshot_weight * self.params.quorum_threshold_num as u128) / 100;
+            (topic_snapshot_weight * self.params.quorum_threshold_num as u128).div_ceil(100);
         if total_approvals < quorum_weight {
             return Ok(None);
         }
@@ -628,8 +628,8 @@ mod tests {
         };
         engine.submit_proposal(proposal, 100).unwrap();
 
-        // topic_snapshot_weight = 5 → quorum = (5 * 67) / 100 = 3
-        let weight = 5u128;
+        // topic_snapshot_weight = 4 → quorum = ceil(4 * 67 / 100) = 3
+        let weight = 4u128;
 
         // First approval: 1 < 3 → Ok(None)
         let result = engine.submit_approval(
