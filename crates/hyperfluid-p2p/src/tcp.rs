@@ -636,6 +636,11 @@ pub async fn connect_and_maintain(
 ) -> Result<(Hash32, mpsc::UnboundedSender<Vec<u8>>), TcpError> {
     let mut stream = TcpStream::connect(peer_addr).await?;
 
+    // Send 32-byte preamble: our peer_id so the responder can look up
+    // our DH/KEM keys in its key_provider for the Clatter handshake.
+    let local_peer_id = *local_identity.peer_id();
+    write_frame(&mut stream, &local_peer_id).await?;
+
     let channel = perform_initiator_handshake(
         &mut stream,
         &local_identity,

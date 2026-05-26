@@ -32,7 +32,7 @@ struct NodeConfig {
     p2p_bind: SocketAddr,
     node_key_path: PathBuf,
     multi_validator: bool,
-    peer_addrs: Vec<SocketAddr>,
+    peer_addrs: Vec<(SocketAddr, Hash32)>,
 }
 
 impl NodeConfig {
@@ -45,7 +45,7 @@ impl NodeConfig {
         let mut p2p_bind_str: Option<String> = None;
         let mut node_key_path = PathBuf::from("node_key");
         let mut multi_validator = false;
-        let mut peer_addrs: Vec<SocketAddr> = Vec::new();
+        let mut peer_addrs: Vec<(SocketAddr, Hash32)> = Vec::new();
 
         let mut i = 1;
         while i < args.len() {
@@ -85,7 +85,24 @@ impl NodeConfig {
                     if i < args.len() {
                         peer_addrs = args[i]
                             .split(',')
-                            .filter_map(|s| s.trim().parse::<SocketAddr>().ok())
+                            .filter_map(|entry| {
+                                let entry = entry.trim();
+                                if let Some((addr_str, peer_id_str)) = entry.split_once('=') {
+                                    let addr: SocketAddr = addr_str.trim().parse().ok()?;
+                                    let peer_id_bytes = hex::decode(peer_id_str.trim()).ok()?;
+                                    if peer_id_bytes.len() == 32 {
+                                        let mut peer_id = [0u8; 32];
+                                        peer_id.copy_from_slice(&peer_id_bytes);
+                                        Some((addr, peer_id))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    // Backward compat: bare address (peer_id = [0;32], won't work)
+                                    let addr: SocketAddr = entry.parse().ok()?;
+                                    Some((addr, [0u8; 32]))
+                                }
+                            })
                             .collect();
                     }
                 }
@@ -339,11 +356,12 @@ async fn main() {
             let identity = Arc::clone(&local_identity);
             let r_p2p = running.clone();
             let handler = consensus_handler.clone();
+            let kp_accept = key_provider.clone();
             tokio::spawn(async move {
                 TcpTransport::accept_loop(
                     listener,
                     identity,
-                    key_provider,
+                    kp_accept,
                     transport,
                     Some(handler),
                 )
@@ -371,20 +389,33 @@ async fn main() {
         let handler_for_peers = consensus_handler.clone();
         let identity_for_peers = Arc::clone(&local_identity);
         let my_bind_addr = actual_addr;
+        let key_provider_for_peers = key_provider.clone();
         tokio::spawn(async move {
-            for peer_addr in config.peer_addrs.iter().copied() {
+            for (peer_addr, peer_id) in config.peer_addrs.iter().copied() {
                 if peer_addr == my_bind_addr {
                     continue;
                 }
-                tracing::info!("Connecting to peer: {}", peer_addr);
-                let remote_peer_id = [0u8; 32]; // TODO: resolve peer_id from config/keystore
-                let remote_dh = [0u8; 32];
-                let remote_kem = Vec::new();
+                let (remote_dh, remote_kem) = match key_provider_for_peers(&peer_id) {
+                    Some(keys) => keys,
+                    None => {
+                        tracing::warn!(
+                            "No key material for peer_id {} — skipping peer {}",
+                            hex::encode(peer_id),
+                            peer_addr,
+                        );
+                        continue;
+                    }
+                };
+                tracing::info!(
+                    "Connecting to peer: {} (peer_id: {})",
+                    peer_addr,
+                    hex::encode(peer_id),
+                );
 
                 match tcp::connect_and_maintain(
                     peer_addr,
                     Arc::clone(&identity_for_peers),
-                    remote_peer_id,
+                    peer_id,
                     remote_dh,
                     remote_kem,
                     Arc::clone(&handler_for_peers),
