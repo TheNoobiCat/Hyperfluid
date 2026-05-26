@@ -85,19 +85,13 @@ fn main() {
     let node_url =
         std::env::var("HYPERFLUID_NODE_URL").unwrap_or_else(|_| "http://127.0.0.1:8545".into());
 
-    let identity = std::thread::Builder::new()
-        .stack_size(10 * 1024 * 1024)
-        .spawn({
-            let key_file = cli.key_file.clone();
-            let key_hex = cli.key_hex.clone();
-            move || {
-                commands::load_identity(key_file.as_deref(), key_hex.as_deref())
-                    .unwrap_or_else(|_| hyperfluid_p2p::identity::Identity::generate())
-            }
-        })
-        .expect("failed to spawn identity thread")
-        .join()
-        .expect("identity thread panicked");
+    let identity = match commands::load_identity(cli.key_file.as_deref(), cli.key_hex.as_deref()) {
+        Ok(id) => id,
+        Err(e) => {
+            eprintln!("Error loading identity: {}", e);
+            process::exit(1);
+        }
+    };
 
     let client = reqwest::blocking::Client::new();
 

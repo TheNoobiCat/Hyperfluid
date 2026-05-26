@@ -57,7 +57,7 @@ pub fn compute_next_base_fee(
     let utilization = block_utilization_pct as u128;
 
     if utilization > target {
-        let denom = target * adjustment_denominator;
+        let denom = target.saturating_mul(adjustment_denominator);
         let delta = current_base_fee
             .checked_mul(utilization.saturating_sub(target))
             .and_then(|v| v.checked_div(denom))
@@ -69,7 +69,7 @@ pub fn compute_next_base_fee(
         let increased = current_base_fee.saturating_add(delta);
         std::cmp::min(increased, current_base_fee.saturating_add(cap))
     } else if utilization < target {
-        let denom = target * adjustment_denominator;
+        let denom = target.saturating_mul(adjustment_denominator);
         let delta = current_base_fee
             .checked_mul(target.saturating_sub(utilization))
             .and_then(|v| v.checked_div(denom))
@@ -146,7 +146,7 @@ pub fn compute_validator_rebate(
     if total_bonded_stake == 0 || total_priority_fees == 0 {
         return 0;
     }
-    total_priority_fees * validator_stake / total_bonded_stake
+    total_priority_fees.saturating_mul(validator_stake) / total_bonded_stake
 }
 
 /// Check per-sender mempool transaction limit.

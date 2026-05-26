@@ -49,14 +49,13 @@ fn fix_F30_nonempty_signature_delivers() {
 }
 
 #[test]
-#[cfg(debug_assertions)]
-#[should_panic(expected = "signature should be verified by caller")]
-fn fix_F30_empty_signature_panics_in_debug() {
+fn fix_F30_empty_signature_rejected() {
     let mut router = InboxRouter::new(InboxConfig::default(), 600);
     router.advance_height(50);
     let mut msg = make_valid_msg(1, 2, b"hello", 1);
     msg.signature = vec![];
-    router.route_message(msg);
+    let result = router.route_message(msg);
+    assert_eq!(result, InboxDecision::InvalidContentAddressing);
 }
 
 // ---------------------------------------------------------------------------

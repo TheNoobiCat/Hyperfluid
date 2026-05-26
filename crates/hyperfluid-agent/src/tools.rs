@@ -126,7 +126,16 @@ pub fn dispatch_tool(
                         name,
                     ) {
                         Ok(skill) => ToolOutput::Remember(crate::types::KnowledgeEntry {
-                            id: [0u8; 32],
+                            id: {
+                                use sha3::Digest;
+                                let mut h = sha3::Sha3_256::new();
+                                h.update(
+                                    format!("{}:{}", skill.name, skill.description).as_bytes(),
+                                );
+                                let mut out = [0u8; 32];
+                                out.copy_from_slice(&h.finalize());
+                                out
+                            },
                             kind: crate::types::KnowledgeKind::Finding,
                             content: format!(
                                 "Loaded skill '{}': {} - {}",

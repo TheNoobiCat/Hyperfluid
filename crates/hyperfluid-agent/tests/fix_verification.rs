@@ -2,6 +2,8 @@
 //
 // Each fix has at least 1 positive test and 1 negative test.
 // Test naming: fix_F{N}_{short_description}
+#![allow(clippy::double_comparisons)]
+#![allow(clippy::field_reassign_with_default)]
 
 use hyperfluid_agent::config::{Config, LlmSection};
 use hyperfluid_agent::isolation;

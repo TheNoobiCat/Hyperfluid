@@ -1,6 +1,7 @@
 // Verification tests for production-readiness fixes (F-22 through F-82).
 // Each fix has at minimum 1 positive + 1 negative test.
 // Source: crates/hyperfluid-state/src/state_machine.rs, state_sync.rs
+#![allow(non_snake_case)]
 
 use hyperfluid_state::state_machine::{ExecutionContext, ExecutionResult, StateMachine};
 use hyperfluid_state::state_sync::{
@@ -285,11 +286,11 @@ fn fix_F81_state_checksum_positive() {
     sm.init_account(test_account_with_pubkey(1, 1000, 0));
     sm.init_account(test_account_with_pubkey(2, 2000, 0));
 
-    let checksum = sm.get_state_checksum();
+    let checksum = sm.get_state_checksum([0u8; 32]);
     assert_ne!(checksum, [0u8; 32], "checksum must not be zero for non-empty state");
 
     // Same state → same checksum (deterministic)
-    let checksum2 = sm.get_state_checksum();
+    let checksum2 = sm.get_state_checksum([0u8; 32]);
     assert_eq!(checksum, checksum2);
 }
 
@@ -300,17 +301,17 @@ fn fix_F81_state_checksum_negative_different_state() {
     sm1.init_account(test_account_with_pubkey(1, 1000, 0));
     sm2.init_account(test_account_with_pubkey(1, 2000, 0)); // different balance
 
-    let cs1 = sm1.get_state_checksum();
-    let cs2 = sm2.get_state_checksum();
+    let cs1 = sm1.get_state_checksum([0u8; 32]);
+    let cs2 = sm2.get_state_checksum([0u8; 32]);
     assert_ne!(cs1, cs2, "different state must produce different checksum");
 }
 
 #[test]
 fn fix_F81_state_checksum_empty_state() {
     let sm = StateMachine::new();
-    let checksum = sm.get_state_checksum();
+    let checksum = sm.get_state_checksum([0u8; 32]);
     // Empty state checksum should be deterministic
-    assert_eq!(sm.get_state_checksum(), checksum);
+    assert_eq!(sm.get_state_checksum([0u8; 32]), checksum);
 }
 
 // ─── F-80: build_smt_from_keys annotation (staged, but still testable) ───

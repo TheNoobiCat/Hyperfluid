@@ -80,7 +80,7 @@ fn list_local_skills() -> Result<Vec<LocalSkillEntry>, String> {
                 content
                     .lines()
                     .find(|l| l.starts_with("## Description") || l.starts_with("# "))
-                    .map(|l| l.trim_start_matches(|c: char| c == '#' || c == ' ').to_string())
+                    .map(|l| l.trim_start_matches(['#', ' ']).to_string())
                     .unwrap_or_default()
             })
             .unwrap_or_default();

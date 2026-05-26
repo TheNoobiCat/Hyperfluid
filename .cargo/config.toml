@@ -1,0 +1,8 @@
+# Increase stack size for ML-DSA-65 key generation.
+# Default Windows stack (1 MB) overflows during FIPS 204 keypair generation.
+# Linux/macOS default (8 MB) is sufficient.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "link-args=/STACK:16777216"]
+
+[target.'cfg(all(windows, target_env = "gnu"))']
+rustflags = ["-C", "link-args=-Wl,--stack,16777216"]

@@ -209,7 +209,7 @@ mod tests {
     /// In production, use the EIP-1559 base fee from FeeMarketState.
     /// This method is intentionally named `base_fee_for_test` to make its
     /// purpose explicit — it MUST NOT be called from production code.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "test utility for manual base-fee inspection")]
     fn base_fee_for_test() -> u128 {
         0
     }

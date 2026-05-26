@@ -13,7 +13,6 @@ use hyperfluid_p2p::{
 
 // ── F-6: seal() returns Result, not Vec<u8> ────────────────────────
 
-#[cfg(feature = "clatter-secure-channel")]
 #[allow(non_snake_case)]
 mod fix_F6_seal_returns_result {
     use hyperfluid_p2p::secure_channel::ClatterSecureChannel;
@@ -24,7 +23,7 @@ mod fix_F6_seal_returns_result {
     fn positive_seal_succeeds_on_valid_channel() {
         let alice = [30u8; 32];
         let bob = [31u8; 32];
-        let mut ch = ClatterSecureChannel::establish(alice, bob);
+        let mut ch = ClatterSecureChannel::establish(alice, bob).unwrap();
         let result = ch.seal(b"valid message");
         assert!(result.is_ok(), "seal on valid channel must return Ok");
         let ct = result.unwrap();
@@ -37,7 +36,7 @@ mod fix_F6_seal_returns_result {
     fn negative_seal_error_type_is_secure_channel_error() {
         let alice = [32u8; 32];
         let bob = [33u8; 32];
-        let mut ch = ClatterSecureChannel::establish(alice, bob);
+        let mut ch = ClatterSecureChannel::establish(alice, bob).unwrap();
         // The production channel should never fail on a simple seal,
         // but the return type MUST be Result<Vec<u8>, SecureChannelError>.
         // This test verifies the type signature compiles and the error
@@ -51,7 +50,7 @@ mod fix_F6_seal_returns_result {
     fn edge_seal_empty_payload() {
         let alice = [34u8; 32];
         let bob = [35u8; 32];
-        let mut ch = ClatterSecureChannel::establish(alice, bob);
+        let mut ch = ClatterSecureChannel::establish(alice, bob).unwrap();
         let result = ch.seal(b"");
         assert!(result.is_ok(), "seal of empty must not fail");
         // AEAD produces ciphertext with authentication tag even for empty input
@@ -61,7 +60,6 @@ mod fix_F6_seal_returns_result {
 
 // ── F-19: initiator() returns Result, no panics on key gen failure ──
 
-#[cfg(feature = "clatter-secure-channel")]
 #[allow(non_snake_case)]
 mod fix_F19_initiator_no_panic {
     use clatter::crypto::dh::X25519;
@@ -99,7 +97,6 @@ mod fix_F19_initiator_no_panic {
     }
 }
 
-#[cfg(feature = "clatter-secure-channel")]
 #[allow(non_snake_case)]
 mod fix_F20_responder_no_panic {
     use clatter::crypto::dh::X25519;
@@ -145,8 +142,8 @@ mod fix_F20_responder_no_panic {
 fn positive_secure_channel_default_is_clatter() {
     let alice = [40u8; 32];
     let bob = [41u8; 32];
-    let mut ch_alice = SecureChannel::establish(alice, bob);
-    let mut ch_bob = SecureChannel::establish(bob, alice);
+    let mut ch_alice = SecureChannel::establish(alice, bob).unwrap();
+    let mut ch_bob = SecureChannel::establish(bob, alice).unwrap();
 
     let msg = b"default feature test";
     let ct = ch_alice.seal(msg).expect("seal must succeed");
@@ -161,7 +158,7 @@ fn positive_secure_channel_default_is_clatter() {
 fn negative_secure_channel_has_session_id() {
     let alice = [42u8; 32];
     let bob = [43u8; 32];
-    let ch = SecureChannel::establish(alice, bob);
+    let ch = SecureChannel::establish(alice, bob).unwrap();
     // Both ClatterSecureChannel and MockSecureChannel implement session_id()
     let sid = ch.session_id();
     assert_eq!(sid.len(), 32, "session_id must be 32 bytes");
@@ -175,6 +172,7 @@ fn negative_secure_channel_has_session_id() {
 /// which is the canonical responder implementation.
 /// Verified by: the test module no longer references perform_responder_handshake.
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn positive_responder_handshake_consolidated() {
     // The old perform_responder_handshake was removed.
     // The canonical function is perform_responder_handshake_on_split.
@@ -185,6 +183,7 @@ fn positive_responder_handshake_consolidated() {
 
 /// Negative: the consolidation removes dead code (checked at compile time).
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn negative_no_dead_code_annotation_for_responder() {
     // perform_responder_handshake no longer exists; #[allow(dead_code)] is gone.
     // We verify this by checking the module no longer has the old symbol.
@@ -304,6 +303,7 @@ fn positive_mempool_public_api_no_base_fee_for_test() {
 /// behind #[cfg(test)]). This is verified at compile time — the function
 /// would cause a compile error if referenced here.
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn negative_base_fee_for_test_not_in_production_api() {
     // The function base_fee_for_test was moved behind #[cfg(test)].
     // It should NOT be accessible from this integration test file.
@@ -338,7 +338,7 @@ fn edge_mempool_baseline_still_works() {
 fn positive_pair_key_no_unwrap() {
     let alice = [50u8; 32];
     let bob = [51u8; 32];
-    let ch = SecureChannel::establish(alice, bob);
+    let ch = SecureChannel::establish(alice, bob).unwrap();
     assert_eq!(ch.session_id().len(), 32);
 }
 
@@ -348,8 +348,8 @@ fn negative_pair_key_is_commutative() {
     let a = [60u8; 32];
     let b = [61u8; 32];
 
-    let ch_ab = SecureChannel::establish(a, b);
-    let ch_ba = SecureChannel::establish(b, a);
+    let ch_ab = SecureChannel::establish(a, b).unwrap();
+    let ch_ba = SecureChannel::establish(b, a).unwrap();
 
     // With mock channel, establish returns the initiator's view.
     // With clatter channel, establish uses the cache shim.
@@ -364,7 +364,7 @@ fn negative_pair_key_is_commutative() {
 #[test]
 fn edge_pair_key_identical_ids() {
     let id = [70u8; 32];
-    let ch = SecureChannel::establish(id, id);
+    let ch = SecureChannel::establish(id, id).unwrap();
     assert_eq!(ch.session_id().len(), 32, "identical peer ids must not panic");
 }
 
@@ -380,6 +380,7 @@ fn positive_secure_channel_error_display() {
 
 /// Verify all error variants are constructable.
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn positive_secure_channel_error_variants() {
     let _ = SecureChannelError::TransportError("transport".into());
     let _ = SecureChannelError::KeyGeneration("keygen".into());

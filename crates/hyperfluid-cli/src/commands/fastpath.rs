@@ -2,7 +2,7 @@ use clap::Subcommand;
 use hyperfluid_p2p::identity::Identity;
 use parity_scale_codec::Encode;
 
-use crate::commands::{format_output, rpc_post, sha3_256_hash};
+use crate::commands::{format_output, rpc_post, sha3_256_hash, sign_payload};
 use crate::OutputFormat;
 
 fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
@@ -66,7 +66,7 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
-    _identity: &Identity,
+    identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         FastPathAction::List { topic } => {
@@ -82,13 +82,14 @@ pub fn run(
                 &[
                     topic_id.as_slice(),
                     proposer_id.as_slice(),
-                    &[0u8; 32], // base_topic_head = genesis
+                    &[0u8; 32], // F-022: base_topic_head defaults to genesis; should be fetched from topic state
                     proposed.as_slice(),
                     &nonce.to_le_bytes(),
                 ]
                 .concat(),
             );
             let payload = (proposal_id, topic_id, proposer_id, proposed, false);
+            let (_, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -97,19 +98,30 @@ pub fn run(
                     "tx_type": "fast_path",
                     "payload": hex::encode(payload.encode()),
                     "manifest": hex::encode(manifest_hash),
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
-        FastPathAction::Approve { proposal_id, reviewer, topic_weight } => rpc_post(
-            client,
-            node_url,
-            "/fastpath/approve",
-            serde_json::json!({
-                "proposal_id": proposal_id,
-                "reviewer_id": reviewer,
-                "topic_weight": topic_weight.unwrap_or(1),
-            }),
-        )?,
+        FastPathAction::Approve { proposal_id, reviewer, topic_weight } => {
+            let pid = parse_hash32(&proposal_id)?;
+            let reviewer_id_bytes = parse_hash32(&reviewer)?;
+            let tw = topic_weight.unwrap_or(1);
+            let payload = (pid, reviewer_id_bytes, tw);
+            let (_, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
+            rpc_post(
+                client,
+                node_url,
+                "/fastpath/approve",
+                serde_json::json!({
+                    "proposal_id": proposal_id,
+                    "reviewer_id": reviewer,
+                    "topic_weight": tw,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
+                }),
+            )?
+        }
         FastPathAction::Challenge {
             proposal_id,
             topic_id,
@@ -123,6 +135,7 @@ pub fn run(
             let ev = parse_hash32(&evidence_hash)?;
             let challenger_id = parse_hash32(&challenger)?;
             let payload = (pid, tid, challenger_id, ev, true);
+            let (_, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -132,6 +145,8 @@ pub fn run(
                     "payload": hex::encode(payload.encode()),
                     "bond": bond.to_string(),
                     "nonce": nonce,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }

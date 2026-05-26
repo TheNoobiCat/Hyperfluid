@@ -7,11 +7,6 @@ repository.workspace = true
 rust-version.workspace = true
 description = "C7 P2P Networking: Discovery, gossip, relays, mempool, secure channels"
 
-[features]
-default = ["clatter-secure-channel"]
-mock-secure-channel = []
-clatter-secure-channel = ["dep:clatter", "dep:ml-dsa"]
-
 [dependencies]
 sha3.workspace = true
 serde.workspace = true
@@ -19,5 +14,5 @@ thiserror.workspace = true
 tracing.workspace = true
 hex.workspace = true
 tokio = { workspace = true, features = ["net", "rt", "io-util", "time"] }
-clatter = { workspace = true, optional = true }
-ml-dsa = { workspace = true, optional = true }
+clatter.workspace = true
+ml-dsa.workspace = true

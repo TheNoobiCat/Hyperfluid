@@ -402,11 +402,11 @@ impl StateMachine {
         // 1. Validate parent exists and caller is authorised
         let parent = match self.tasks.get(&parent_task_id) {
             Some(p) => {
-                let authorised = match p.status {
-                    TaskStatus::Open => p.funder == caller_id,
-                    TaskStatus::Claimed | TaskStatus::InProgress => p.primary_owner == caller_id,
-                    _ => false,
-                };
+        let authorised = match p.status {
+            TaskStatus::Open => p.funder == caller_id,
+            TaskStatus::Claimed | TaskStatus::InProgress => p.primary_owner == caller_id,
+            TaskStatus::InReview | TaskStatus::Done | TaskStatus::Decomposed => false,
+        };
                 if !authorised {
                     return ExecutionResult::Rejected;
                 }
@@ -478,7 +478,7 @@ impl StateMachine {
                 required_skills_hash: child.required_skills_hash,
                 metadata_hash: parent_metadata,
                 sponsor_id: parent_sponsor,
-                requester_pubkey: [0u8; 32],
+                requester_pubkey: [0u8; 32], // TODO: fetch from caller's Account.pubkey
                 escrow_status: EscrowStatus::Locked,
             };
             self.tasks.insert(child.task_id, child_task);
@@ -1069,10 +1069,10 @@ impl StateMachine {
                 bounty_agx: work_bounty * 5 / 100,
                 created_at_height: current_height,
                 lease_expires_height: current_height,
-                required_skills_hash: [0u8; 32],
+                required_skills_hash: [0u8; 32], // TODO: compute from actual review skills
                 metadata_hash: task_metadata,
                 sponsor_id: task_sponsor,
-                requester_pubkey: [0u8; 32],
+                requester_pubkey: [0u8; 32], // TODO: fetch from task_funder's Account.pubkey
                 escrow_status: EscrowStatus::Locked,
             };
             self.tasks.insert(review_task_id, review_task);
@@ -1610,8 +1610,8 @@ impl StateMachine {
 
     /// Compute a checksum over the current state for integrity verification.
     /// Wires compute_state_checksum into production code.
-    pub fn get_state_checksum(&self) -> Hash32 {
-        let snapshot = crate::state_sync::snapshot_state(self, 0, 0, [0u8; 32]);
+    pub fn get_state_checksum(&self, block_hash: Hash32) -> Hash32 {
+        let snapshot = crate::state_sync::snapshot_state(self, 0, 0, block_hash);
         crate::state_sync::compute_state_checksum(&snapshot.sst_keys)
     }
 

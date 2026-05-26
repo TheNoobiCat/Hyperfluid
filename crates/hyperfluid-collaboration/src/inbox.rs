@@ -79,9 +79,9 @@ pub fn compute_message_id(
     h.update(sender_id);
     h.update(recipient_id);
     h.update(topic_id);
-    h.update(&body_hash);
-    h.update(&nonce.to_le_bytes());
-    h.update(&expires_at_height.to_le_bytes());
+    h.update(body_hash);
+    h.update(nonce.to_le_bytes());
+    h.update(expires_at_height.to_le_bytes());
     let mut out = [0u8; 32];
     out.copy_from_slice(&h.finalize());
     out
@@ -186,12 +186,12 @@ impl InboxRouter {
     /// Returns the routing decision. If `Delivered`, the message is queued
     /// for the recipient agent and can be retrieved via `poll_inbox`.
     pub fn route_message(&mut self, msg: InboxMessage) -> InboxDecision {
-        // SPEC_DEVIATION: signature verification delegated to caller (node RPC handler)
-        // to keep collaboration crate free of crypto dependencies.
-        debug_assert!(
-            !msg.signature.is_empty(),
-            "inbox message signature should be verified by caller"
-        );
+        // Signature verification is performed by the caller (node RPC handler)
+        // before invoking route_message. We assert here to catch integration bugs.
+        if msg.signature.is_empty() {
+            eprintln!("[hyperfluid-collaboration] inbox message with empty signature rejected — caller must verify before routing");
+            return InboxDecision::InvalidContentAddressing;
+        }
 
         // TTL check
         if msg.expires_at_height <= self.current_height {

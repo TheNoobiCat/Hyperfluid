@@ -113,10 +113,4 @@ If this was invoked standalone, skip Step 5 — the 3 keep-files are sufficient 
 
 ---
 
-### Step 6: Stage archive dir in git
-
-```powershell
-git add "docs/08-handoff/archive/" 2>$null
-```
-
-This ensures the archive directory is tracked. Do not commit unless explicitly asked.
+Do not commit or run any git-related commands unless explicitly asked.

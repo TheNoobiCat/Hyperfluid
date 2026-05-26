@@ -1,8 +1,7 @@
 use clap::Subcommand;
 use hyperfluid_p2p::identity::Identity;
-use parity_scale_codec::Encode;
 
-use crate::commands::{format_output, rpc_post};
+use crate::commands::{format_output, rpc_post, sign_payload};
 use crate::OutputFormat;
 
 fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
@@ -109,26 +108,30 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
-    _identity: &Identity,
+    identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         TxAction::Transfer { sender, recipient, amount, nonce } => {
             let sender_id = parse_hash32(&sender)?;
             let recipient_id = parse_hash32(&recipient)?;
             let payload = (sender_id, recipient_id, amount, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
                 "/tx/submit",
                 serde_json::json!({
                     "tx_type": "transfer",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         TxAction::Bond { validator, amount, nonce } => {
             let v = parse_hash32(&validator)?;
             let payload = (v, amount, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -136,13 +139,16 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "staking",
                     "action": "bond",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         TxAction::Unbond { validator, nonce } => {
             let v = parse_hash32(&validator)?;
-            let payload = (v, 0u128, nonce);
+            let payload = (v, 0u128 /* amount: no transfer */, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -150,13 +156,16 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "staking",
                     "action": "unbond",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         TxAction::Withdraw { validator, nonce } => {
             let v = parse_hash32(&validator)?;
-            let payload = (v, 0u128, nonce);
+            let payload = (v, 0u128 /* amount: no transfer */, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -164,13 +173,16 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "staking",
                     "action": "withdraw",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         TxAction::Renew { validator, nonce } => {
             let v = parse_hash32(&validator)?;
-            let payload = (v, 0u128, nonce);
+            let payload = (v, 0u128 /* amount: no transfer */, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -178,7 +190,9 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "staking",
                     "action": "renew",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
@@ -186,6 +200,7 @@ pub fn run(
             let d = parse_hash32(&delegator)?;
             let v = parse_hash32(&validator)?;
             let payload = (d, v, amount, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -193,14 +208,17 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "delegation",
                     "action": "delegate",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         TxAction::Undelegate { delegator, validator, nonce } => {
             let d = parse_hash32(&delegator)?;
             let v = parse_hash32(&validator)?;
-            let payload = (d, v, 0u128, nonce);
+            let payload = (d, v, 0u128 /* amount: no transfer */, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -208,14 +226,17 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "delegation",
                     "action": "undelegate",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         TxAction::WithdrawDelegation { delegator, validator, nonce } => {
             let d = parse_hash32(&delegator)?;
             let v = parse_hash32(&validator)?;
-            let payload = (d, v, 0u128, nonce);
+            let payload = (d, v, 0u128 /* amount: no transfer */, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -223,7 +244,9 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "delegation",
                     "action": "withdraw_delegation",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
@@ -232,6 +255,7 @@ pub fn run(
             let delegator_id = parse_hash32(&delegator)?;
             let v = parse_hash32(&validator)?;
             let payload = (delegator_id, v, rate as u128, nonce);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
@@ -239,7 +263,9 @@ pub fn run(
                 serde_json::json!({
                     "tx_type": "delegation",
                     "action": "set_commission",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
@@ -252,13 +278,16 @@ pub fn run(
         } => {
             let v = parse_hash32(&validator)?;
             let payload = (evidence_type, v, evidence_height, missed_blocks, total_window_blocks);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
                 "/tx/submit",
                 serde_json::json!({
                     "tx_type": "evidence",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }

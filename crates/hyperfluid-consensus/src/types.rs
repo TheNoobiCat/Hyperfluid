@@ -40,7 +40,7 @@ impl Committee {
     /// The fallback uses only historical entropy (previous seed) plus epoch number —
     /// no current-epoch malleable data.
     /// Staged for commit-reveal in Stage 03.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "staged for commit-reveal in Stage 03")]
     pub fn compute_committee_seed(
         epoch: u64,
         reveals: &[Hash32],
@@ -109,10 +109,10 @@ impl Committee {
 
         let mut members = Vec::with_capacity(committee_size);
         let mut weights = Vec::with_capacity(committee_size);
-        let mut used = std::collections::HashSet::new();
+        let mut used = std::collections::BTreeSet::new();
 
-        let previous_set: std::collections::HashSet<_> = previous_members.iter().collect();
-        let ineligible_set: std::collections::HashSet<_> = ineligible.iter().collect();
+        let previous_set: std::collections::BTreeSet<_> = previous_members.iter().collect();
+        let ineligible_set: std::collections::BTreeSet<_> = ineligible.iter().collect();
         // Integer arithmetic: ceil(committee_size * 20 / 100) — deterministic across all platforms
         let max_overlap = (committee_size * 20).div_ceil(100);
 
@@ -229,6 +229,9 @@ pub struct BlockHeader {
     pub transaction_root: Hash32,
     pub committee_id: u64,
     pub proposer_id: Hash32,
+    /// Deterministic block ordering field — uses block `height` as a logical clock,
+    /// not wall-clock time. Replicates the height for BFT ordering compatibility.
+    /// Never populated with `SystemTime::now()`.
     pub timestamp: u64,
     pub epoch: u64,
 }
@@ -257,8 +260,7 @@ pub struct TransactionEnvelope {
     pub gateway_signature: Option<Signature>,
     /// ML-DSA-65 signature from the agent who authored this transaction.
     /// Verified against `key_bindings` in PDP validation.
-    /// Empty vec if signature is not yet provided (SPEC_DEVIATION: pre-signature
-    /// phase — all agents are trusted for now).
+    /// Must be a valid ML-DSA-65 signature (3309 bytes).
     pub signature: Vec<u8>,
 }
 

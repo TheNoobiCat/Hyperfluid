@@ -51,7 +51,7 @@ impl TestNode {
     /// Create a new test node, bootstrapping the consensus driver from the
     /// given genesis configuration.
     fn new(node_id: u8, port: u16, genesis: &GenesisConfig) -> Self {
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         driver.init_genesis(genesis);
         // pdp_bypass = true for multi-node determinism tests without real keypairs.
         // For BFT networking tests with real ML-DSA-65, use pdp_bypass = false

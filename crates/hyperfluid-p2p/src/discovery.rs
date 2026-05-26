@@ -1,12 +1,5 @@
 use crate::types::{ConnState, ConnectionState, DiscoveryConfig, Hash32};
 
-/// Outcome of a direct connection probe.
-pub enum ProbeOutcome {
-    Success { endpoint: String, height: u64 },
-    Timeout,
-    Refused,
-}
-
 /// Transition the connection state machine based on a probe event.
 ///
 /// Source: p2p-wire-spec.md Section 1.4 — Connection state machine.
@@ -40,6 +33,14 @@ pub fn transition_connection(
             }
         }
 
+        (ConnState::DirectProbing, ConnectionEvent::DirectConnectError) => {
+            if cf + 1 >= config.direct_retry_attempts {
+                ConnState::RelayActive
+            } else {
+                ConnState::DirectProbing
+            }
+        }
+
         (ConnState::DirectActive, ConnectionEvent::UpgradeProbeSucceeded) => ConnState::Upgrading,
 
         (ConnState::DirectActive, ConnectionEvent::ConnectionLost) => ConnState::Unknown,
@@ -59,6 +60,7 @@ pub fn transition_connection(
         (ConnState::Unknown, ConnectionEvent::DirectConnectSuccess)
         | (ConnState::Unknown, ConnectionEvent::DirectConnectTimeout)
         | (ConnState::Unknown, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::Unknown, ConnectionEvent::DirectConnectError)
         | (ConnState::Unknown, ConnectionEvent::UpgradeProbeSucceeded)
         | (ConnState::Unknown, ConnectionEvent::ConnectionLost)
         | (ConnState::Unknown, ConnectionEvent::MigrationComplete)
@@ -86,6 +88,7 @@ pub fn transition_connection(
         | (ConnState::DirectActive, ConnectionEvent::DirectConnectSuccess)
         | (ConnState::DirectActive, ConnectionEvent::DirectConnectTimeout)
         | (ConnState::DirectActive, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::DirectActive, ConnectionEvent::DirectConnectError)
         | (ConnState::DirectActive, ConnectionEvent::MigrationComplete)
         | (ConnState::DirectActive, ConnectionEvent::AllRelayPathsLost) => {
             eprintln!(
@@ -99,6 +102,7 @@ pub fn transition_connection(
         | (ConnState::RelayActive, ConnectionEvent::DirectConnectSuccess)
         | (ConnState::RelayActive, ConnectionEvent::DirectConnectTimeout)
         | (ConnState::RelayActive, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::RelayActive, ConnectionEvent::DirectConnectError)
         | (ConnState::RelayActive, ConnectionEvent::ConnectionLost)
         | (ConnState::RelayActive, ConnectionEvent::MigrationComplete) => {
             eprintln!(
@@ -112,6 +116,7 @@ pub fn transition_connection(
         | (ConnState::Upgrading, ConnectionEvent::DirectConnectSuccess)
         | (ConnState::Upgrading, ConnectionEvent::DirectConnectTimeout)
         | (ConnState::Upgrading, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::Upgrading, ConnectionEvent::DirectConnectError)
         | (ConnState::Upgrading, ConnectionEvent::UpgradeProbeSucceeded)
         | (ConnState::Upgrading, ConnectionEvent::AllRelayPathsLost) => {
             eprintln!(
@@ -130,6 +135,7 @@ pub enum ConnectionEvent {
     DirectConnectSuccess,
     DirectConnectTimeout,
     DirectConnectRefused,
+    DirectConnectError,
     UpgradeProbeSucceeded,
     ConnectionLost,
     MigrationComplete,

@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -14,20 +14,15 @@ use crate::discovery::{transition_connection, ConnectionEvent};
 use crate::transport::PeerCache;
 use crate::types::{ConnState, ConnectionState, DiscoveryConfig, Hash32};
 
-#[cfg(feature = "clatter-secure-channel")]
 use crate::identity::Identity;
-#[cfg(feature = "clatter-secure-channel")]
 use crate::identity::{ML_DSA65_PUBKEY_LEN, ML_DSA65_SIG_LEN};
-#[cfg(feature = "clatter-secure-channel")]
 use crate::secure_channel::{ClatterHandshake, ClatterSecureChannel};
-#[cfg(not(feature = "clatter-secure-channel"))]
-use crate::transport::MockSecureChannel as SecureChannel;
-#[cfg(feature = "clatter-secure-channel")]
 use clatter::bytearray::ByteArray;
 
 const HANDSHAKE_BUF_SIZE: usize = 8192;
 const FRAME_LEN_BYTES: usize = 4;
 const MESSAGE_MAX_BYTES: usize = 1_048_576;
+const ML_KEM768_PUBKEY_LEN: usize = 1184;
 
 #[derive(Debug)]
 pub enum TcpError {
@@ -77,10 +72,7 @@ pub struct TcpTransport {
     config: DiscoveryConfig,
     peer_cache: Arc<RwLock<PeerCache>>,
     connection_states: RwLock<BTreeMap<Hash32, ConnectionState>>,
-    #[cfg(feature = "clatter-secure-channel")]
     active_channels: RwLock<BTreeMap<Hash32, ClatterSecureChannel>>,
-    #[cfg(not(feature = "clatter-secure-channel"))]
-    active_channels: RwLock<BTreeMap<Hash32, SecureChannel>>,
 }
 
 impl TcpTransport {
@@ -110,9 +102,9 @@ impl TcpTransport {
 
         let new_state = transition_connection(current, event, &self.config);
         let failures = match event {
-            ConnectionEvent::DirectConnectTimeout | ConnectionEvent::DirectConnectRefused => {
-                current.consecutive_failures + 1
-            }
+            ConnectionEvent::DirectConnectTimeout
+            | ConnectionEvent::DirectConnectRefused
+            | ConnectionEvent::DirectConnectError => current.consecutive_failures + 1,
             ConnectionEvent::DirectConnectSuccess => 0,
             _ => current.consecutive_failures,
         };
@@ -129,13 +121,13 @@ impl TcpTransport {
         TcpListener::bind(bind_addr).await
     }
 
-    #[cfg(feature = "clatter-secure-channel")]
     pub async fn accept_loop<F>(
         listener: TcpListener,
         local_identity: Arc<Identity>,
         remote_key_provider: Arc<F>,
         transport: Arc<TcpTransport>,
         consensus_handler: Option<ConsensusMessageHandler>,
+        peer_registry: Option<Arc<Mutex<Vec<mpsc::UnboundedSender<Vec<u8>>>>>>,
     ) where
         F: Fn(&Hash32) -> Option<([u8; 32], Vec<u8>)> + Send + Sync + 'static,
     {
@@ -146,6 +138,7 @@ impl TcpTransport {
                     let transport = Arc::clone(&transport);
                     let key_provider = Arc::clone(&remote_key_provider);
                     let handler = consensus_handler.clone();
+                    let registry = peer_registry.clone();
                     tokio::spawn(async move {
                         let (peer_id, channel) = match handle_inbound(
                             &mut stream,
@@ -165,15 +158,21 @@ impl TcpTransport {
 
                         if let Some(h) = handler {
                             let (tx, rx) = mpsc::unbounded_channel();
+                            let sender = tx.clone();
                             tokio::spawn(async move {
                                 peer_message_loop(&mut stream, channel, rx, h, peer_id).await;
                                 transport.disconnect(&peer_id).await;
                             });
+                            if let Some(reg) = &registry {
+                                if let Ok(mut senders) = reg.lock() {
+                                    senders.push(sender);
+                                }
+                            }
                             tracing::info!(
                                 "P2P: consensus messaging active for peer {:?}",
                                 peer_id,
                             );
-                            let _ = tx; // sender is used by caller via bridge
+                            let _ = sender; // keep clone alive in memory while message loop runs
                         } else {
                             transport.active_channels.write().await.insert(peer_id, channel);
                             tracing::info!(
@@ -191,7 +190,6 @@ impl TcpTransport {
         }
     }
 
-    #[cfg(feature = "clatter-secure-channel")]
     pub async fn connect_to_peer(
         transport: Arc<TcpTransport>,
         peer_addr: SocketAddr,
@@ -222,7 +220,16 @@ impl TcpTransport {
                 let event = match &e {
                     TcpError::Timeout => ConnectionEvent::DirectConnectTimeout,
                     TcpError::ConnectionRefused => ConnectionEvent::DirectConnectRefused,
-                    _ => ConnectionEvent::DirectConnectTimeout,
+                    TcpError::Io(io_error) => {
+                        tracing::debug!("P2P connect I/O error: {}", io_error);
+                        ConnectionEvent::DirectConnectError
+                    }
+                    TcpError::ConnectionReset => ConnectionEvent::DirectConnectError,
+                    TcpError::InvalidFrame => ConnectionEvent::DirectConnectError,
+                    TcpError::Handshake(msg) => {
+                        tracing::debug!("P2P connect handshake error: {}", msg);
+                        ConnectionEvent::DirectConnectError
+                    }
                 };
                 let new_state = transport.update_state(remote_peer_id, event).await;
                 eprintln!(
@@ -234,7 +241,6 @@ impl TcpTransport {
         }
     }
 
-    #[cfg(feature = "clatter-secure-channel")]
     pub async fn run_connection_loop(
         transport: Arc<TcpTransport>,
         peer_addr: SocketAddr,
@@ -341,13 +347,10 @@ async fn read_frame(stream: &mut TcpStream) -> Result<Vec<u8>, TcpError> {
 
 // --- Clatter handshake over TCP ---
 
-#[cfg(feature = "clatter-secure-channel")]
 type X25519PubKey = <clatter::crypto::dh::X25519 as clatter::traits::Dh>::PubKey;
-#[cfg(feature = "clatter-secure-channel")]
 type MlKem768PubKey =
     <clatter::crypto::kem::rust_crypto_ml_kem::MlKem768 as clatter::traits::Kem>::PubKey;
 
-#[cfg(feature = "clatter-secure-channel")]
 async fn perform_initiator_handshake(
     stream: &mut TcpStream,
     local_identity: &Identity,
@@ -355,6 +358,13 @@ async fn perform_initiator_handshake(
     remote_dh_pubkey_bytes: [u8; 32],
     remote_kem_pubkey_bytes: Vec<u8>,
 ) -> Result<ClatterSecureChannel, TcpError> {
+    if remote_kem_pubkey_bytes.len() != ML_KEM768_PUBKEY_LEN {
+        return Err(TcpError::Handshake(format!(
+            "invalid ML-KEM-768 pubkey length: expected {}, got {}",
+            ML_KEM768_PUBKEY_LEN,
+            remote_kem_pubkey_bytes.len()
+        )));
+    }
     let remote_dh: X25519PubKey = ByteArray::from_slice(&remote_dh_pubkey_bytes);
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
@@ -413,7 +423,6 @@ async fn perform_initiator_handshake(
 /// Receives (peer_id, decrypted_bytes) — the raw wire-format consensus message.
 pub type ConsensusMessageHandler = Arc<dyn Fn(Hash32, Vec<u8>) + Send + Sync + 'static>;
 
-#[cfg(feature = "clatter-secure-channel")]
 async fn handle_inbound<F>(
     stream: &mut TcpStream,
     peer_addr: SocketAddr,
@@ -464,7 +473,6 @@ where
     Ok((remote_peer_id, channel))
 }
 
-#[cfg(feature = "clatter-secure-channel")]
 async fn perform_responder_handshake_on_split(
     stream: &mut TcpStream,
     local_identity: &Identity,
@@ -502,6 +510,13 @@ async fn perform_responder_handshake_on_split(
         Ok(())
     }
 
+    if remote_kem_pubkey_bytes.len() != ML_KEM768_PUBKEY_LEN {
+        return Err(TcpError::Handshake(format!(
+            "invalid ML-KEM-768 pubkey length: expected {}, got {}",
+            ML_KEM768_PUBKEY_LEN,
+            remote_kem_pubkey_bytes.len()
+        )));
+    }
     let remote_dh: X25519PubKey = ByteArray::from_slice(&remote_dh_pubkey_bytes);
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
@@ -569,7 +584,6 @@ async fn perform_responder_handshake_on_split(
 ///
 /// Uses `tokio::select!` so read and write share the same channel (avoiding Mutex
 /// on nonce state). Exits when either side closes.
-#[cfg(feature = "clatter-secure-channel")]
 async fn peer_message_loop(
     stream: &mut TcpStream,
     mut channel: ClatterSecureChannel,
@@ -625,7 +639,6 @@ async fn peer_message_loop(
 /// Connects to `peer_addr`, performs the Clatter initiator handshake,
 /// then enters a persistent message loop. Returns an mpsc sender for
 /// sending consensus messages to this peer.
-#[cfg(feature = "clatter-secure-channel")]
 pub async fn connect_and_maintain(
     peer_addr: SocketAddr,
     local_identity: Arc<Identity>,
@@ -791,7 +804,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "clatter-secure-channel"))]
+#[cfg(test)]
 mod socket_integration {
     use super::*;
     use crate::identity::Identity;

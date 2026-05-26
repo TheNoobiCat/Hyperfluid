@@ -233,6 +233,8 @@ fn assign_section(
                 })
                 .unwrap_or_default();
         }
-        _ => {}
+        unrecognized => {
+            eprintln!("skipping unrecognized markdown section: {}", unrecognized);
+        }
     }
 }

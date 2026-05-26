@@ -99,6 +99,10 @@ impl FastPathEngine {
         current_height: u64,
         topic_snapshot_weight: u128,
     ) -> Result<&FastPathCertificate, FastPathError> {
+        if self.certificates.iter().any(|c| c.proposal_id == proposal_id) {
+            return Err(FastPathError::DuplicateProposal);
+        }
+
         let proposal = self
             .proposals
             .iter()
@@ -322,6 +326,10 @@ impl FastPathEngine {
     // ── Rollback ─────────────────────────────────────────────────────────
 
     pub fn rollback(&mut self, rollback: FastPathRollbackTx) -> Result<(), FastPathError> {
+        if !self.challenged_proposals.contains(&rollback.proposal_id) {
+            return Err(FastPathError::ChallengeWindowNotEnded);
+        }
+
         let cert = self
             .certificates
             .iter()

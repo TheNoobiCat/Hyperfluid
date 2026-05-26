@@ -178,7 +178,14 @@ pub fn run_setup() {
     };
 
     // ── Serialize and write ──
-    let toml_str = toml::to_string_pretty(&config).expect("Config serialization should not fail");
+    let toml_str = match toml::to_string_pretty(&config) {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = writeln!(stdout(), "\nFailed to serialize config: {}", e);
+            let _ = stdout().flush();
+            return;
+        }
+    };
     if let Err(e) = std::fs::write("config.toml", &toml_str) {
         let _ = writeln!(stdout(), "\n❌ Failed to write config.toml: {}", e);
     } else {

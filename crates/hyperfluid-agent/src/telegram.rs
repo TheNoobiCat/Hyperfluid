@@ -22,10 +22,13 @@ impl TelegramBot {
     /// Uses the token and user_id fields. If `enabled` is false the bot
     /// will not process updates, but this is not enforced at construction time.
     pub fn new(config: &config::TelegramSection) -> Self {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("reqwest Client builder should not fail");
+        let client = match Client::builder().timeout(Duration::from_secs(30)).build() {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Telegram: failed to build reqwest client: {}", e);
+                Client::new()
+            }
+        };
         Self {
             _token: config.token.clone(),
             allowed_user_id: config.user_id,
@@ -47,7 +50,11 @@ impl TelegramBot {
 
             let response = self.client.get(&url).send().await;
             let body: serde_json::Value = match response {
-                Ok(r) => r.json().await.unwrap_or(serde_json::Value::Null),
+                Ok(r) => r
+                    .json()
+                    .await
+                    .inspect_err(|e| tracing::debug!("Telegram JSON deserialize error: {}", e))
+                    .unwrap_or(serde_json::Value::Null),
                 Err(e) => {
                     tracing::debug!("Telegram poll error: {}", e);
                     tokio::time::sleep(Duration::from_secs(10)).await;
@@ -146,7 +153,11 @@ impl TelegramBot {
 
             let response = self.client.get(&url).send().await;
             let body: serde_json::Value = match response {
-                Ok(r) => r.json().await.unwrap_or(serde_json::Value::Null),
+                Ok(r) => r
+                    .json()
+                    .await
+                    .inspect_err(|e| tracing::debug!("Telegram JSON deserialize error: {}", e))
+                    .unwrap_or(serde_json::Value::Null),
                 Err(_) => {
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;

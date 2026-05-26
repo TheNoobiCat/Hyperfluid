@@ -116,10 +116,11 @@ impl GovernanceEngine {
         vote: GovernanceVote,
         current_height: u64,
     ) -> Result<(), ProposalError> {
-        // SPEC_DEVIATION: signature verification delegated to caller (consensus driver)
-        // to avoid adding hyperfluid-p2p dependency to governance crate.
-        // The caller MUST verify the ML-DSA-65 signature before calling this function.
-        // As a sanity check, we assert the signature length matches ML-DSA-65 (3309 bytes).
+        // Signature verification is performed by the consensus driver (PDP step 2)
+        // before calling cast_vote. The governance crate delegates crypto to the
+        // consensus layer to avoid depending on hyperfluid-p2p for ML-DSA-65.
+        // As a defense-in-depth check, we verify the signature length is valid for
+        // ML-DSA-65 (3309 bytes). If this fails, the driver passed an invalid sig.
         if vote.signature.len() != 3309 {
             return Err(ProposalError::InvalidSignature);
         }

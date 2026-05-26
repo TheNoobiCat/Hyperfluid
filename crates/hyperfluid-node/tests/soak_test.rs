@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 fn dummy_sig() -> Vec<u8> {
     vec![0u8; 3309]
 }

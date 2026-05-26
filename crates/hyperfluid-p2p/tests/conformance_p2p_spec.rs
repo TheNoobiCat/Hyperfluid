@@ -289,8 +289,8 @@ fn conforms_to_p2p_spec_1_7_e2e_encryption_across_relay() {
     let bob = [11u8; 32];
     let relay = [12u8; 32];
 
-    let mut ch_alice = SecureChannel::establish(alice, bob);
-    let mut ch_bob = SecureChannel::establish(bob, alice);
+    let mut ch_alice = SecureChannel::establish(alice, bob).unwrap();
+    let mut ch_bob = SecureChannel::establish(bob, alice).unwrap();
 
     let message = b"transaction batch for committee epoch 5";
     let ciphertext = ch_alice.seal(message).expect("seal must succeed");
@@ -299,7 +299,7 @@ fn conforms_to_p2p_spec_1_7_e2e_encryption_across_relay() {
     assert_ne!(&ciphertext, message, "ciphertext must not leak plaintext");
 
     // Relay node establishes its own channel with Bob but cannot decrypt
-    let mut ch_relay = SecureChannel::establish(relay, bob);
+    let mut ch_relay = SecureChannel::establish(relay, bob).unwrap();
     let relay_result = ch_relay.open(&ciphertext);
     assert!(
         relay_result.is_none() || relay_result.as_deref() != Some(message.as_slice()),
@@ -317,8 +317,8 @@ fn conforms_to_p2p_spec_1_7_tampered_ciphertext_rejected() {
     let alice = [20u8; 32];
     let bob = [21u8; 32];
 
-    let mut ch_alice = SecureChannel::establish(alice, bob);
-    let mut ch_bob = SecureChannel::establish(bob, alice);
+    let mut ch_alice = SecureChannel::establish(alice, bob).unwrap();
+    let mut ch_bob = SecureChannel::establish(bob, alice).unwrap();
 
     let mut ciphertext = ch_alice.seal(b"sensitive payload").expect("seal must succeed");
     if !ciphertext.is_empty() {
@@ -340,8 +340,8 @@ fn conforms_to_p2p_spec_1_7_e2e_empty_message() {
     let alice = [1u8; 32];
     let bob = [2u8; 32];
 
-    let mut ch_alice = SecureChannel::establish(alice, bob);
-    let mut ch_bob = SecureChannel::establish(bob, alice);
+    let mut ch_alice = SecureChannel::establish(alice, bob).unwrap();
+    let mut ch_bob = SecureChannel::establish(bob, alice).unwrap();
 
     let ciphertext = ch_alice.seal(b"").expect("seal must succeed");
     let decrypted = ch_bob.open(&ciphertext).expect("empty message must decrypt");

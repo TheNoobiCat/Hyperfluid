@@ -11,24 +11,13 @@ pub mod tcp;
 pub mod transport;
 pub mod types;
 
-#[cfg(feature = "clatter-secure-channel")]
 pub mod identity;
-
-#[cfg(feature = "clatter-secure-channel")]
 pub mod secure_channel;
 
 pub use transport::{CachedPeer, PeerCache};
 
-// Clatter (real cryptography) is the default.
-// Mock (XOR cipher) is opt-in via `mock-secure-channel` feature flag.
-#[cfg(feature = "clatter-secure-channel")]
-pub use secure_channel::ClatterSecureChannel as SecureChannel;
-
-#[cfg(all(not(feature = "clatter-secure-channel"), feature = "mock-secure-channel"))]
-pub use transport::MockSecureChannel as SecureChannel;
-
-#[cfg(feature = "clatter-secure-channel")]
 pub use secure_channel::ClatterHandshake;
+pub use secure_channel::ClatterSecureChannel as SecureChannel;
 
 pub use types::{
     BootstrapResponse, CapabilityFlags, ConnState, ConnectionState, DHTEntry, DiscoveryConfig,

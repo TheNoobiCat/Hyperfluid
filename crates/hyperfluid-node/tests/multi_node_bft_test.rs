@@ -26,9 +26,13 @@ use clatter::crypto::kem::rust_crypto_ml_kem::MlKem768;
 use clatter::traits::{Dh, Kem};
 
 struct NodeKeys {
+    #[allow(dead_code)]
     identity: Identity,
+    #[allow(dead_code)]
     peer_id: Hash32,
+    #[allow(dead_code)]
     dh_pubkey: [u8; 32],
+    #[allow(dead_code)]
     kem_pubkey: Vec<u8>,
 }
 
@@ -99,17 +103,19 @@ async fn spawn_validator_node(
     let identity = Arc::new(Identity::from_seed(&identity_seed));
     let running = Arc::new(AtomicBool::new(true));
     let p2p_config = DiscoveryConfig::default();
-    let peer_cache = Arc::new(tokio::sync::RwLock::new(hyperfluid_p2p::transport::PeerCache::new()));
+    let peer_cache =
+        Arc::new(tokio::sync::RwLock::new(hyperfluid_p2p::transport::PeerCache::new()));
     let transport = Arc::new(TcpTransport::new(p2p_config, Arc::clone(&peer_cache)));
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await.expect("bind");
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     let _ = driver.init_genesis(&genesis);
     let driver = Arc::new(Mutex::new(driver));
 
     // Build key_provider from genesis accounts.
-    let mut key_map: std::collections::HashMap<Hash32, ([u8; 32], Vec<u8>)> = std::collections::HashMap::new();
+    let mut key_map: std::collections::HashMap<Hash32, ([u8; 32], Vec<u8>)> =
+        std::collections::HashMap::new();
     for v in &genesis.validators {
         if let Some(acct) = genesis.accounts.iter().find(|a| a.account_id == v.validator_id) {
             if let Some(ref pk) = acct.pubkey {
@@ -121,7 +127,8 @@ async fn spawn_validator_node(
             }
         }
     }
-    let key_provider = Arc::new(move |pid: &Hash32| -> Option<([u8; 32], Vec<u8>)> { key_map.get(pid).cloned() });
+    let key_provider =
+        Arc::new(move |pid: &Hash32| -> Option<([u8; 32], Vec<u8>)> { key_map.get(pid).cloned() });
 
     // BFT setup
     let bft_config = ConsensusNetworkConfig::default();
@@ -130,7 +137,8 @@ async fn spawn_validator_node(
 
     let mut entries = Vec::new();
     for v in &genesis.validators {
-        let voting_power = if v.bonded_stake > u64::MAX as u128 { u64::MAX } else { v.bonded_stake as u64 };
+        let voting_power =
+            if v.bonded_stake > u64::MAX as u128 { u64::MAX } else { v.bonded_stake as u64 };
         let pk = key_provider(&v.validator_id).map(|(dh, _)| dh.to_vec()).unwrap_or_default();
         entries.push((v.validator_id, pk, voting_power));
     }
@@ -139,18 +147,23 @@ async fn spawn_validator_node(
     let proposer_seed = {
         use sha3::Digest;
         let mut h = sha3::Sha3_256::new();
-        h.update(&peer_id);
-        h.update(&genesis.timestamp.to_le_bytes());
+        h.update(peer_id);
+        h.update(genesis.timestamp.to_le_bytes());
         let mut out = [0u8; 32];
         out.copy_from_slice(&h.finalize());
         out
     };
 
-    let bridge = Arc::new(Mutex::new(NetworkBridge { outgoing: channels.outgoing_tx.clone(), peers: Vec::new() }));
+    let bridge = Arc::new(Mutex::new(NetworkBridge {
+        outgoing: channels.outgoing_tx.clone(),
+        peers: Vec::new(),
+    }));
 
     let incoming_tx = channels.incoming_tx.clone();
     let consensus_handler: ConsensusMessageHandler = Arc::new(move |_: Hash32, data: Vec<u8>| {
-        if data.is_empty() { return; }
+        if data.is_empty() {
+            return;
+        }
         let msg = match data[0] {
             0x01 => match network_bridge::decode_vote(&data[1..]) {
                 Some(vote) => malachite_consensus::ConsensusNetworkMsg::Vote(vote),
@@ -172,14 +185,22 @@ async fn spawn_validator_node(
     let t_a = Arc::clone(&transport);
     let id_a = Arc::clone(&identity);
     tokio::spawn(async move {
-        TcpTransport::accept_loop(listener, id_a, kp_a, t_a, Some(h_a)).await;
+        TcpTransport::accept_loop(listener, id_a, kp_a, t_a, Some(h_a), None).await;
         r_p2p.store(false, Ordering::Release);
     });
 
     // BFT loop
     let bft_handle = ConsensusDriver::run_bft_loop(
-        driver.clone(), running.clone(), bft_config, channels,
-        identity.clone(), node_addr, validator_set, proposer_seed, None, Some(bridge.clone()),
+        driver.clone(),
+        running.clone(),
+        bft_config,
+        channels,
+        identity.clone(),
+        node_addr,
+        validator_set,
+        proposer_seed,
+        None,
+        Some(bridge.clone()),
     );
 
     // Give peers a moment to start their accept loops before connecting.
@@ -197,8 +218,15 @@ async fn spawn_validator_node(
                 None => continue,
             };
             match tcp::connect_and_maintain(
-                *peer_addr, Arc::clone(&id_conn), *remote_peer_id, remote_dh, remote_kem, Arc::clone(&h_conn),
-            ).await {
+                *peer_addr,
+                Arc::clone(&id_conn),
+                *remote_peer_id,
+                remote_dh,
+                remote_kem,
+                Arc::clone(&h_conn),
+            )
+            .await
+            {
                 Ok((_, sender)) => {
                     if let Ok(mut b) = b_conn.lock() {
                         b.peers.push(sender);
@@ -231,11 +259,31 @@ async fn conforms_to_stage01_multi_node_three_validators_reach_consensus() {
     let peers1 = vec![(a0, node_keys[0].peer_id), (a2, node_keys[2].peer_id)];
     let peers2 = vec![(a0, node_keys[0].peer_id), (a1, node_keys[1].peer_id)];
 
-    let h0 = spawn_validator_node(node_keys[0].identity.to_seed(), node_keys[0].peer_id, genesis.clone(), a0, peers0);
-    let h1 = spawn_validator_node(node_keys[1].identity.to_seed(), node_keys[1].peer_id, genesis.clone(), a1, peers1);
-    let h2 = spawn_validator_node(node_keys[2].identity.to_seed(), node_keys[2].peer_id, genesis.clone(), a2, peers2);
+    let h0 = spawn_validator_node(
+        node_keys[0].identity.to_seed(),
+        node_keys[0].peer_id,
+        genesis.clone(),
+        a0,
+        peers0,
+    );
+    let h1 = spawn_validator_node(
+        node_keys[1].identity.to_seed(),
+        node_keys[1].peer_id,
+        genesis.clone(),
+        a1,
+        peers1,
+    );
+    let h2 = spawn_validator_node(
+        node_keys[2].identity.to_seed(),
+        node_keys[2].peer_id,
+        genesis.clone(),
+        a2,
+        peers2,
+    );
 
-    drop(l0); drop(l1); drop(l2);
+    drop(l0);
+    drop(l1);
+    drop(l2);
 
     let (h0, h1, h2) = tokio::join!(h0, h1, h2);
 
@@ -254,10 +302,23 @@ async fn conforms_to_stage01_multi_node_two_validators_reach_consensus() {
     let peers0 = vec![(a1, node_keys[1].peer_id)];
     let peers1 = vec![(a0, node_keys[0].peer_id)];
 
-    let h0 = spawn_validator_node(node_keys[0].identity.to_seed(), node_keys[0].peer_id, genesis.clone(), a0, peers0);
-    let h1 = spawn_validator_node(node_keys[1].identity.to_seed(), node_keys[1].peer_id, genesis.clone(), a1, peers1);
+    let h0 = spawn_validator_node(
+        node_keys[0].identity.to_seed(),
+        node_keys[0].peer_id,
+        genesis.clone(),
+        a0,
+        peers0,
+    );
+    let h1 = spawn_validator_node(
+        node_keys[1].identity.to_seed(),
+        node_keys[1].peer_id,
+        genesis.clone(),
+        a1,
+        peers1,
+    );
 
-    drop(l0); drop(l1);
+    drop(l0);
+    drop(l1);
 
     let (h0, h1) = tokio::join!(h0, h1);
 

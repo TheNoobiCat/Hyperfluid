@@ -39,11 +39,13 @@ pub fn start_rpc_server(
 ) -> (tokio::task::JoinHandle<()>, SocketAddr) {
     // Security gate: loopback only
     if !bind_addr.ip().is_loopback() {
-        panic!(
+        tracing::error!(
             "RPC server refuses to bind to non-loopback address {}. \
              The RPC API is local-only — use 127.0.0.1.",
             bind_addr
         );
+        let handle = tokio::spawn(async {});
+        return (handle, bind_addr);
     }
 
     let listener = std::net::TcpListener::bind(bind_addr).expect("failed to bind RPC listener");
@@ -209,7 +211,7 @@ fn dispatch_read(path: &str, body: &str, driver: &ConsensusDriver) -> (u16, Stri
         "/query/fee-estimate" => handle_query_fee_estimate(driver),
         "/task/status" => handle_task_status(driver, body),
         "/task/list" => handle_task_list(driver, body),
-        "/task/get" => handle_task_status(driver, body),
+        "/task/get" => handle_task_get(driver, body),
         "/review/list" => handle_review_list(driver),
         "/governance/list" => handle_governance_list(driver),
         "/governance/get" => handle_governance_get(driver, body),
@@ -508,8 +510,7 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
             arr
         }
         None => {
-            // Not provided — default to zero hash.
-            [0u8; 32]
+            return (400, r#"{"error":"target_hash is required for governance proposals"}"#.into())
         }
     };
     let title_hash = match req.get("title_hash").and_then(|v| v.as_str()) {
@@ -527,7 +528,9 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
             arr.copy_from_slice(&bytes);
             arr
         }
-        None => [0u8; 32],
+        None => {
+            return (400, r#"{"error":"title_hash is required for governance proposals"}"#.into())
+        }
     };
     let description_hash = match req.get("description_hash").and_then(|v| v.as_str()) {
         Some(s) => {
@@ -550,7 +553,12 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
             arr.copy_from_slice(&bytes);
             arr
         }
-        None => [0u8; 32],
+        None => {
+            return (
+                400,
+                r#"{"error":"description_hash is required for governance proposals"}"#.into(),
+            )
+        }
     };
 
     // Compute proposal_id = SHA3-256(proposer || target_hash)
@@ -630,7 +638,7 @@ fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, Str
             arr.copy_from_slice(&bytes);
             arr
         }
-        None => [0u8; 32], // not provided — default to zero hash
+        None => return (400, r#"{"error":"target_hash is required for governance votes"}"#.into()),
     };
 
     // Compute title_hash from optional "title" string, or use zero if absent.
@@ -643,7 +651,7 @@ fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, Str
             out.copy_from_slice(&hasher.finalize());
             out
         }
-        None => [0u8; 32], // not provided
+        None => return (400, r#"{"error":"title_hash is required for governance votes"}"#.into()),
     };
 
     // Compute description_hash from optional "description" string, or use zero if absent.
@@ -656,7 +664,9 @@ fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, Str
             out.copy_from_slice(&hasher.finalize());
             out
         }
-        None => [0u8; 32], // not provided
+        None => {
+            return (400, r#"{"error":"description_hash is required for governance votes"}"#.into())
+        }
     };
 
     // Build SCALE-encoded GovernancePayload for vote:
@@ -782,6 +792,41 @@ fn handle_task_list(driver: &ConsensusDriver, body: &str) -> (u16, String) {
         "count": tasks.len(),
     });
     (200, json.to_string())
+}
+
+fn handle_task_get(driver: &ConsensusDriver, body: &str) -> (u16, String) {
+    let req: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return (400, r#"{"error":"invalid json"}"#.into()),
+    };
+    let task_id = match parse_hash32(&req, "task_id") {
+        Ok(id) => id,
+        Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
+    };
+    match driver.state_machine.get_task(&task_id) {
+        Some(task) => {
+            let json = serde_json::json!({
+                "task_id": hex::encode(task.task_id),
+                "topic_id": hex::encode(task.topic_id),
+                "seed_ref": hex::encode(task.seed_ref),
+                "parent_task_id": hex::encode(task.parent_task_id),
+                "depends_on": task.depends_on.iter().map(hex::encode).collect::<Vec<_>>(),
+                "funder": hex::encode(task.funder),
+                "primary_owner": hex::encode(task.primary_owner),
+                "status": format!("{:?}", task.status),
+                "bounty_agx": task.bounty_agx,
+                "created_at_height": task.created_at_height,
+                "lease_expires_height": task.lease_expires_height,
+                "required_skills_hash": hex::encode(task.required_skills_hash),
+                "metadata_hash": hex::encode(task.metadata_hash),
+                "sponsor_id": hex::encode(task.sponsor_id),
+                "requester_pubkey": hex::encode(task.requester_pubkey),
+                "escrow_status": format!("{:?}", task.escrow_status),
+            });
+            (200, json.to_string())
+        }
+        None => (404, r#"{"error":"task not found"}"#.to_string()),
+    }
 }
 
 fn handle_review_list(driver: &ConsensusDriver) -> (u16, String) {

@@ -2,6 +2,7 @@
 //
 // Covers fixes F-10, F-27, F-28, F-54, F-55, F-56, F-57, F-85, F-86.
 // Each fix: minimum 1 positive + 1 negative test.
+#![allow(non_snake_case)]
 
 use hyperfluid_fastpath::lifecycle::{compute_proposal_id, FastPathEngine, FastPathError};
 use hyperfluid_fastpath::types::{

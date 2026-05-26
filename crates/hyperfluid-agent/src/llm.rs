@@ -152,7 +152,7 @@ struct OllamaMessage {
 #[derive(Deserialize)]
 struct OllamaResponseMessage {
     message: OllamaMessage,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "total_duration returned by Ollama API but not yet used")]
     total_duration: Option<u64>,
 }
 
@@ -194,12 +194,15 @@ impl LlmProvider for OllamaProvider {
 // ── Stub Provider (for testing without a live API) ────────────────────────
 
 /// Stub provider that returns empty responses. Used for development/testing
-/// when no LLM provider is configured.
+/// when no LLM provider is configured. Emits a warning in non-test builds.
 #[derive(Debug)]
 pub struct StubProvider;
 
 impl LlmProvider for StubProvider {
     fn complete(&self, _request: &LlmRequest) -> Result<LlmResponse, LlmError> {
+        if cfg!(not(test)) {
+            eprintln!("[hyperfluid-agent] WARNING: StubProvider used in production build");
+        }
         Ok(LlmResponse {
             content: String::new(),
             tokens_used: 10,

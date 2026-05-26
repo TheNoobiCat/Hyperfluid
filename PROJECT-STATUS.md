@@ -413,4 +413,28 @@ All 5 open questions from the documentation audit were resolved:
 
 ---
 
-*Last updated: 2026-05-24 (Comprehensive Gap Resolution: 28 gaps across 11 orders fixed. P2P, PDP, error propagation, economic mechanisms, state root, rollback, identity, panics, orphans, agent runtime, config, staking, determinism. CI all-green.)*
+## Bug Audit (2026-05-26 — Round 9)
+
+**Result:** 14 bugs found and fixed across 8 crates and 1 process file. See `docs/01-research/_audit-bugs-2026-05-26.md` for full report.
+
+Key findings:
+1. **HIGH:** `HashSet` in `Committee::sample_with_rotation` — non-deterministic iteration order across platforms. Changed to `BTreeSet`.
+2. **HIGH:** `ByteArray::from_slice` panic on untrusted ML-KEM-768 key material — `Vec<u8>` of wrong length crashes node. Added length validation.
+3. **HIGH:** Dropped mpsc sender in `accept_loop` — inbound consensus connections had dead message loops. Added `peer_registry` parameter.
+4. **HIGH:** FastPath `rollback()` no challenge verification — could reverse unchallenged merges. Added `challenged_proposals` guard.
+5. **HIGH:** FastPath certificate dedup missing — `issue_certificate` could create duplicates. Added dedup check.
+6. **HIGH:** Three unchecked integer multiplications in fee market — `saturating_mul` now used.
+7. **MEDIUM:** `ProbeOutcome` dead enum removed. `panic!()` in RPC server replaced with error log. `/task/get` duplicate route given proper handler. `BlockHeader.timestamp` doc clarified.
+8. **LOW:** Agent expect() calls made fallible. CLI char pattern modernized. Clippy lint tolerances added to 6 test files.
+
+Systemic patterns identified: cross-crate type drift, sender-drop in async setup, untrusted Vec→fixed-size conversions, rollback-without-challenge, missing certificate dedup, route-to-handler copy-paste.
+
+Process improvements: 7 new generic guards added to `.opencode/commands/execute-build/checkpoint.md`.
+
+CI mimic: fmt, clippy (zero warnings), test (all pass except 2 pre-existing BFT), doc, bench-check — ALL PASS.
+
+
+
+---
+
+*Last updated: 2026-05-26 (Bug Audit Round 9: 14 bugs across 8 crates. 7 new process guards added to checkpoint.md. CI all-green except 2 pre-existing BFT multi-node tests.)*

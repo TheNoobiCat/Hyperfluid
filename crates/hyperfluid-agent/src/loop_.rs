@@ -209,6 +209,7 @@ impl AgentRuntime {
             let recent_msgs: Vec<LlmMessage> = self
                 .db
                 .get_recent_messages(1000)
+                .inspect_err(|e| tracing::warn!("DB get_recent_messages failed: {}", e))
                 .unwrap_or_default()
                 .into_iter()
                 .map(|(role, content, _timestamp)| LlmMessage { role, content })
@@ -234,9 +235,9 @@ impl AgentRuntime {
             } else if let Some(start) = llm_response.content.find('[') {
                 let end = llm_response.content[start..].find(']').map(|e| start + e + 1);
                 match end {
-                    Some(end) => {
-                        serde_json::from_str(&llm_response.content[start..end]).unwrap_or_default()
-                    }
+                    Some(end) => serde_json::from_str(&llm_response.content[start..end])
+                        .inspect_err(|e| tracing::warn!("LLM tool-call JSON parse error: {}", e))
+                        .unwrap_or_default(),
                     None => Vec::new(),
                 }
             } else {
@@ -373,6 +374,7 @@ impl AgentRuntime {
         let recent_msgs: Vec<LlmMessage> = self
             .db
             .get_recent_messages(1000)
+            .inspect_err(|e| tracing::warn!("DB get_recent_messages failed: {}", e))
             .unwrap_or_default()
             .into_iter()
             .map(|(role, content, _timestamp)| LlmMessage { role, content })
@@ -393,9 +395,9 @@ impl AgentRuntime {
         } else if let Some(start) = llm_response.content.find('[') {
             let end = llm_response.content[start..].find(']').map(|e| start + e + 1);
             match end {
-                Some(end) => {
-                    serde_json::from_str(&llm_response.content[start..end]).unwrap_or_default()
-                }
+                Some(end) => serde_json::from_str(&llm_response.content[start..end])
+                    .inspect_err(|e| tracing::warn!("LLM tool-call JSON parse error: {}", e))
+                    .unwrap_or_default(),
                 None => Vec::new(),
             }
         } else {
@@ -699,7 +701,7 @@ impl AgentRuntime {
 
         // Load or generate identity key
         let p2p_identity = if key_path.exists() {
-            let seed_bytes = std::fs::read(key_path).map_err(|e| AgentError::Io(e))?;
+            let seed_bytes = std::fs::read(key_path).map_err(AgentError::Io)?;
             if seed_bytes.len() != 32 {
                 return Err(AgentError::Config(format!(
                     "Agent key must be exactly 32 bytes, got {}",
@@ -712,7 +714,7 @@ impl AgentRuntime {
         } else {
             let identity = hyperfluid_p2p::identity::Identity::generate();
             let seed = identity.to_seed();
-            std::fs::write(key_path, &seed).map_err(|e| AgentError::Io(e))?;
+            std::fs::write(key_path, seed).map_err(AgentError::Io)?;
             identity
         };
 

@@ -16,7 +16,7 @@ name = "hyperfluid_node"
 path = "src/lib.rs"
 
 [dependencies]
-hyperfluid-consensus = { path = "../hyperfluid-consensus", features = ["pdp-bypass"] }
+hyperfluid-consensus = { path = "../hyperfluid-consensus" }
 hyperfluid-state = { path = "../hyperfluid-state" }
 hyperfluid-staking = { path = "../hyperfluid-staking" }
 hyperfluid-p2p = { path = "../hyperfluid-p2p" }
@@ -33,6 +33,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+hyperfluid-consensus = { path = "../hyperfluid-consensus", features = ["pdp-bypass"] }
 hyperfluid-fee-market = { path = "../hyperfluid-fee-market" }
 hyperfluid-artifact = { path = "../hyperfluid-artifact" }
 clatter.workspace = true

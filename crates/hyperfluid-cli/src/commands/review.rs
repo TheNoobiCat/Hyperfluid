@@ -56,7 +56,10 @@ pub fn run(
         ReviewAction::Claim { review_task_id, agent, nonce } => {
             let task_id = parse_hash32(&review_task_id)?;
             let agent_id = parse_hash32(&agent)?;
-            let payload = (task_id, agent_id, nonce, 0u128, false);
+            let payload = (
+                task_id, agent_id, nonce, 0u128, /* claim_bond not used */
+                false, /* shadow_claim flag */
+            );
             let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,

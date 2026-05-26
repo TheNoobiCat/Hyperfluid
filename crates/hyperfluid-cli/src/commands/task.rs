@@ -145,7 +145,13 @@ pub fn run(
         TaskAction::Claim { task_id, agent, nonce } => {
             let task_id_bytes = parse_hash32(&task_id)?;
             let agent_id = parse_hash32(&agent)?;
-            let payload = (task_id_bytes, agent_id, nonce, 0u128, false);
+            let payload = (
+                task_id_bytes,
+                agent_id,
+                nonce,
+                0u128, /* bid_amount not used */
+                false, /* shadow_claim flag */
+            );
             let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,

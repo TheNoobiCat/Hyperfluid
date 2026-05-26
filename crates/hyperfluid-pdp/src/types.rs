@@ -52,7 +52,6 @@ pub enum ActionType {
     SubmitTaskCompletion,
     Transfer,
     // Original variants
-    #[allow(dead_code, reason = "staged for topic messaging in Stage 03")]
     PublishTopicMessage,
     ClaimTaskLease,
     RenewTaskLease,

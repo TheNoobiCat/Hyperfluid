@@ -6,15 +6,21 @@
 //!
 //! Source: docs/04-specifications/protocol/p2p-wire-spec.md Section 1.2, 1.8
 
-use crate::types::{Hash32, SecureChannelError};
+use crate::types::Hash32;
+#[cfg(test)]
+use crate::types::SecureChannelError;
+#[cfg(test)]
 use sha3::digest::Update;
+#[cfg(test)]
 use sha3::Digest;
+#[cfg(test)]
 use sha3::Sha3_256;
 
 /// Mock secure channel using SHA3-256 XOR for conformance testing.
 ///
 /// Provides the same interface as the production clatter-based SecureChannel.
 /// Key derivation is deterministic from peer IDs and nonce.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MockSecureChannel {
     session_id: Hash32,
@@ -24,6 +30,7 @@ pub struct MockSecureChannel {
     nonce: u64,
 }
 
+#[cfg(test)]
 impl MockSecureChannel {
     /// Establish a new secure channel between two peers.
     ///
@@ -73,6 +80,7 @@ impl MockSecureChannel {
 }
 
 /// Derive a shared secret from two peer identities and a nonce.
+#[cfg(test)]
 fn derive_shared_secret(a: Hash32, b: Hash32, nonce: Hash32) -> Hash32 {
     let mut hasher = Sha3_256::new();
     let (low, high) = if a < b { (a, b) } else { (b, a) };
@@ -85,6 +93,7 @@ fn derive_shared_secret(a: Hash32, b: Hash32, nonce: Hash32) -> Hash32 {
 }
 
 /// Derive a session identifier from the shared secret and nonce.
+#[cfg(test)]
 fn derive_session_id(secret: &Hash32, nonce: Hash32) -> Hash32 {
     let mut hasher = Sha3_256::new();
     Update::update(&mut hasher, secret);
@@ -96,6 +105,7 @@ fn derive_session_id(secret: &Hash32, nonce: Hash32) -> Hash32 {
 }
 
 /// Generate a fast nonce from two peer identities for deterministic testing.
+#[cfg(test)]
 fn fast_nonce(a: Hash32, b: Hash32) -> Hash32 {
     let mut hasher = Sha3_256::new();
     Update::update(&mut hasher, a.as_slice());
@@ -106,6 +116,7 @@ fn fast_nonce(a: Hash32, b: Hash32) -> Hash32 {
 }
 
 /// Symmetric XOR encryption using SHAKE-256 XOF keystream.
+#[cfg(test)]
 fn xof_encrypt(key: &Hash32, nonce: u64, data: &[u8]) -> Vec<u8> {
     use sha3::digest::{ExtendableOutput, XofReader};
     use sha3::Shake256;

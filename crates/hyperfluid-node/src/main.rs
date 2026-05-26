@@ -98,15 +98,21 @@ impl NodeConfig {
                                         None
                                     }
                                 } else {
-                                    // Backward compat: bare address (peer_id = [0;32], won't work)
-                                    let addr: SocketAddr = entry.parse().ok()?;
-                                    Some((addr, [0u8; 32]))
+                                    // Peer ID required for P2P connections.
+                                    // Bare addresses are not supported.
+                                    tracing::warn!(
+                                        "Skipping peer entry with no peer_id: {}",
+                                        entry,
+                                    );
+                                    None
                                 }
                             })
                             .collect();
                     }
                 }
-                _ => {}
+                unknown => {
+                    eprintln!("Warning: unknown flag '{}' — ignored", unknown);
+                }
             }
             i += 1;
         }
@@ -118,14 +124,10 @@ impl NodeConfig {
             .expect("invalid P2P bind address (expected IP:port format, e.g. 0.0.0.0:9876)");
 
         let genesis = if let Some(ref path) = genesis_path {
-            let _content = std::fs::read_to_string(path)
+            let content = std::fs::read_to_string(path)
                 .unwrap_or_else(|e| panic!("Failed to read genesis file {:?}: {}", path, e));
-            GenesisConfig::new_testnet_single_validator()
-        // TODO Stage 01: deserialize from TOML to GenesisConfig.
-        // For now, scaffold uses the built-in testnet default.
-        // SPEC_DEVIATION: GenesisConfig TOML deserialization deferred.
-        // The GenesisConfig struct is fully specified but
-        // config file parsing will be formalised in Stage 01.
+            serde_json::from_str(&content)
+                .unwrap_or_else(|e| panic!("Invalid genesis file {:?}: {}", path, e))
         } else {
             GenesisConfig::new_testnet_single_validator()
         };
@@ -198,7 +200,11 @@ async fn main() {
     tracing::info!("Block interval: {}s", config.block_interval_secs);
 
     // ── Initialise consensus driver with genesis state ──
-    let mut driver = ConsensusDriver::new(config.genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(
+        config.genesis.epoch_length,
+        [0u8; 32], // node_id: set after identity load
+        [0u8; 32], // git_head_commit: genesis
+    );
     let genesis_block = driver.init_genesis(&config.genesis);
 
     tracing::info!(
@@ -296,17 +302,25 @@ async fn main() {
         for v in &config.genesis.validators {
             let voting_power: u64 =
                 if v.bonded_stake > u64::MAX as u128 { u64::MAX } else { v.bonded_stake as u64 };
-            let pk =
-                key_provider(&v.validator_id).map(|(dh, _kem)| dh.to_vec()).unwrap_or_default();
-            entries.push((v.validator_id, pk, voting_power));
+            match key_provider(&v.validator_id) {
+                Some((dh, _kem)) => {
+                    entries.push((v.validator_id, dh.to_vec(), voting_power));
+                }
+                None => {
+                    tracing::warn!(
+                        "No key found for validator {} — skipping",
+                        hex::encode(v.validator_id),
+                    );
+                }
+            }
         }
         let validator_set = malachite_consensus::build_validator_set(entries);
 
         let proposer_seed = {
             use sha3::Digest;
             let mut h = sha3::Sha3_256::new();
-            h.update(&local_peer_id);
-            h.update(&config.genesis.timestamp.to_le_bytes());
+            h.update(local_peer_id);
+            h.update(config.genesis.timestamp.to_le_bytes());
             let mut out = [0u8; 32];
             out.copy_from_slice(&h.finalize());
             out
@@ -364,6 +378,7 @@ async fn main() {
                     kp_accept,
                     transport,
                     Some(handler),
+                    None, // peer_registry — inbound senders deferred (outbound via connect_and_maintain)
                 )
                 .await;
                 r_p2p.store(false, Ordering::Release);
@@ -451,7 +466,8 @@ async fn main() {
             let identity = Arc::clone(&local_identity);
             let r_p2p = running.clone();
             tokio::spawn(async move {
-                TcpTransport::accept_loop(listener, identity, key_provider, transport, None).await;
+                TcpTransport::accept_loop(listener, identity, key_provider, transport, None, None)
+                    .await;
                 r_p2p.store(false, Ordering::Release);
             });
         }
@@ -506,7 +522,7 @@ mod tests {
     #[test]
     fn genesis_block_height_zero() {
         let genesis = GenesisConfig::new_testnet_single_validator();
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         let block = driver.init_genesis(&genesis);
         assert_eq!(block.header.height, 0);
         assert_eq!(block.header.parent_hash, [0u8; 32]);
@@ -516,7 +532,7 @@ mod tests {
     #[test]
     fn genesis_block_epoch_zero() {
         let genesis = GenesisConfig::new_testnet_single_validator();
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         let block = driver.init_genesis(&genesis);
         assert_eq!(block.header.epoch, 0);
     }
@@ -524,7 +540,7 @@ mod tests {
     #[test]
     fn genesis_block_timestamp_matches_config() {
         let genesis = GenesisConfig::new_testnet_single_validator();
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         let block = driver.init_genesis(&genesis);
         assert_eq!(block.header.timestamp, genesis.timestamp);
     }
@@ -532,7 +548,7 @@ mod tests {
     #[test]
     fn node_produces_real_blocks() {
         let genesis = GenesisConfig::new_testnet_single_validator();
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         driver.init_genesis(&genesis);
 
         // Produce 5 blocks

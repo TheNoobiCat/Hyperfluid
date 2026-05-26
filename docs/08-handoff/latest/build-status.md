@@ -1,6 +1,6 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) COMPLETE
 
-**Last updated:** 2026-05-26 (Stage 01 multi-validator BFT networking: `--multi-validator` flag, persistent TCP consensus messaging, dynamic peer bridge, 6 files changed across 3 crates. CI all-green.)
+**Last updated:** 2026-05-26 (Bug Audit Round 9: 14 bugs fixed across 8 crates. 7 new process guards added to checkpoint.md. CI all-green except 2 pre-existing BFT multi-node tests.)
 **Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards implemented, BFT multi-validator networking infrastructure wired — outbound peer key resolution deferred)
 **Stage:** 02 — Agent Runtime — **COMPLETE** (all 10 weeks complete)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
@@ -1056,6 +1056,42 @@ Together these two lines make the entire P2P layer (TCP sockets, clatter handsha
 | `ValidatorState` / `ValidatorLifecycleState` | `staking/src/lib.rs:21` AND `state_machine.rs:103` | Same 4-variant enum, two locations |
 
 **Fix:** Remove duplicates from staking crate; use governance/state types as canonical.
+
+---
+
+## Resolved Issues (Bug Audit 2026-05-26 — Round 9)
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| H-01: `HashSet` in committee sampling — non-deterministic iteration (K-01) | High | Changed to `BTreeSet` in `Committee::sample_with_rotation` |
+| H-02: `ByteArray::from_slice` panic on untrusted KEM key length (K-02) | High | Added length validation before conversion; returns `TcpError::Handshake` |
+| H-03: Dropped mpsc sender in `accept_loop` — dead message loop (K-03) | High | Added `peer_registry` parameter; inbound senders stored for outbound messaging |
+| H-04: FastPath `rollback()` without challenge verification (K-04) | High | Added `challenged_proposals` guard before rollback execution |
+| H-05: FastPath certificate dedup missing (K-05) | High | Added duplicate check at top of `issue_certificate()` |
+| H-06: Unchecked multiplications in fee market (K-06) | High | Changed to `saturating_mul` at 3 call sites |
+| M-01: `ProbeOutcome` dead enum (K-07) | Medium | Removed unused enum from `discovery.rs` |
+| M-02: `panic!()` in RPC server on non-loopback bind (K-08) | Medium | Replaced with `tracing::error!` + no-op handle |
+| M-03: `/task/get` routed to `handle_task_status` (K-09) | Medium | Added `handle_task_get` returning full 17-field task detail |
+| M-04: `BlockHeader.timestamp` field ambiguity (K-10) | Medium | Added doc comment clarifying deterministic block-height usage |
+| L-01: Agent `telegram.rs` Client builder expect() (K-11) | Low | Replaced with match + error log + fallback |
+| L-02: Agent `tui.rs` TOML serialization expect() (K-12) | Low | Replaced with match + error print + early return |
+| L-03: CLI manual char comparison (K-13) | Low | Changed to array pattern `['#', ' ']` |
+| L-04: Clippy `non_snake_case` across 6 test files (K-14) | Low | Added `#![allow(non_snake_case)]` to affected test files |
+
+See `docs/01-research/_audit-bugs-2026-05-26.md` for full report.
+
+### Systemic patterns identified
+
+- **Cross-crate type drift:** `ValidatorTracker` (state) diverged from `ValidatorRecord` (spec staking)
+- **Sender-drop in async setup:** Channels created locally where sender must be stored externally
+- **Untrusted Vec<u8> → fixed-size conversion:** P2P handshake code panics on wrong-length keys
+- **Rollback without challenge check:** State-modifying undo functions not consulting dispute tracking
+- **Certificate dedup missing:** Named-record insertion without prior lookup
+- **Route-to-handler copy-paste:** Different REST paths calling identical handler
+
+### Process improvements
+
+7 new generic guards added to `.opencode/commands/execute-build/checkpoint.md` (bytearray-panic, channel-sender-preservation, rollback-auth-check, record-dedup, handler-routing-completeness, name-vs-type-drift, embedded pre-existing lint tolerances).
 
 ---
 

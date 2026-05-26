@@ -296,6 +296,8 @@ impl Vote<HyperfluidContext> for HyperfluidVote {
         &self.validator_addr
     }
 
+    /// Hyperfluid does not use Malachite's extension framework.
+    /// Returns `None` — this is by design, not a stub.
     fn extension(
         &self,
     ) -> Option<&arc_malachitebft_core_types::SignedExtension<HyperfluidContext>> {

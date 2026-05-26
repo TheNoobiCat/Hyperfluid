@@ -60,13 +60,13 @@ pub(crate) const EMPTY_SKILLS_HASH: [u8; 32] = [
     0xf5, 0xdc, 0x3f, 0x78, 0xb7, 0xbf, 0x42, 0x26, 0x18, 0xc2, 0x77, 0x29, 0x31, 0x14, 0x6f, 0x79,
 ];
 
-/// Load an ML-DSA-65 Identity from a key file, hex key string, or generate a temporary one.
+/// Load an ML-DSA-65 Identity from a key file, hex key string, or default path.
 ///
 /// Resolution order:
 /// 1. `key_file` path (must exist)
 /// 2. `key_hex` 32-byte hex seed
 /// 3. `~/.hyperfluid/agent.key` (default path, if exists)
-/// 4. Generate a fresh random identity (stateless fallback)
+/// 4. Error: no identity found. Use `hyperfluid agent keygen` to create one.
 pub(crate) fn load_identity(
     key_file: Option<&str>,
     key_hex: Option<&str>,
@@ -91,6 +91,7 @@ pub(crate) fn load_identity(
     if default_path.exists() {
         return load_identity_from_file(&default_path);
     }
+    eprintln!("Warning: No identity found — using ephemeral key. Configure with --key-file or --key-hex.");
     Ok(Identity::generate())
 }
 

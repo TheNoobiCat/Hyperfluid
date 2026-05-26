@@ -37,6 +37,7 @@ struct GovernancePayload {
     target_hash: [u8; 32],
     title_hash: [u8; 32],
     description_hash: [u8; 32],
+    vote_signature: Vec<u8>,
 }
 
 /// Payload for FastPathTx — mirrors the struct in driver.rs.
@@ -103,7 +104,7 @@ fn test_node_produces_real_blocks() {
         .collect();
 
     let genesis = make_genesis(accounts, vec![]);
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
 
     let genesis_block = driver.init_genesis(&genesis);
     assert_eq!(genesis_block.header.height, 0);
@@ -188,7 +189,7 @@ fn test_transaction_changes_state() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.init_genesis(&genesis);
     driver.pdp_bypass = true; // mock pubkeys for testing
 
@@ -260,7 +261,7 @@ fn test_multiple_transfers_across_blocks() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.init_genesis(&genesis);
     driver.pdp_bypass = true; // mock pubkeys for testing
 
@@ -323,7 +324,7 @@ fn test_rejected_transfer_preserves_state() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.init_genesis(&genesis);
 
     let root_before = driver.state_machine.compute_state_root();
@@ -364,7 +365,7 @@ fn test_epoch_advances_at_boundary() {
     let mut genesis_with_epoch = genesis.clone();
     genesis_with_epoch.epoch_length = epoch_length;
 
-    let mut driver = ConsensusDriver::new(epoch_length);
+    let mut driver = ConsensusDriver::new(epoch_length, [0u8; 32], [0u8; 32]);
     driver.init_genesis(&genesis_with_epoch);
 
     // Genesis is at epoch 0, height 0
@@ -417,7 +418,7 @@ fn test_governance_proposal_submitted() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true; // PDP state not wired in this test
     driver.init_genesis(&genesis);
 
@@ -430,6 +431,7 @@ fn test_governance_proposal_submitted() {
         target_hash,
         title_hash,
         description_hash,
+        vote_signature: vec![],
     };
     let tx = TransactionEnvelope {
         tx_type: TxType::GovernanceTx(GovernanceAction::Propose),
@@ -489,7 +491,7 @@ fn test_governance_vote_cast() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true; // PDP state not wired in this test
     driver.init_genesis(&genesis);
 
@@ -502,6 +504,7 @@ fn test_governance_vote_cast() {
         target_hash,
         title_hash: [0u8; 32],
         description_hash: [0u8; 32],
+        vote_signature: vec![],
     };
     let propose_tx = TransactionEnvelope {
         tx_type: TxType::GovernanceTx(GovernanceAction::Propose),
@@ -526,6 +529,7 @@ fn test_governance_vote_cast() {
         target_hash: [0u8; 32],
         title_hash: [0u8; 32],
         description_hash: [0u8; 32],
+        vote_signature: dummy_sig(),
     };
     let vote_tx = TransactionEnvelope {
         tx_type: TxType::GovernanceTx(GovernanceAction::Vote),
@@ -569,7 +573,7 @@ fn test_fastpath_merge_submitted() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true; // PDP state not wired in this test
     driver.init_genesis(&genesis);
 
@@ -619,7 +623,7 @@ fn test_validator_bond_via_driver() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true;
     driver.init_genesis(&genesis);
     let root_before = driver.state_machine.compute_state_root();
@@ -663,7 +667,7 @@ fn test_validator_unbond_via_driver() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true;
     driver.init_genesis(&genesis);
 
@@ -711,7 +715,7 @@ fn test_validator_withdraw_via_driver() {
     );
     genesis.unbond_delay = 10;
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true;
     driver.staking_params.unbond_delay = 10;
     driver.init_genesis(&genesis);
@@ -799,7 +803,7 @@ fn test_delegation_via_driver() {
         vec![GenesisValidator { validator_id, bonded_stake: bond_amount }],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true;
     driver.init_genesis(&genesis);
 
@@ -839,7 +843,7 @@ fn test_fee_market_adjusts_per_block() {
         vec![],
     );
 
-    let mut driver = ConsensusDriver::new(genesis.epoch_length);
+    let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     driver.init_genesis(&genesis);
     let base_fee_before = driver.fee_state.base_fee;
 
@@ -876,12 +880,12 @@ fn test_validator_cycle_state_root_determinism() {
     );
     genesis.unbond_delay = 10;
 
-    let mut d1 = ConsensusDriver::new(genesis.epoch_length);
+    let mut d1 = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     d1.pdp_bypass = true;
     d1.staking_params.unbond_delay = 10;
     d1.init_genesis(&genesis);
 
-    let mut d2 = ConsensusDriver::new(genesis.epoch_length);
+    let mut d2 = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
     d2.pdp_bypass = true;
     d2.staking_params.unbond_delay = 10;
     d2.init_genesis(&genesis);

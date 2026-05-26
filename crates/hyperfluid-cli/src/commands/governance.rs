@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use hyperfluid_p2p::identity::Identity;
 
-use crate::commands::{format_output, rpc_post, sha3_256_hash};
+use crate::commands::{format_output, rpc_post, sha3_256_hash, sign_payload};
 use crate::OutputFormat;
 
 fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
@@ -53,7 +53,7 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
-    _identity: &Identity,
+    identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         GovernanceAction::Propose {
@@ -67,6 +67,8 @@ pub fn run(
             let proposer_id = parse_hash32(&proposer)?;
             // F-88: Use shared sha3_256_hash
             let proposal_id = sha3_256_hash(&[proposer_id.as_slice(), target.as_slice()].concat());
+            let (payload_hex, sig_hex, pubkey_hex) =
+                sign_payload(identity, &(proposal_id, target, proposer_id, nonce));
             rpc_post(
                 client,
                 node_url,
@@ -78,12 +80,19 @@ pub fn run(
                     "description_hash": description_hash,
                     "proposer": proposer,
                     "nonce": nonce,
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
         // F-69: Use provided target_hash instead of hardcoded zero
         GovernanceAction::Vote { proposal_id, option, voter, nonce, target_hash } => {
             let approve = option.to_lowercase() == "yes" || option.to_lowercase() == "approve";
+            let proposal_id_bytes = parse_hash32(&proposal_id)?;
+            let voter_id = parse_hash32(&voter)?;
+            let (payload_hex, sig_hex, pubkey_hex) =
+                sign_payload(identity, &(proposal_id_bytes, approve as u8, voter_id, nonce));
             rpc_post(
                 client,
                 node_url,
@@ -94,6 +103,9 @@ pub fn run(
                     "voter": voter,
                     "nonce": nonce,
                     "target_hash": target_hash,
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }

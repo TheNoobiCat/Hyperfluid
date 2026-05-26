@@ -65,6 +65,7 @@ struct TransferPayload {
 ///
 /// For `Vote`:
 ///   `vote_approve`    → true = Yes, false = No
+///   `vote_signature`  → ML-DSA-65 signature over (proposal_id || vote_approve_byte).
 ///   Other fields ignored.
 #[derive(Encode, Decode)]
 struct GovernancePayload {
@@ -75,6 +76,9 @@ struct GovernancePayload {
     target_hash: Hash32,
     title_hash: Hash32,
     description_hash: Hash32,
+    /// ML-DSA-65 signature over vote-specific payload:
+    /// SHA3-256(proposal_id || proposer_id || vote_approve_byte)
+    vote_signature: Vec<u8>,
 }
 
 /// Payload format for FastPathTx transactions.
@@ -280,7 +284,7 @@ impl ConsensusDriver {
     /// Create a new consensus driver with zero height and an empty block store.
     /// Initializes the governance, fast-path engines, fee market, and staking
     /// parameters with their defaults.
-    pub fn new(epoch_length: u64) -> Self {
+    pub fn new(epoch_length: u64, node_id: Hash32, git_head_commit: Hash32) -> Self {
         Self {
             state_machine: StateMachine::new(),
             block_store: Vec::new(),
@@ -298,10 +302,10 @@ impl ConsensusDriver {
             agent_nonces: BTreeMap::new(),
             quota_states: BTreeMap::new(),
             consumed_plan_ids: BTreeSet::new(),
-            node_id: [0u8; 32],
+            node_id,
             #[cfg(feature = "pdp-bypass")]
             pdp_bypass: false,
-            git_head_commit: [0u8; 32],
+            git_head_commit,
             fee_reward_pool: 0,
             audit_log: AuditLog::new(),
             committee_history: BTreeMap::new(),
@@ -752,15 +756,20 @@ impl ConsensusDriver {
                         .get_validator(&payload.proposer_id)
                         .map(|vt| vt.self_bond)
                         .unwrap_or(1);
-                    // SPEC_DEVIATION: vote signature reuses tx.signature;
-                    // full per-vote ML-DSA signing deferred.
+                    // Use per-vote ML-DSA-65 signature if provided; fall back to tx signature
+                    // for older clients that haven't been updated yet.
+                    let vote_sig = if payload.vote_signature.len() == 3309 {
+                        payload.vote_signature
+                    } else {
+                        tx.signature.clone()
+                    };
                     let vote = GovernanceVote {
                         proposal_id: payload.proposal_id,
                         voter_id: payload.proposer_id,
                         vote: vote_option,
                         reason_hash: payload.description_hash,
                         vote_weight,
-                        signature: tx.signature.clone(),
+                        signature: vote_sig,
                     };
                     match self.governance.cast_vote(vote, ctx.height) {
                         Ok(()) => {
@@ -1600,7 +1609,7 @@ mod tests {
 
     #[test]
     fn genesis_block_has_height_zero() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [1u8; 32],
             balance: 1_000_000_000_000_000_000_000u128,
@@ -1615,7 +1624,7 @@ mod tests {
 
     #[test]
     fn genesis_state_root_is_nonzero() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [1u8; 32],
             balance: 1_000_000_000_000_000_000_000u128,
@@ -1627,7 +1636,7 @@ mod tests {
 
     #[test]
     fn produce_block_advances_height() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [1u8; 32],
             balance: 1_000_000_000_000_000_000_000u128,
@@ -1643,7 +1652,7 @@ mod tests {
 
     #[test]
     fn blocks_chain_parent_hash() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [1u8; 32],
             balance: 1_000_000_000_000_000_000_000u128,
@@ -1662,7 +1671,7 @@ mod tests {
 
     #[test]
     fn empty_block_state_root_unchanged() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [1u8; 32],
             balance: 1_000_000_000_000_000_000_000u128,
@@ -1677,7 +1686,7 @@ mod tests {
 
     #[test]
     fn account_balance_query() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [0xAAu8; 32],
             balance: 5_000_000_000_000_000_000_000u128,
@@ -1691,7 +1700,7 @@ mod tests {
 
     #[test]
     fn account_nonce_query() {
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [0xCCu8; 32],
             balance: 1_000u128,
@@ -1708,7 +1717,7 @@ mod tests {
         use hyperfluid_pdp::rule_chain::hash_action_plan_for_signing;
         use hyperfluid_pdp::types::{ActionPlanRequest, ActionType};
 
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let alice_id = [1u8; 32];
         let bob_id = [2u8; 32];
 
@@ -1779,7 +1788,7 @@ mod tests {
 
     #[test]
     fn epoch_boundary_detection() {
-        let mut driver = ConsensusDriver::new(5); // short epoch for testing
+        let mut driver = ConsensusDriver::new(5, [0u8; 32], [0u8; 32]); // short epoch for testing
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [1u8; 32],
             balance: 1_000u128,
@@ -1816,7 +1825,7 @@ mod tests {
         use crate::malachite_consensus::{BftDriver, ConsensusEvent, ConsensusNetworkConfig};
 
         // 1. Create driver with genesis state
-        let driver = Arc::new(Mutex::new(ConsensusDriver::new(100)));
+        let driver = Arc::new(Mutex::new(ConsensusDriver::new(100, [0u8; 32], [0u8; 32])));
         {
             let mut d = driver.lock().unwrap();
             let genesis = test_genesis(vec![GenesisAccount {
@@ -1879,7 +1888,7 @@ mod tests {
         // block is committed — no BftDriver ceremony required.
 
         // 1. Create driver with genesis
-        let mut driver = ConsensusDriver::new(100);
+        let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
         let genesis = test_genesis(vec![GenesisAccount {
             account_id: [2u8; 32],
             balance: 1_000_000_000_000_000_000_000u128,

@@ -2,6 +2,10 @@
 //
 // Tests for fixes F-2 through F-73 applied to the hyperfluid-consensus crate.
 // Each fix has at least 1 positive + 1 negative test case.
+#![allow(non_snake_case)]
+#![allow(dead_code)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(unused_imports)]
 
 use hyperfluid_consensus::malachite::{
     Address32, BlockHeight, HyperfluidContext, HyperfluidValidator, HyperfluidValidatorSet,
@@ -88,7 +92,7 @@ fn fix_F2_valid_signature_accepted() {
     let alice = Identity::generate();
     let pk = alice.verifying_key_encoded();
 
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     driver.key_bindings.insert(alice_id, pk);
     driver.agent_nonces.insert(alice_id, 0);
 
@@ -126,7 +130,7 @@ fn fix_F2_wrong_signature_rejected() {
     let bob = Identity::generate();
     let pk = alice.verifying_key_encoded();
 
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     driver.key_bindings.insert(alice_id, pk);
     driver.agent_nonces.insert(alice_id, 0);
 
@@ -158,7 +162,7 @@ fn fix_F2_empty_signature_rejected() {
     let alice = Identity::generate();
     let pk = alice.verifying_key_encoded();
 
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     driver.key_bindings.insert(alice_id, pk);
 
     let genesis = minimal_genesis();
@@ -183,7 +187,7 @@ fn fix_F2_missing_key_binding_rejected() {
     let alice_id = [0xAAu8; 32];
     let alice = Identity::generate();
 
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     // No key binding for alice
 
     let genesis = minimal_genesis();
@@ -232,7 +236,7 @@ fn fix_F3_signature_populated_from_tx() {
     let alice = Identity::generate();
     let pk = alice.verifying_key_encoded();
 
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     driver.key_bindings.insert(alice_id, pk);
     driver.agent_nonces.insert(alice_id, 0);
 
@@ -366,7 +370,7 @@ fn fix_F13_empty_signature_rejected_by_consensus_driver() {
     let alice = Identity::generate();
     let pk = alice.verifying_key_encoded();
 
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     driver.key_bindings.insert(alice_id, pk);
     driver.agent_nonces.insert(alice_id, 0);
 
@@ -437,7 +441,7 @@ fn fix_F14_signer_set_hash_computed_from_reviewers() {
 
 #[test]
 fn fix_F15_proposer_id_matches_node_id() {
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     let node_id = [0xDEu8; 32];
     driver.node_id = node_id;
 
@@ -450,7 +454,7 @@ fn fix_F15_proposer_id_matches_node_id() {
 
 #[test]
 fn fix_F15_proposer_id_defaults_to_zeros() {
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     let genesis = minimal_genesis();
     driver.init_genesis(&genesis);
 
@@ -518,7 +522,7 @@ fn fix_F16_task_create_payload_new_fields_nonzero() {
     };
 
     // Just verify it submits — the SCALE encoding is valid
-    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100);
+    let mut driver = hyperfluid_consensus::driver::ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     assert!(driver.submit_tx(tx).is_ok(), "F-16: TaskCreateTx with new fields must submit");
 }
 

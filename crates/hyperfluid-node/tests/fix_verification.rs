@@ -3,6 +3,7 @@
 // Tests for F-8, F-25, F-48, F-49, F-50, F-51, F-83 in rpc.rs.
 //
 // Spawns a real node with JSON-RPC server on ephemeral port,
+#![allow(non_snake_case)]
 // then exercises the RPC handlers with valid and invalid inputs.
 //
 // Conventions:
@@ -91,7 +92,7 @@ fn build_fixture(with_proposal: bool) -> TestFixture {
             validators: vec![],
         };
 
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         driver.init_genesis(&genesis);
 
         if with_proposal {
@@ -244,6 +245,7 @@ fn fix_F50_invalid_description_hash_hex_rejected() {
         .json(&serde_json::json!({
             "proposer": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "target_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "title_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "description_hash": "gg-invalid",
         }))
         .send()
@@ -332,7 +334,7 @@ fn fix_F83_vote_with_title_computes_hash() {
 }
 
 #[test]
-fn fix_F83_vote_without_title_uses_zero_hash() {
+fn fix_F83_vote_without_title_requires_hash() {
     let fx = build_fixture(false);
     let client = reqwest::blocking::Client::new();
     let resp: serde_json::Value = client
@@ -348,7 +350,7 @@ fn fix_F83_vote_without_title_uses_zero_hash() {
         .json()
         .expect("invalid json");
     let err = resp.get("error").and_then(|v| v.as_str()).unwrap_or("");
-    assert!(!err.contains("title"), "no title error expected when title is absent");
+    assert!(err.contains("title_hash"), "expected title_hash required error, got: {}", err);
 }
 
 // ─── F-8: ReviewerSignature signature verification ───

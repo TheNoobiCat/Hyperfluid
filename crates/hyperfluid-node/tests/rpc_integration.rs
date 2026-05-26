@@ -48,7 +48,7 @@ fn start_test_node() -> (String, tokio::runtime::Runtime, tokio::task::JoinHandl
             validators: vec![],
         };
 
-        let mut driver = ConsensusDriver::new(genesis.epoch_length);
+        let mut driver = ConsensusDriver::new(genesis.epoch_length, [0u8; 32], [0u8; 32]);
         driver.pdp_bypass = true; // test environment
         driver.init_genesis(&genesis);
 
@@ -196,7 +196,7 @@ fn rpc_agent_status_returns_data() {
 #[test]
 fn rpc_rejects_non_loopback_bind() {
     // This must panic — the RPC server is local-only
-    let mut driver = ConsensusDriver::new(100);
+    let mut driver = ConsensusDriver::new(100, [0u8; 32], [0u8; 32]);
     driver.pdp_bypass = true;
     let driver = Arc::new(Mutex::new(driver));
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

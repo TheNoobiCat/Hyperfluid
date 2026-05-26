@@ -3,6 +3,7 @@
 //! Each fix has at least 1 positive + 1 negative test:
 //!   F-26: GovernanceVote.signature length validation (3309 bytes for ML-DSA-65)
 //!   F-9:  cast_vote delegates crypto verification to caller (consensus driver)
+#![allow(non_snake_case)]
 //!   F-53: compute_proposal_id wired into proposal submission
 //!   F-84: Safe BTreeMap access in submit_proposal (no index operator panic)
 

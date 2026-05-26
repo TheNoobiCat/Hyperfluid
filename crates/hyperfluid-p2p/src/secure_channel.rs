@@ -83,28 +83,44 @@ fn pair_key(a: &Hash32, b: &Hash32) -> u64 {
 type X25519PubKey = <X25519 as Dh>::PubKey;
 type MlKem768PubKey = <MlKem768 as Kem>::PubKey;
 
-fn run_handshake(initiator: &mut ClatterHybridHandshake, responder: &mut ClatterHybridHandshake) {
+fn run_handshake(
+    initiator: &mut ClatterHybridHandshake,
+    responder: &mut ClatterHybridHandshake,
+) -> Result<(), SecureChannelError> {
     let mut buf_a = [0u8; HANDSHAKE_BUF_SIZE];
     let mut buf_b = [0u8; HANDSHAKE_BUF_SIZE];
 
-    // Msg1: initiator → responder (e + e_kem)
-    let n = initiator.write_message(&[], &mut buf_a).expect("msg1");
-    let _ = responder.read_message(&buf_a[..n], &mut buf_b).expect("read msg1");
+    let n = initiator.write_message(&[], &mut buf_a)
+        .map_err(|e| SecureChannelError::TransportError(format!("msg1: {:?}", e)))?;
+    let _ = responder.read_message(&buf_a[..n], &mut buf_b)
+        .map_err(|e| SecureChannelError::TransportError(format!("read msg1: {:?}", e)))?;
 
-    // Msg2: responder → initiator (e + e_kem)
-    let n = responder.write_message(&[], &mut buf_b).expect("msg2");
-    let _ = initiator.read_message(&buf_b[..n], &mut buf_a).expect("read msg2");
+    let n = responder.write_message(&[], &mut buf_b)
+        .map_err(|e| SecureChannelError::TransportError(format!("msg2: {:?}", e)))?;
+    let _ = initiator.read_message(&buf_b[..n], &mut buf_a)
+        .map_err(|e| SecureChannelError::TransportError(format!("read msg2: {:?}", e)))?;
 
-    // Msg3: initiator → responder (s + Skem)
-    let n = initiator.write_message(&[], &mut buf_a).expect("msg3");
-    let _ = responder.read_message(&buf_a[..n], &mut buf_b).expect("read msg3");
+    let n = initiator.write_message(&[], &mut buf_a)
+        .map_err(|e| SecureChannelError::TransportError(format!("msg3: {:?}", e)))?;
+    let _ = responder.read_message(&buf_a[..n], &mut buf_b)
+        .map_err(|e| SecureChannelError::TransportError(format!("read msg3: {:?}", e)))?;
 
-    // Msg4: responder → initiator (s + Skem)
-    let n = responder.write_message(&[], &mut buf_b).expect("msg4");
-    let _ = initiator.read_message(&buf_b[..n], &mut buf_a).expect("read msg4");
+    let n = responder.write_message(&[], &mut buf_b)
+        .map_err(|e| SecureChannelError::TransportError(format!("msg4: {:?}", e)))?;
+    let _ = initiator.read_message(&buf_b[..n], &mut buf_a)
+        .map_err(|e| SecureChannelError::TransportError(format!("read msg4: {:?}", e)))?;
 
-    assert!(initiator.is_finished(), "initiator handshake not finished");
-    assert!(responder.is_finished(), "responder handshake not finished");
+    if !initiator.is_finished() {
+        return Err(SecureChannelError::TransportError(
+            "initiator handshake not finished".into(),
+        ));
+    }
+    if !responder.is_finished() {
+        return Err(SecureChannelError::TransportError(
+            "responder handshake not finished".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// An in-progress Noise hybrid XX handshake.
@@ -280,34 +296,43 @@ impl ClatterSecureChannel {
     /// handshake states and runs the full 4-message exchange in-memory.
     /// Production code should use `ClatterHandshake` and exchange messages
     /// over the network.
-    pub fn establish(local_id: Hash32, remote_id: Hash32) -> Self {
+    pub fn establish(local_id: Hash32, remote_id: Hash32) -> Result<Self, SecureChannelError> {
         let initiator = local_id < remote_id;
         let key = pair_key(&local_id, &remote_id);
 
         // Check if a handshake for this peer pair already exists
         {
-            let mut cache = shim_result_cache().lock().unwrap();
+            let mut cache = shim_result_cache()
+                .lock()
+                .map_err(|_| SecureChannelError::TransportError("shim cache poisoned".into()))?;
             if let Some(result) = cache.get_mut(&key) {
-                // Return the appropriate side from the cached handshake
                 let transport = if initiator {
-                    result.initiator_transport.take().expect("initiator transport already taken")
+                    result.initiator_transport.take().ok_or_else(|| {
+                        SecureChannelError::TransportError("initiator transport already taken".into())
+                    })?
                 } else {
-                    result.responder_transport.take().expect("responder transport already taken")
+                    result.responder_transport.take().ok_or_else(|| {
+                        SecureChannelError::TransportError("responder transport already taken".into())
+                    })?
                 };
                 let session_id = transport.get_handshake_hash();
                 let mut out = [0u8; 32];
                 out.copy_from_slice(session_id.as_slice());
-                return Self { session_id: out, remote_id, transport };
+                return Ok(Self { session_id: out, remote_id, transport });
             }
         }
 
         // No cached handshake — run a new one
-        // Generate real random keys
-        let initiator_dh = X25519::genkey().expect("initiator DH keygen");
-        let initiator_kem = MlKem768::genkey().expect("initiator KEM keygen");
-        let responder_dh = X25519::genkey().expect("responder DH keygen");
-        let responder_kem = MlKem768::genkey().expect("responder KEM keygen");
+        let initiator_dh = X25519::genkey()
+            .map_err(|_| SecureChannelError::KeyGeneration("initiator DH keygen failed".into()))?;
+        let initiator_kem = MlKem768::genkey()
+            .map_err(|_| SecureChannelError::KeyGeneration("initiator KEM keygen failed".into()))?;
+        let responder_dh = X25519::genkey()
+            .map_err(|_| SecureChannelError::KeyGeneration("responder DH keygen failed".into()))?;
+        let responder_kem = MlKem768::genkey()
+            .map_err(|_| SecureChannelError::KeyGeneration("responder KEM keygen failed".into()))?;
 
+        // ... (rest remains the same up to handshake construction and finalization)
         let initiator_dh_pub = initiator_dh.public;
         let initiator_kem_pub = initiator_kem.public.clone();
         let responder_dh_pub = responder_dh.public;
@@ -321,8 +346,9 @@ impl ClatterSecureChannel {
                 .with_s_kem(initiator_kem)
                 .with_rs_kem(responder_kem_pub);
 
-        let mut initiator_hs =
-            ClatterHybridHandshake::new(initiator_params).expect("initiator handshake");
+        let mut initiator_hs = ClatterHybridHandshake::new(initiator_params).map_err(|_| {
+            SecureChannelError::HandshakeConstruction("initiator handshake construction failed".into())
+        })?;
 
         let responder_params =
             HybridHandshakeParams::<X25519, MlKem768, MlKem768>::new(noise_hybrid_xx(), false)
@@ -332,13 +358,19 @@ impl ClatterSecureChannel {
                 .with_s_kem(responder_kem)
                 .with_rs_kem(initiator_kem_pub);
 
-        let mut responder_hs =
-            ClatterHybridHandshake::new(responder_params).expect("responder handshake");
+        let mut responder_hs = ClatterHybridHandshake::new(responder_params).map_err(|_| {
+            SecureChannelError::HandshakeConstruction("responder handshake construction failed".into())
+        })?;
 
-        run_handshake(&mut initiator_hs, &mut responder_hs);
+        run_handshake(&mut initiator_hs, &mut responder_hs)
+            .map_err(|e| SecureChannelError::TransportError(format!("handshake failed: {:?}", e)))?;
 
-        let initiator_transport = initiator_hs.finalize().expect("initiator finalize");
-        let responder_transport = responder_hs.finalize().expect("responder finalize");
+        let initiator_transport = initiator_hs
+            .finalize()
+            .map_err(|_| SecureChannelError::TransportError("initiator finalize failed".into()))?;
+        let responder_transport = responder_hs
+            .finalize()
+            .map_err(|_| SecureChannelError::TransportError("responder finalize failed".into()))?;
 
         // Cache both sides
         let shim_result = ShimResult {
@@ -347,22 +379,34 @@ impl ClatterSecureChannel {
         };
 
         {
-            let mut cache = shim_result_cache().lock().unwrap();
+            let mut cache = shim_result_cache()
+                .lock()
+                .map_err(|_| SecureChannelError::TransportError("shim cache poisoned".into()))?;
             cache.insert(key, shim_result);
         }
 
         // Return the appropriate side — take it from the cache
-        let mut cache = shim_result_cache().lock().unwrap();
-        let result = cache.get_mut(&key).unwrap();
+        let mut cache = shim_result_cache()
+            .lock()
+            .map_err(|_| SecureChannelError::TransportError("shim cache poisoned".into()))?;
+        let result = cache
+            .get_mut(&key)
+            .ok_or_else(|| {
+                SecureChannelError::TransportError("shim result missing from cache".into())
+            })?;
         let transport = if initiator {
-            result.initiator_transport.take().unwrap()
+            result.initiator_transport.take().ok_or_else(|| {
+                SecureChannelError::TransportError("initiator transport missing from cache".into())
+            })?
         } else {
-            result.responder_transport.take().unwrap()
+            result.responder_transport.take().ok_or_else(|| {
+                SecureChannelError::TransportError("responder transport missing from cache".into())
+            })?
         };
         let session_id = transport.get_handshake_hash();
         let mut out = [0u8; 32];
         out.copy_from_slice(session_id.as_slice());
-        Self { session_id: out, remote_id, transport }
+        Ok(Self { session_id: out, remote_id, transport })
     }
 }
 
@@ -377,8 +421,8 @@ mod tests {
         let alice = [1u8; 32];
         let bob = [2u8; 32];
 
-        let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
-        let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
+        let mut ch_alice = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let mut ch_bob = ClatterSecureChannel::establish(bob, alice).unwrap();
 
         let msg = b"hello over clatter hybrid handshake";
         let ciphertext = ch_alice.seal(msg).expect("seal must succeed");
@@ -394,8 +438,8 @@ mod tests {
         let alice = [3u8; 32];
         let bob = [4u8; 32];
 
-        let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
-        let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
+        let mut ch_alice = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let mut ch_bob = ClatterSecureChannel::establish(bob, alice).unwrap();
 
         for i in 0u8..10 {
             let msg = [i; 64];
@@ -410,8 +454,8 @@ mod tests {
         let alice = [5u8; 32];
         let bob = [6u8; 32];
 
-        let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
-        let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
+        let mut ch_alice = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let mut ch_bob = ClatterSecureChannel::establish(bob, alice).unwrap();
 
         let mut ciphertext = ch_alice.seal(b"sensitive payload").expect("seal must succeed");
         if ciphertext.len() >= 2 {
@@ -432,8 +476,8 @@ mod tests {
         let bob = [8u8; 32];
         let eve = [9u8; 32];
 
-        let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
-        let mut ch_eve = ClatterSecureChannel::establish(eve, bob);
+        let mut ch_alice = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let mut ch_eve = ClatterSecureChannel::establish(eve, bob).unwrap();
 
         let msg = b"secret for bob only";
         let ciphertext = ch_alice.seal(msg).expect("seal must succeed");
@@ -450,8 +494,8 @@ mod tests {
         let alice = [10u8; 32];
         let bob = [11u8; 32];
 
-        let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
-        let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
+        let mut ch_alice = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let mut ch_bob = ClatterSecureChannel::establish(bob, alice).unwrap();
 
         let ciphertext = ch_alice.seal(b"").expect("seal must succeed");
         let decrypted = ch_bob.open(&ciphertext).expect("empty message must decrypt");
@@ -463,7 +507,7 @@ mod tests {
         let alice = [16u8; 32];
         let bob = [17u8; 32];
 
-        let mut ch = ClatterSecureChannel::establish(alice, bob);
+        let mut ch = ClatterSecureChannel::establish(alice, bob).unwrap();
         let c1 = ch.seal(b"msg1").expect("seal must succeed");
         let c2 = ch.seal(b"msg2").expect("seal must succeed");
         assert_ne!(c1, c2, "different messages must produce different ciphertexts");
@@ -474,8 +518,8 @@ mod tests {
         let alice = [18u8; 32];
         let bob = [19u8; 32];
 
-        let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
-        let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
+        let mut ch_alice = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let mut ch_bob = ClatterSecureChannel::establish(bob, alice).unwrap();
 
         let large_msg = vec![0xABu8; 60000];
         let ct = ch_alice.seal(&large_msg).expect("seal must succeed");
@@ -491,8 +535,8 @@ mod tests {
         let bob = [21u8; 32];
         let carol = [22u8; 32];
 
-        let ch_ab = ClatterSecureChannel::establish(alice, bob);
-        let ch_ac = ClatterSecureChannel::establish(alice, carol);
+        let ch_ab = ClatterSecureChannel::establish(alice, bob).unwrap();
+        let ch_ac = ClatterSecureChannel::establish(alice, carol).unwrap();
 
         // Different peer pairs must produce different sessions
         assert_ne!(
