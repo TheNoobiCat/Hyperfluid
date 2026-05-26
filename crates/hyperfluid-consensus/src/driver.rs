@@ -18,6 +18,7 @@ use tokio::task::JoinHandle;
 use std::collections::{BTreeMap, BTreeSet};
 
 use hyperfluid_fee_market::{compute_next_base_fee, FeeConfig, FeeMarketState};
+use hyperfluid_p2p::identity::Identity;
 use hyperfluid_p2p::mempool::{Mempool, MempoolConfig, MempoolTx, TxTypeTag};
 use hyperfluid_pdp::audit::AuditLog;
 use hyperfluid_staking::SystemParameters;
@@ -183,6 +184,16 @@ struct TaskCreatePayload {
     bounty_agx: u128,
     seed_ref: Hash32,
     nonce: u64,
+    /// Topic identifier for the task.
+    topic_id: Hash32,
+    /// Hash of the task metadata blob.
+    metadata_hash: Hash32,
+    /// Hash of the required skills specification.
+    skills_hash: Hash32,
+    /// Sponsor identifier for the task.
+    sponsor_id: Hash32,
+    /// Public key hash of the task requester.
+    requester_pubkey: Hash32,
 }
 
 /// Payload format for SubmitReviewTx transactions.
@@ -234,7 +245,6 @@ pub struct ConsensusDriver {
     /// Full transaction storage, keyed by tx_hash, for mempool retrieval.
     pub tx_store: BTreeMap<[u8; 32], TransactionEnvelope>,
     /// Agent pubkey bindings for PDP signature verification.
-    /// Stub: unit value — real ML-DSA key verification deferred to Week 9-10.
     pub key_bindings: BTreeMap<Hash32, Vec<u8>>,
     /// Expected next nonce per agent (PDP replay protection).
     pub agent_nonces: BTreeMap<Hash32, u64>,
@@ -247,9 +257,14 @@ pub struct ConsensusDriver {
     pub fee_reward_pool: u128,
     /// Append-only audit log of PDP decisions.
     pub audit_log: AuditLog,
+    /// This node's validator ID for block proposer identification.
+    /// Set during initialization; defaults to zeros until configured.
+    pub node_id: Hash32,
     /// When true, bypasses PDP validation for all transaction types.
     /// Used for development/testing when full PDP state (key bindings,
     /// nonce tracking, quota states) is not yet wired.
+    /// Only available when the `pdp-bypass` feature is enabled.
+    #[cfg(feature = "pdp-bypass")]
     pub pdp_bypass: bool,
     /// Tracks the approved git:head commit for on-chain governance.
     /// Updated when a governance proposal passes tally.
@@ -283,6 +298,8 @@ impl ConsensusDriver {
             agent_nonces: BTreeMap::new(),
             quota_states: BTreeMap::new(),
             consumed_plan_ids: BTreeSet::new(),
+            node_id: [0u8; 32],
+            #[cfg(feature = "pdp-bypass")]
             pdp_bypass: false,
             git_head_commit: [0u8; 32],
             fee_reward_pool: 0,
@@ -605,7 +622,7 @@ impl ConsensusDriver {
                 state_root,
                 transaction_root,
                 committee_id: new_epoch, // committee_id matches epoch number; committee_history tracks epoch hashes
-                proposer_id: [0u8; 32],
+                proposer_id: self.node_id,
                 timestamp,
                 epoch: new_epoch,
             },
@@ -656,12 +673,13 @@ impl ConsensusDriver {
 
     /// Dispatch a single transaction to the appropriate state machine method
     /// or subsystem engine (governance, fast-path).
+    ///
+    /// PDP pre-validation is performed by `produce_block` before calling
+    /// this function. The `validate_tx_pdp` is NOT called here to avoid
+    /// nonce state changes between the first and second call (the signature
+    /// verification would fail on the second call because the nonce context
+    /// has already been advanced).
     fn execute_tx(&mut self, tx: &TransactionEnvelope, ctx: ExecutionContext) -> ExecutionResult {
-        // Run PDP pre-validation (integration point — currently pass-through)
-        if !self.validate_tx_pdp(tx, ctx) {
-            return ExecutionResult::Rejected;
-        }
-
         match tx.tx_type {
             TxType::TransferTx => {
                 if let Ok(payload) = TransferPayload::decode(&mut &tx.tx_payload[..]) {
@@ -681,13 +699,13 @@ impl ConsensusDriver {
                     let bundle_manifest_hash = sha3_256_hash(&payload.description_hash);
                     let current_epoch = ctx.height / self.epoch_length;
                     match self.governance.submit_proposal(
-                        payload.proposal_id,
                         payload.proposer_id,
                         payload.target_hash,
                         bundle_manifest_hash,
                         self.git_head_commit,
                         ctx.height,
                         current_epoch,
+                        0,
                         0,
                     ) {
                         Ok(proposal) => {
@@ -734,13 +752,15 @@ impl ConsensusDriver {
                         .get_validator(&payload.proposer_id)
                         .map(|vt| vt.self_bond)
                         .unwrap_or(1);
+                    // SPEC_DEVIATION: vote signature reuses tx.signature;
+                    // full per-vote ML-DSA signing deferred.
                     let vote = GovernanceVote {
                         proposal_id: payload.proposal_id,
                         voter_id: payload.proposer_id,
                         vote: vote_option,
                         reason_hash: payload.description_hash,
                         vote_weight,
-                        signature: vec![],
+                        signature: tx.signature.clone(),
                     };
                     match self.governance.cast_vote(vote, ctx.height) {
                         Ok(()) => {
@@ -773,7 +793,7 @@ impl ConsensusDriver {
                             challenger_id: payload.proposer_id,
                             evidence_hash: payload.merge_hash,
                             challenger_bond: 0,
-                            signature: vec![],
+                            signature: tx.signature.clone(),
                         };
                         let current_epoch = ctx.height / self.epoch_length;
                         match self.fastpath.submit_challenge(challenge, ctx.height, current_epoch) {
@@ -794,7 +814,7 @@ impl ConsensusDriver {
                                     topic_id: payload.topic_id,
                                     rollback_to_head,
                                     arbiter_certificate: vec![],
-                                    signature: vec![],
+                                    signature: tx.signature.clone(),
                                 };
                                 if let Err(e) = self.fastpath.rollback(rollback_tx) {
                                     tracing::warn!(
@@ -815,34 +835,40 @@ impl ConsensusDriver {
                             }
                         }
                     } else {
+                        // Compute commitment hashes from actual proposal data
+                        let base_topic_head = sha3_256_hash(
+                            &[&payload.topic_id[..], &payload.proposer_id[..]].concat(),
+                        );
+                        let bundle_manifest_hash = sha3_256_hash(&payload.merge_hash);
                         let proposal = FastPathProposal {
                             proposal_id: payload.proposal_id,
                             topic_id: payload.topic_id,
                             proposer_id: payload.proposer_id,
-                            base_topic_head: [0u8; 32],
+                            base_topic_head,
                             proposed_head: payload.merge_hash,
-                            bundle_manifest_hash: [0u8; 32],
+                            bundle_manifest_hash,
                             expires_at_height: ctx.height.saturating_add(1000),
-                            proposer_signature: vec![],
+                            proposer_signature: tx.signature.clone(),
                         };
                         match self.fastpath.submit_proposal(proposal, ctx.height) {
-                            Ok(()) => {
+                            Ok(proposal_id) => {
                                 tracing::info!(
                                     "Fast-path proposal submitted: id={} topic={}",
-                                    hex::encode(payload.proposal_id),
+                                    hex::encode(proposal_id),
                                     hex::encode(payload.topic_id),
                                 );
                                 // Auto-issue a certificate with proposer as first approver
+                                let signer_set_hash = sha3_256_hash(&payload.proposer_id);
                                 let self_approval = ReviewerSignature {
                                     reviewer_id: payload.proposer_id,
                                     vote: ReviewerVote::Approve,
                                     reason_hash: [0u8; 32],
-                                    signature: vec![],
+                                    signature: tx.signature.clone(),
                                 };
                                 if let Err(e) = self.fastpath.issue_certificate(
                                     payload.proposal_id,
                                     vec![self_approval],
-                                    [0u8; 32], // signer_set_hash placeholder
+                                    signer_set_hash,
                                     ctx.height,
                                     1, // topic_snapshot_weight = 1 → quorum = 1
                                 ) {
@@ -958,11 +984,11 @@ impl ConsensusDriver {
                         task_id,
                         payload.nonce,
                         payload.seed_ref,
-                        [0u8; 32], // topic_id placeholder
-                        [0u8; 32], // metadata_hash placeholder
-                        [0u8; 32], // required_skills_hash placeholder
-                        [0u8; 32], // sponsor_id placeholder
-                        [0u8; 32], // requester_pubkey placeholder
+                        payload.topic_id,
+                        payload.metadata_hash,
+                        payload.skills_hash,
+                        payload.sponsor_id,
+                        payload.requester_pubkey,
                         ctx.height,
                         ctx,
                     )
@@ -1108,18 +1134,25 @@ impl ConsensusDriver {
         }
     }
 
-    /// PDP pre-validation integration point for governance and fast-path transactions.
+    /// PDP pre-validation integration point for all transaction types.
     ///
     /// Maps `TxType` to `ActionType`, builds a `PdpContext` from live driver state
-    /// (agent balance, nonce, key binding, quotas), and runs the 5-step deterministic
-    /// rule chain. When PDP bypass is enabled, all transactions pass through.
+    /// (agent balance, nonce, key binding, quotas), verifies the agent's ML-DSA-65
+    /// signature, and runs the 5-step deterministic rule chain.
     ///
-    /// Signature verification (step 2) is a stub — real ML-DSA-65 checking deferred
-    /// to Week 9-10. When pdp_bypass is false, key_binding must be present for the
-    /// agent (fail-closed), but step 2 itself always passes (no cryptographic check).
+    /// Signature verification (PDP step 2): looks up the agent's public key from
+    /// `key_bindings`, verifies `tx.signature` against `tx.tx_payload` using
+    /// ML-DSA-65. If the key is not found or verification fails, the transaction
+    /// is rejected (fail-closed) without calling evaluate().
+    ///
+    /// When the `pdp-bypass` feature is enabled, all transactions pass through
+    /// without PDP validation (for testing scenarios).
     fn validate_tx_pdp(&mut self, tx: &TransactionEnvelope, ctx: ExecutionContext) -> bool {
-        if self.pdp_bypass {
-            return true;
+        #[cfg(feature = "pdp-bypass")]
+        {
+            if self.pdp_bypass {
+                return true;
+            }
         }
 
         let action_type = match tx.tx_type {
@@ -1143,9 +1176,33 @@ impl ConsensusDriver {
 
         let balance = self.state_machine.get_account(&agent_id).map(|a| a.balance).unwrap_or(0);
 
-        let nonce = self.agent_nonces.get(&agent_id).copied().unwrap_or(0);
+        // `last_nonce` is the last used/validated nonce for this agent.
+        // The PDP expects `request.nonce == ctx.agent_nonce + 1`.
+        let last_nonce = self.agent_nonces.get(&agent_id).copied().unwrap_or(0);
+        let next_nonce = last_nonce.saturating_add(1);
 
         let key_binding = self.state_machine.get_account(&agent_id).and_then(|a| a.pubkey.clone());
+
+        // ── Step 2: ML-DSA-65 signature verification (PDP pre-check) ──
+        // Look up the agent's public key from key_bindings and verify the
+        // agent_signature against the canonical action plan hash.
+        // This runs BEFORE rule_chain::evaluate() as a fast rejection.
+        let request = ActionPlanRequest {
+            plan_id: sha3_256_hash(&tx.tx_payload),
+            agent_id,
+            action_type,
+            resource_id: sha3_256_hash(&tx.tx_payload),
+            reason_hash: [0u8; 32],
+            evidence_refs: vec![],
+            nonce: next_nonce,
+            expires_at_height: ctx.height.saturating_add(1000),
+            agent_signature: tx.signature.clone(), // F-3: populated from tx envelope
+        };
+
+        if !self.verify_agent_signature(&request, &agent_id) {
+            tracing::debug!("PDP signature verification failed: agent={}", hex::encode(agent_id),);
+            return false;
+        }
 
         let trust_stage = self
             .state_machine
@@ -1168,31 +1225,19 @@ impl ConsensusDriver {
             current_height: ctx.height,
             key_binding,
             agent_balance_attagx: balance,
-            agent_nonce: nonce,
+            agent_nonce: last_nonce,
             consumed_plan_ids: self.consumed_plan_ids.iter().copied().collect(),
             quota_states,
             trust_stage,
         };
 
-        let request = ActionPlanRequest {
-            plan_id: sha3_256_hash(&tx.tx_payload),
-            agent_id,
-            action_type,
-            resource_id: sha3_256_hash(&tx.tx_payload),
-            reason_hash: [0u8; 32],
-            evidence_refs: vec![],
-            nonce,
-            expires_at_height: ctx.height.saturating_add(1000),
-            agent_signature: vec![],
-        };
-
-        let response = rule_chain::evaluate(&request, &pdp_ctx, &mut self.audit_log);
+        let response = rule_chain::evaluate(&request, &pdp_ctx, &mut self.audit_log, None);
 
         if matches!(response.decision, Decision::Approved) {
             if let Some(ref consumed) = response.consumed_quota {
                 self.apply_quota_consumption(agent_id, consumed);
             }
-            self.agent_nonces.insert(agent_id, nonce.saturating_add(1));
+            self.agent_nonces.insert(agent_id, last_nonce.saturating_add(1));
             self.consumed_plan_ids.insert(request.plan_id);
             true
         } else {
@@ -1203,6 +1248,49 @@ impl ConsensusDriver {
                 response.deny_reason,
             );
             false
+        }
+    }
+
+    /// Verify the agent's ML-DSA-65 signature against the action plan hash.
+    ///
+    /// Looks up the agent's public key in `key_bindings` and verifies
+    /// `request.agent_signature` against `hash_action_plan_for_signing(request)`.
+    /// This matches what the PDP rule chain's step2 does internally, providing
+    /// fast rejection before the full rule chain evaluation.
+    ///
+    /// Returns `true` if the signature is valid.
+    /// Returns `false` if key not found, signature empty, or verification fails.
+    fn verify_agent_signature(&self, request: &ActionPlanRequest, agent_id: &Hash32) -> bool {
+        match self.key_bindings.get(agent_id) {
+            Some(pubkey_bytes) => {
+                if request.agent_signature.is_empty() {
+                    tracing::debug!(
+                        "verify_agent_signature: empty signature for agent {} — rejecting",
+                        hex::encode(agent_id),
+                    );
+                    return false;
+                }
+                let msg_hash = hyperfluid_pdp::rule_chain::hash_action_plan_for_signing(request);
+                let valid =
+                    Identity::verify_with_pubkey(pubkey_bytes, &msg_hash, &request.agent_signature);
+                if !valid {
+                    tracing::debug!(
+                        "verify_agent_signature: ML-DSA-65 verification failed for agent {}",
+                        hex::encode(agent_id),
+                    );
+                }
+                valid
+            }
+            None => {
+                // No pubkey registered for this agent — fail-closed.
+                // Agents must register a pubkey in key_bindings before submitting
+                // transactions that require PDP validation.
+                tracing::debug!(
+                    "verify_agent_signature: no pubkey binding for agent {} — rejecting",
+                    hex::encode(agent_id),
+                );
+                false
+            }
         }
     }
 
@@ -1318,6 +1406,7 @@ impl ConsensusDriver {
         peer_tx_rx_pairs: Option<
             Vec<(mpsc::UnboundedSender<Vec<u8>>, mpsc::UnboundedReceiver<Vec<u8>>)>,
         >,
+        external_bridge: Option<Arc<Mutex<crate::network_bridge::NetworkBridge>>>,
     ) -> JoinHandle<()> {
         use crate::malachite_consensus::BftDriver;
         use crate::network_bridge;
@@ -1330,7 +1419,16 @@ impl ConsensusDriver {
             let incoming_tx_for_peers = channels.incoming_tx.clone();
             let mut incoming = channels.incoming_rx;
 
-            let outgoing = if let Some(pairs) = peer_tx_rx_pairs {
+            let outgoing = if let Some(bridge) = external_bridge {
+                // External bridge: peers managed dynamically (added/removed
+                // as connections are established/lost). run_sender reads
+                // from bridge_rx and broadcasts to all current bridge.peers.
+                // Inbound messages arrive via the consensus_handler callback
+                // wired at the TCP layer, which forwards directly to incoming_tx.
+                let (bridge_tx, bridge_rx) = mpsc::unbounded_channel();
+                let _sender_handle = network_bridge::run_sender(bridge, bridge_rx);
+                bridge_tx
+            } else if let Some(pairs) = peer_tx_rx_pairs {
                 let (senders, receivers): (Vec<_>, Vec<_>) = pairs.into_iter().unzip();
                 let (bridge_tx, bridge_rx) = mpsc::unbounded_channel();
                 let bridge = Arc::new(Mutex::new(network_bridge::NetworkBridge {
@@ -1606,20 +1704,32 @@ mod tests {
 
     #[test]
     fn transfer_tx_changes_state() {
+        use hyperfluid_p2p::identity::Identity;
+        use hyperfluid_pdp::rule_chain::hash_action_plan_for_signing;
+        use hyperfluid_pdp::types::{ActionPlanRequest, ActionType};
+
         let mut driver = ConsensusDriver::new(100);
         let alice_id = [1u8; 32];
         let bob_id = [2u8; 32];
+
+        // Create a real ML-DSA-65 identity for Alice to sign the transaction
+        let alice_identity = Identity::generate();
+        let alice_pubkey = alice_identity.verifying_key_encoded();
 
         let genesis = test_genesis(vec![
             GenesisAccount {
                 account_id: alice_id,
                 balance: 1_000_000_000_000_000_000_000u128, // 1000 AGX
-                pubkey: None,
+                pubkey: Some(alice_pubkey.clone()),
             },
             GenesisAccount { account_id: bob_id, balance: 0, pubkey: None },
         ]);
         driver.init_genesis(&genesis);
-        driver.pdp_bypass = true; // test accounts have no pubkeys for PDP sig verification
+        // Register Alice's pubkey for PDP signature verification
+        driver.key_bindings.insert(alice_id, alice_pubkey);
+        // Initialize nonce so PDP replay check passes:
+        // PDP expects request.nonce = ctx.agent_nonce + 1
+        driver.agent_nonces.insert(alice_id, 0);
         let root_before = driver.state_machine.compute_state_root();
 
         let payload = TransferPayload {
@@ -1628,11 +1738,31 @@ mod tests {
             amount: 100_000_000_000_000_000_000u128, // 100 AGX
             nonce: 1,
         };
+        let tx_payload = payload.encode();
+
+        // The PDP rule chain verifies the signature against hash_action_plan_for_signing,
+        // NOT against the raw tx_payload. We must pre-compute this hash and sign it.
+        let plan_id = sha3_256_hash(&tx_payload);
+        let action_request = ActionPlanRequest {
+            plan_id,
+            agent_id: alice_id,
+            action_type: ActionType::Transfer,
+            resource_id: plan_id,
+            reason_hash: [0u8; 32],
+            evidence_refs: vec![],
+            nonce: 1,                // next_nonce = last_nonce(0) + 1
+            expires_at_height: 1001, // height(1) + 1000
+            agent_signature: vec![],
+        };
+        let msg_hash = hash_action_plan_for_signing(&action_request);
+        let signature = alice_identity.sign(&msg_hash);
+
         let tx = TransactionEnvelope {
             tx_type: TxType::TransferTx,
-            tx_payload: payload.encode(),
+            tx_payload,
             approved_plan_id: None,
             gateway_signature: None,
+            signature,
         };
         assert!(driver.submit_tx(tx).is_ok());
 

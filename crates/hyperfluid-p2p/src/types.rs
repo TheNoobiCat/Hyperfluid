@@ -5,6 +5,30 @@ use sha3::{
 };
 use sha3::{Sha3_256, Shake256};
 
+/// Errors from secure channel operations (Clatter-backed or mock).
+///
+/// This is defined in `types` so it is available to all modules regardless
+/// of feature flags — both `ClatterSecureChannel` (clatter-secure-channel)
+/// and `MockSecureChannel` (mock-secure-channel) use the same error type.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum SecureChannelError {
+    /// Transport-level encryption/decryption failure.
+    #[error("transport error: {0}")]
+    TransportError(String),
+
+    /// Key generation failure.
+    #[error("key generation failed: {0}")]
+    KeyGeneration(String),
+
+    /// Handshake construction failure.
+    #[error("handshake construction failed: {0}")]
+    HandshakeConstruction(String),
+
+    /// Invalid key material or conversion failure.
+    #[error("invalid key material: {0}")]
+    InvalidKeyMaterial(String),
+}
+
 pub type Hash32 = [u8; 32];
 pub type PeerId = Hash32;
 

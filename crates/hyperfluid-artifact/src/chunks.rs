@@ -1,4 +1,16 @@
 use sha3::{Digest, Sha3_256};
+use std::sync::LazyLock;
+
+/// Well-known sentinel Merkle root for empty chunk sets.
+/// SHA3-256(b"HYPERFLUID_EMPTY_MERKLE_TREE") — a synthetic hash that
+/// provably cannot collide with any real SHA3-256 output over actual chunk data.
+pub static EMPTY_MERKLE_ROOT: LazyLock<[u8; 32]> = LazyLock::new(|| {
+    let mut hasher = Sha3_256::new();
+    Digest::update(&mut hasher, b"HYPERFLUID_EMPTY_MERKLE_TREE");
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&hasher.finalize());
+    out
+});
 
 /// Split data into `n` roughly equal chunks for testing.
 /// Padding: last chunk may be shorter if data doesn't divide evenly.
@@ -43,7 +55,7 @@ fn hash_pair(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
 /// Source: artifact-availability-spec.md Section 1.2
 pub fn compute_chunk_merkle_root(chunk_refs: &[&[u8]]) -> [u8; 32] {
     if chunk_refs.is_empty() {
-        return [0u8; 32];
+        return *EMPTY_MERKLE_ROOT;
     }
 
     let mut level: Vec<[u8; 32]> = chunk_refs.iter().map(|c| hash_leaf(c)).collect();

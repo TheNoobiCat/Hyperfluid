@@ -293,7 +293,7 @@ fn conforms_to_p2p_spec_1_7_e2e_encryption_across_relay() {
     let mut ch_bob = SecureChannel::establish(bob, alice);
 
     let message = b"transaction batch for committee epoch 5";
-    let ciphertext = ch_alice.seal(message);
+    let ciphertext = ch_alice.seal(message).expect("seal must succeed");
 
     // Ciphertext must differ from plaintext (confidentiality)
     assert_ne!(&ciphertext, message, "ciphertext must not leak plaintext");
@@ -320,7 +320,7 @@ fn conforms_to_p2p_spec_1_7_tampered_ciphertext_rejected() {
     let mut ch_alice = SecureChannel::establish(alice, bob);
     let mut ch_bob = SecureChannel::establish(bob, alice);
 
-    let mut ciphertext = ch_alice.seal(b"sensitive payload");
+    let mut ciphertext = ch_alice.seal(b"sensitive payload").expect("seal must succeed");
     if !ciphertext.is_empty() {
         ciphertext[0] ^= 0xFF;
     }
@@ -343,7 +343,7 @@ fn conforms_to_p2p_spec_1_7_e2e_empty_message() {
     let mut ch_alice = SecureChannel::establish(alice, bob);
     let mut ch_bob = SecureChannel::establish(bob, alice);
 
-    let ciphertext = ch_alice.seal(b"");
+    let ciphertext = ch_alice.seal(b"").expect("seal must succeed");
     let decrypted = ch_bob.open(&ciphertext).expect("empty message must decrypt");
     assert_eq!(decrypted, b"");
 }

@@ -41,7 +41,12 @@ impl Identity {
     /// raw private key material — it must be kept secret and never derived
     /// from public data like PeerIds.
     pub fn from_seed(seed_bytes: &[u8; 32]) -> Self {
-        let seed = Seed::try_from(seed_bytes.as_slice()).expect("seed must be 32 bytes");
+        let seed = match Seed::try_from(seed_bytes.as_slice()) {
+            Ok(s) => s,
+            Err(_) => {
+                unreachable!("Seed::try_from fails on [u8; 32] only if alloc fails");
+            }
+        };
         let signing_key = SigningKey::<MlDsa65>::from_seed(&seed);
         let verifying_key = signing_key.verifying_key();
         let peer_id = compute_peer_id(&verifying_key);

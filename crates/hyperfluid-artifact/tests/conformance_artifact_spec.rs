@@ -5,7 +5,7 @@
 use hyperfluid_artifact::{
     chunk_bytes_for_test, compute_chunk_merkle_root, compute_manifest_root_hash,
     verify_proof_of_possession, ArtifactClass, ArtifactManifest, ProofOfPossession, RepairEntry,
-    RepairQueue, RetentionTier,
+    RepairQueue, RetentionTier, EMPTY_MERKLE_ROOT,
 };
 
 fn test_manifest(
@@ -88,8 +88,8 @@ fn conforms_to_artifact_spec_1_7_chunk_merkle_root_correct() {
 fn conforms_to_artifact_spec_1_7_chunk_merkle_root_empty_rejected() {
     let chunks: Vec<&[u8]> = vec![];
     let root = compute_chunk_merkle_root(&chunks);
-    // Empty set should return zero hash
-    assert_eq!(root, [0u8; 32], "empty chunks must return zero hash");
+    // Empty set should return the well-known sentinel
+    assert_eq!(root, *EMPTY_MERKLE_ROOT, "empty chunks must return EMPTY_MERKLE_ROOT sentinel");
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn conforms_to_artifact_spec_1_7_proof_of_possession_valid() {
     let chunk_root = compute_chunk_merkle_root(&chunk_refs);
 
     // Create a proof for chunk_index 1
-    let proof = ProofOfPossession::build(&chunks, 1, chunk_root, [9u8; 32], 200)
+    let proof = ProofOfPossession::build(&chunks, 1, chunk_root, [9u8; 32], 200, vec![1u8; 64])
         .expect("valid proof must build");
 
     assert!(verify_proof_of_possession(&proof, &chunk_root), "valid proof must verify");
@@ -132,7 +132,7 @@ fn conforms_to_artifact_spec_1_7_proof_of_possession_wrong_chunk_rejected() {
     let chunk_refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
     let chunk_root = compute_chunk_merkle_root(&chunk_refs);
 
-    let mut proof = ProofOfPossession::build(&chunks, 0, chunk_root, [1u8; 32], 100)
+    let mut proof = ProofOfPossession::build(&chunks, 0, chunk_root, [1u8; 32], 100, vec![2u8; 64])
         .expect("valid proof must build");
     proof.chunk_bytes = b"wrong_chunk_data".to_vec();
 
@@ -148,7 +148,7 @@ fn conforms_to_artifact_spec_1_7_proof_of_possession_wrong_root_rejected() {
     let chunk_refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
     let chunk_root = compute_chunk_merkle_root(&chunk_refs);
 
-    let proof = ProofOfPossession::build(&chunks, 0, chunk_root, [1u8; 32], 100)
+    let proof = ProofOfPossession::build(&chunks, 0, chunk_root, [1u8; 32], 100, vec![3u8; 64])
         .expect("valid proof must build");
     let wrong_root = [0xFFu8; 32];
 

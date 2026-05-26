@@ -1,7 +1,7 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) COMPLETE
 
-**Last updated:** 2026-05-24 (Comprehensive Gap Resolution: 28 gaps across 11 orders fixed. P2P remote connectivity, PDP security, error propagation, economic mechanisms, state root completeness, PDP rollback, identity verification, orphan functions wired, agent runtime persistence, config/staking types, determinism fixes. CI all-green. ~540 tests.)
-**Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards implemented, BFT consensus partially wired — Malachite multi-validator networking deferred to Stage 03)
+**Last updated:** 2026-05-26 (Stage 01 multi-validator BFT networking: `--multi-validator` flag, persistent TCP consensus messaging, dynamic peer bridge, 6 files changed across 3 crates. CI all-green.)
+**Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards implemented, BFT multi-validator networking infrastructure wired — outbound peer key resolution deferred)
 **Stage:** 02 — Agent Runtime — **COMPLETE** (all 10 weeks complete)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
 **Week 3-4 (Agent Runtime C10):** COMPLETE (87 tests, infinite loop, tools, SQLite, handoff, sandbox)
@@ -34,6 +34,23 @@ All 5 pending code changes from the 2026-05-06 architecture amendments are now i
 | TxType collapsed | 16 variants → 7 base types with action sub-enums (StakingAction, DelegationAction, GovernanceAction, FastPathAction). | ~12 files |
 
 All doc changes complete. Only Rust code changes remain (5 items from Round 1 above).
+
+## Stage 01 Multi-Validator BFT Networking (2026-05-26)
+
+| Task | Status |
+|------|--------|
+| `--multi-validator` flag + BFT loop wiring in main.rs | Complete |
+| TCP persistent consensus message routing (peer_message_loop, connect_and_maintain) | Complete |
+| Accept loop with consensus handler (dynamic inbound peers) | Complete |
+| External NetworkBridge for dynamic peer management | Complete |
+| Public decode_vote for consensus handler | Complete |
+| Outbound peer key resolution (remote_peer_id, DH/KEM keys) | **DEFERRED** — hardcoded to zeros |
+| Multi-node BFT integration test (3+ nodes over TCP) | **DEFERRED** — blocked on key resolution |
+| 24h soak test | **DEFERRED** — blocked on multi-node test |
+
+**Verification:** `cargo build`, `cargo test` (all passing), `cargo clippy` (pre-existing warnings only), `cargo fmt` applied.
+
+**See:** `docs/08-handoff/latest/checkpoint-2026-05-26.md`
 
 ## Stage 01: Week 1-2 — Consensus + State Machine (C1 + C2) — COMPLETE
 

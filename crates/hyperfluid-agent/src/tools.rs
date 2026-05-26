@@ -115,6 +115,34 @@ pub fn dispatch_tool(
             };
             execute_apply_patch(&input, working_dir)
         }
+        "load_skill" => {
+            let skill_name = arguments.get("name").and_then(|v| v.as_str());
+            match skill_name {
+                Some(name) => {
+                    // Skills directory defaults to "skills/" relative to working_dir
+                    let skills_dir = working_dir.join("skills");
+                    match crate::skills::load_skill_content(
+                        skills_dir.to_str().unwrap_or("skills"),
+                        name,
+                    ) {
+                        Ok(skill) => ToolOutput::Remember(crate::types::KnowledgeEntry {
+                            id: [0u8; 32],
+                            kind: crate::types::KnowledgeKind::Finding,
+                            content: format!(
+                                "Loaded skill '{}': {} - {}",
+                                skill.name, skill.title, skill.description
+                            ),
+                            created_at: 0,
+                            expires_at: 0,
+                            last_read_at: 0,
+                            is_active: true,
+                        }),
+                        Err(e) => ToolOutput::Error(format!("load_skill failed: {}", e)),
+                    }
+                }
+                None => ToolOutput::Error("load_skill requires 'name' argument".to_string()),
+            }
+        }
         _ => ToolOutput::Error(format!("unknown tool: {}", tool_name)),
     }
 }
@@ -140,6 +168,11 @@ pub fn validate_tool_input(
         "edit" => validate_edit(obj, tool_name),
         "write" => validate_write(obj, tool_name),
         "apply_patch" => validate_apply_patch(obj, tool_name),
+        "load_skill" => {
+            allowed_keys(obj, &["name"], tool_name)?;
+            require_string(obj, "name", tool_name)?;
+            Ok(())
+        }
         _ => Err(ToolError {
             tool_name: tool_name.to_string(),
             message: format!("unknown tool: {}", tool_name),

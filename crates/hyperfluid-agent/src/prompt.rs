@@ -565,8 +565,14 @@ fn flush_section(
             append_block(messages, &block);
         } else if tool_headers.contains(&header) {
             append_block(tools, &block);
+        } else if !header.is_empty() {
+            // Unrecognised headers are logged as a warning rather than silently dropped.
+            tracing::warn!(
+                target: "hyperfluid_agent::prompt",
+                "Unrecognized prompt section header: '{}' — content will be dropped",
+                header
+            );
         }
-        // Unrecognised headers are dropped (graceful degradation)
     }
 }
 

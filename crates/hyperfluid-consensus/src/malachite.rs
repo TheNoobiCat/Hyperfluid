@@ -425,18 +425,15 @@ impl Context for HyperfluidContext {
     ) -> &'a Self::Validator {
         let count = validator_set.count();
         if count == 0 {
-            tracing::error!(
-                "select_proposer called on empty validator set — no validators available"
+            // If the validator set is empty, the system cannot make progress.
+            // This is a fatal configuration error - fail loudly rather than
+            // returning a zero-identity fallback that would silently corrupt state.
+            panic!(
+                "select_proposer called on empty validator set at height {}, round {} — \
+                 at least one active validator is required for consensus",
+                height.as_u64(),
+                round.as_u32().unwrap_or(0),
             );
-            // Return a reference to a static fallback validator to avoid panic.
-            // This is a safe guard: an empty set should never reach this point in
-            // production; the call site must ensure at least one active validator.
-            static FALLBACK: HyperfluidValidator = HyperfluidValidator {
-                addr: Address32::new([0u8; 32]),
-                pubkey: MlDsa65PublicKey(Vec::new()),
-                voting_power: 0u64,
-            };
-            return &FALLBACK;
         }
 
         use sha3::{Digest, Sha3_256};
@@ -445,9 +442,17 @@ impl Context for HyperfluidContext {
         hasher.update(round.as_u32().unwrap_or(0).to_le_bytes());
         hasher.update(self.proposer_seed);
         let hash = hasher.finalize();
-        let selector = u64::from_le_bytes(hash[..8].try_into().unwrap());
+        let mut selector_bytes = [0u8; 8];
+        selector_bytes.copy_from_slice(&hash[..8]);
+        let selector = u64::from_le_bytes(selector_bytes);
         let index = (selector as usize) % count;
-        validator_set.get_by_index(index).expect("validator at index")
+        // Safe: count > 0 and index < count (checked above and computed via modulo)
+        validator_set.get_by_index(index).unwrap_or_else(|| {
+            panic!(
+                "select_proposer: index {} out of bounds for validator set of size {}",
+                index, count
+            );
+        })
     }
 
     fn new_proposal(

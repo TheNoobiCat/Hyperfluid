@@ -26,7 +26,7 @@
 //! ```
 
 use crate::identity::Identity;
-use crate::types::Hash32;
+use crate::types::{Hash32, SecureChannelError};
 use clatter::crypto::cipher::ChaChaPoly;
 use clatter::crypto::dh::X25519;
 use clatter::crypto::hash::Sha256;
@@ -72,7 +72,12 @@ fn pair_key(a: &Hash32, b: &Hash32) -> u64 {
     let mut hasher = Sha3_256::new();
     Update::update(&mut hasher, low.as_slice());
     Update::update(&mut hasher, high.as_slice());
-    u64::from_le_bytes(hasher.finalize()[..8].try_into().unwrap())
+    // SAFETY: SHA3-256 produces 32 bytes; we take the first 8 bytes,
+    // which always succeeds because 8 <= 32.
+    let hash = hasher.finalize();
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&hash[..8]);
+    u64::from_le_bytes(bytes)
 }
 
 type X25519PubKey = <X25519 as Dh>::PubKey;
@@ -124,9 +129,11 @@ impl ClatterHandshake {
         remote_id: Hash32,
         remote_static_dh: X25519PubKey,
         remote_static_kem: MlKem768PubKey,
-    ) -> Self {
-        let local_static_dh = X25519::genkey().expect("X25519 key generation");
-        let local_static_kem = MlKem768::genkey().expect("ML-KEM-768 key generation");
+    ) -> Result<Self, SecureChannelError> {
+        let local_static_dh = X25519::genkey()
+            .map_err(|e| SecureChannelError::KeyGeneration(format!("X25519: {:?}", e)))?;
+        let local_static_kem = MlKem768::genkey()
+            .map_err(|e| SecureChannelError::KeyGeneration(format!("ML-KEM-768: {:?}", e)))?;
 
         let params =
             HybridHandshakeParams::<X25519, MlKem768, MlKem768>::new(noise_hybrid_xx(), true)
@@ -136,9 +143,10 @@ impl ClatterHandshake {
                 .with_s_kem(local_static_kem)
                 .with_rs_kem(remote_static_kem);
 
-        let handshake = ClatterHybridHandshake::new(params).expect("handshake construction");
+        let handshake = ClatterHybridHandshake::new(params)
+            .map_err(|e| SecureChannelError::HandshakeConstruction(format!("{:?}", e)))?;
 
-        Self { handshake, remote_id }
+        Ok(Self { handshake, remote_id })
     }
 
     /// Create a new handshake as the responder.
@@ -149,9 +157,11 @@ impl ClatterHandshake {
         remote_id: Hash32,
         remote_static_dh: X25519PubKey,
         remote_static_kem: MlKem768PubKey,
-    ) -> Self {
-        let local_static_dh = X25519::genkey().expect("X25519 key generation");
-        let local_static_kem = MlKem768::genkey().expect("ML-KEM-768 key generation");
+    ) -> Result<Self, SecureChannelError> {
+        let local_static_dh = X25519::genkey()
+            .map_err(|e| SecureChannelError::KeyGeneration(format!("X25519: {:?}", e)))?;
+        let local_static_kem = MlKem768::genkey()
+            .map_err(|e| SecureChannelError::KeyGeneration(format!("ML-KEM-768: {:?}", e)))?;
 
         let params =
             HybridHandshakeParams::<X25519, MlKem768, MlKem768>::new(noise_hybrid_xx(), false)
@@ -161,9 +171,10 @@ impl ClatterHandshake {
                 .with_s_kem(local_static_kem)
                 .with_rs_kem(remote_static_kem);
 
-        let handshake = ClatterHybridHandshake::new(params).expect("handshake construction");
+        let handshake = ClatterHybridHandshake::new(params)
+            .map_err(|e| SecureChannelError::HandshakeConstruction(format!("{:?}", e)))?;
 
-        Self { handshake, remote_id }
+        Ok(Self { handshake, remote_id })
     }
 
     /// Write the next handshake message to `out`.
@@ -217,11 +228,13 @@ pub struct ClatterSecureChannel {
 
 impl ClatterSecureChannel {
     /// Encrypt a plaintext message for the remote peer.
-    pub fn seal(&mut self, plaintext: &[u8]) -> Vec<u8> {
+    pub fn seal(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, SecureChannelError> {
         let mut out = vec![0u8; plaintext.len() + 16];
-        let n = self.transport.send(plaintext, &mut out).expect("transport send");
+        let n = self.transport.send(plaintext, &mut out).map_err(|e| {
+            SecureChannelError::TransportError(format!("transport send failed: {:?}", e))
+        })?;
         out.truncate(n);
-        out
+        Ok(out)
     }
 
     /// Decrypt a message received from the remote peer.
@@ -368,7 +381,7 @@ mod tests {
         let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
 
         let msg = b"hello over clatter hybrid handshake";
-        let ciphertext = ch_alice.seal(msg);
+        let ciphertext = ch_alice.seal(msg).expect("seal must succeed");
         assert_ne!(&ciphertext, msg, "ciphertext must differ from plaintext");
         assert!(!ciphertext.is_empty(), "ciphertext must not be empty");
 
@@ -386,7 +399,7 @@ mod tests {
 
         for i in 0u8..10 {
             let msg = [i; 64];
-            let ct = ch_alice.seal(&msg);
+            let ct = ch_alice.seal(&msg).expect("seal must succeed");
             let pt = ch_bob.open(&ct).expect("decrypt must succeed");
             assert_eq!(pt.as_slice(), msg.as_slice(), "message {i} roundtrip");
         }
@@ -400,7 +413,7 @@ mod tests {
         let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
         let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
 
-        let mut ciphertext = ch_alice.seal(b"sensitive payload");
+        let mut ciphertext = ch_alice.seal(b"sensitive payload").expect("seal must succeed");
         if ciphertext.len() >= 2 {
             ciphertext[0] ^= 0xFF;
             ciphertext[1] ^= 0xFF;
@@ -423,7 +436,7 @@ mod tests {
         let mut ch_eve = ClatterSecureChannel::establish(eve, bob);
 
         let msg = b"secret for bob only";
-        let ciphertext = ch_alice.seal(msg);
+        let ciphertext = ch_alice.seal(msg).expect("seal must succeed");
 
         let result = ch_eve.open(&ciphertext);
         assert!(
@@ -440,7 +453,7 @@ mod tests {
         let mut ch_alice = ClatterSecureChannel::establish(alice, bob);
         let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
 
-        let ciphertext = ch_alice.seal(b"");
+        let ciphertext = ch_alice.seal(b"").expect("seal must succeed");
         let decrypted = ch_bob.open(&ciphertext).expect("empty message must decrypt");
         assert_eq!(decrypted, b"");
     }
@@ -451,8 +464,8 @@ mod tests {
         let bob = [17u8; 32];
 
         let mut ch = ClatterSecureChannel::establish(alice, bob);
-        let c1 = ch.seal(b"msg1");
-        let c2 = ch.seal(b"msg2");
+        let c1 = ch.seal(b"msg1").expect("seal must succeed");
+        let c2 = ch.seal(b"msg2").expect("seal must succeed");
         assert_ne!(c1, c2, "different messages must produce different ciphertexts");
     }
 
@@ -465,7 +478,7 @@ mod tests {
         let mut ch_bob = ClatterSecureChannel::establish(bob, alice);
 
         let large_msg = vec![0xABu8; 60000];
-        let ct = ch_alice.seal(&large_msg);
+        let ct = ch_alice.seal(&large_msg).expect("seal must succeed");
         let pt = ch_bob.open(&ct).expect("large message decrypt");
         assert_eq!(pt, large_msg);
     }

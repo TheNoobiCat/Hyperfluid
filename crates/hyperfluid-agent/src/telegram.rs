@@ -9,10 +9,10 @@ use std::time::Duration;
 
 /// Telegram bot client wrapping the Bot API.
 pub struct TelegramBot {
-    #[allow(dead_code)]
-    token: String,
-    allowed_user_id: u64,
-    base_url: String,
+    // Stored for potential serialization/re-creation; used in tests.
+    pub _token: String,
+    pub allowed_user_id: u64,
+    pub base_url: String,
     client: Client,
 }
 
@@ -27,7 +27,7 @@ impl TelegramBot {
             .build()
             .expect("reqwest Client builder should not fail");
         Self {
-            token: config.token.clone(),
+            _token: config.token.clone(),
             allowed_user_id: config.user_id,
             base_url: format!("https://api.telegram.org/bot{}", config.token),
             client,
@@ -209,7 +209,7 @@ mod tests {
         let section =
             config::TelegramSection { token: "test-token-123".into(), user_id: 42, enabled: true };
         let bot = TelegramBot::new(&section);
-        assert_eq!(bot.token, "test-token-123");
+        assert_eq!(bot._token, "test-token-123");
         assert_eq!(bot.allowed_user_id, 42);
         assert!(bot.base_url.contains("test-token-123"));
     }

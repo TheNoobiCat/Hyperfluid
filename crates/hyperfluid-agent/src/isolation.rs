@@ -141,10 +141,20 @@ impl SandboxConfig {
 // ── Disk Quota ──
 
 /// Walk the working directory tree and sum file sizes.
-/// Returns the total bytes used. Does not enforce — just reports.
-/// Enforcement is the caller's responsibility.
-pub fn enforce_disk_quota(working_dir: &Path, _max_bytes: u64) -> Result<u64, std::io::Error> {
-    walk_dir_size(working_dir)
+/// Returns the total bytes used. If the total exceeds `max_bytes`,
+/// returns an error describing the overage.
+pub fn enforce_disk_quota(working_dir: &Path, max_bytes: u64) -> Result<u64, String> {
+    let total =
+        walk_dir_size(working_dir).map_err(|e| format!("disk quota check failed: {}", e))?;
+    if max_bytes > 0 && total > max_bytes {
+        return Err(format!(
+            "Disk quota exceeded: {} bytes used, max is {} bytes ({} over)",
+            total,
+            max_bytes,
+            total - max_bytes
+        ));
+    }
+    Ok(total)
 }
 
 fn walk_dir_size(dir: &Path) -> Result<u64, std::io::Error> {
@@ -223,6 +233,14 @@ pub fn check_file_descriptor_limit(_max_fds: u32) -> Result<u32, String> {
     #[cfg(not(target_os = "linux"))]
     {
         let _ = _max_fds;
+        // Windows does not have the same file descriptor model as Unix.
+        // Process-level handle limits are enforced by the OS and are
+        // typically not constrained in the same way as Unix FD limits.
+        // Returning Ok(0) indicates the check is not applicable rather
+        // than silently no-oping.
+        tracing::debug!(
+            "check_file_descriptor_limit: FD limits not applicable on this platform (non-Linux)"
+        );
         Ok(0)
     }
 }
@@ -474,6 +492,12 @@ mod tests {
         // 100 + 200 + 50 = 350 (allow for directory metadata rounding).
         assert!(total >= 350, "expected at least 350 bytes, got {}", total);
         assert!(total <= 360, "expected at most 360 bytes, got {}", total);
+
+        // Positive: exceeding max_bytes returns an error
+        let exceeded = enforce_disk_quota(&tmp, 100);
+        assert!(exceeded.is_err(), "should fail when quota is exceeded");
+        let err_msg = exceeded.unwrap_err();
+        assert!(err_msg.contains("Disk quota exceeded"), "error should mention overage");
 
         // Cleanup.
         let _ = fs::remove_dir_all(&tmp);

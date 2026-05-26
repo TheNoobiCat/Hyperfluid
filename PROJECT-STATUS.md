@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-10 COMPLETE 2026-05-24 — see checkpoint-2026-05-24.md. TUI, Telegram, sandbox, network bridge, protocol/RPC backend gaps, skills infra, FastPath approval accumulation. All CI green. 551 tests.) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-10 COMPLETE 2026-05-24. Stage 01 multi-validator BFT networking wired 2026-05-26 — `--multi-validator` flag, persistent TCP consensus messaging, dynamic peer bridge. Outbound peer key resolution deferred. CI all-green.) |
 
 ---
 

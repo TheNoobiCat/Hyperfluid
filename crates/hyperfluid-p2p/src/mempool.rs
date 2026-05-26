@@ -195,11 +195,6 @@ impl Mempool {
         }
     }
 
-    /// Return the current base fee for reference.
-    pub fn base_fee_for_test(&self) -> u128 {
-        0
-    }
-
     /// Get the current config (for testing).
     pub fn config(&self) -> &MempoolConfig {
         &self.config
@@ -209,6 +204,15 @@ impl Mempool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test-only helper that returns a zero base fee.
+    /// In production, use the EIP-1559 base fee from FeeMarketState.
+    /// This method is intentionally named `base_fee_for_test` to make its
+    /// purpose explicit — it MUST NOT be called from production code.
+    #[allow(dead_code)]
+    fn base_fee_for_test() -> u128 {
+        0
+    }
 
     fn tx(
         hash: u8,

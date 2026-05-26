@@ -21,6 +21,7 @@ ml-dsa.workspace = true
 thiserror.workspace = true
 parity-scale-codec.workspace = true
 reqwest = { workspace = true, features = ["blocking", "json"] }
+hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 hyperfluid-pdp = { path = "../hyperfluid-pdp" }
 hyperfluid-state = { path = "../hyperfluid-state" }
 hyperfluid-collaboration = { path = "../hyperfluid-collaboration" }

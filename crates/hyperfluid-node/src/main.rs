@@ -9,6 +9,10 @@ pub mod rpc;
 
 use hyperfluid_consensus::driver::ConsensusDriver;
 use hyperfluid_consensus::genesis::GenesisConfig;
+use hyperfluid_consensus::malachite::Address32;
+use hyperfluid_consensus::malachite_consensus;
+use hyperfluid_consensus::network_bridge;
+use hyperfluid_p2p::tcp;
 use hyperfluid_p2p::transport::PeerCache;
 use hyperfluid_p2p::types::{DiscoveryConfig, Hash32};
 use hyperfluid_p2p::{identity::Identity, tcp::TcpTransport};
@@ -27,6 +31,8 @@ struct NodeConfig {
     block_interval_secs: u64,
     p2p_bind: SocketAddr,
     node_key_path: PathBuf,
+    multi_validator: bool,
+    peer_addrs: Vec<SocketAddr>,
 }
 
 impl NodeConfig {
@@ -38,6 +44,8 @@ impl NodeConfig {
         let mut block_interval_secs: u64 = 2;
         let mut p2p_bind_str: Option<String> = None;
         let mut node_key_path = PathBuf::from("node_key");
+        let mut multi_validator = false;
+        let mut peer_addrs: Vec<SocketAddr> = Vec::new();
 
         let mut i = 1;
         while i < args.len() {
@@ -69,6 +77,18 @@ impl NodeConfig {
                         node_key_path = PathBuf::from(&args[i]);
                     }
                 }
+                "--multi-validator" => {
+                    multi_validator = true;
+                }
+                "--peers" => {
+                    i += 1;
+                    if i < args.len() {
+                        peer_addrs = args[i]
+                            .split(',')
+                            .filter_map(|s| s.trim().parse::<SocketAddr>().ok())
+                            .collect();
+                    }
+                }
                 _ => {}
             }
             i += 1;
@@ -93,7 +113,16 @@ impl NodeConfig {
             GenesisConfig::new_testnet_single_validator()
         };
 
-        Self { gen_genesis, genesis_path, genesis, block_interval_secs, p2p_bind, node_key_path }
+        Self {
+            gen_genesis,
+            genesis_path,
+            genesis,
+            block_interval_secs,
+            p2p_bind,
+            node_key_path,
+            multi_validator,
+            peer_addrs,
+        }
     }
 }
 
@@ -205,61 +234,206 @@ async fn main() {
     let local_identity = Arc::new(load_or_create_identity(&config.node_key_path));
     let local_peer_id = *local_identity.peer_id();
 
-    {
-        let listener = tokio::net::TcpListener::bind(p2p_bind_addr)
-            .await
-            .expect("failed to bind P2P TCP listener");
-        let actual_addr = listener.local_addr().expect("failed to get P2P listener address");
-        tracing::info!(
-            "P2P TCP listener started on {} (peer_id: {})",
-            actual_addr,
-            hex::encode(local_peer_id),
-        );
+    let listener = tokio::net::TcpListener::bind(p2p_bind_addr)
+        .await
+        .expect("failed to bind P2P TCP listener");
+    let actual_addr = listener.local_addr().expect("failed to get P2P listener address");
+    tracing::info!(
+        "P2P TCP listener started on {} (peer_id: {})",
+        actual_addr,
+        hex::encode(local_peer_id),
+    );
 
-        let transport = Arc::clone(&tcp_transport);
-        let identity = Arc::clone(&local_identity);
-        let r_p2p = running.clone();
-        // Build key provider from genesis validator set.
-        // Each validator's account pubkey provides the DH and KEM key material
-        // needed to authenticate inbound P2P connections.
-        let mut key_map: HashMap<Hash32, ([u8; 32], Vec<u8>)> = HashMap::new();
-        {
-            let account_pubkeys: HashMap<Hash32, &Vec<u8>> = config
-                .genesis
-                .accounts
-                .iter()
-                .filter_map(|a| a.pubkey.as_ref().map(|pk| (a.account_id, pk)))
-                .collect();
-            for v in &config.genesis.validators {
-                if let Some(pubkey) = account_pubkeys.get(&v.validator_id) {
-                    let mut dh_key = [0u8; 32];
-                    let copy_len = pubkey.len().min(32);
-                    dh_key[..copy_len].copy_from_slice(&pubkey[..copy_len]);
-                    let kem_key =
-                        if pubkey.len() > 32 { pubkey[32..].to_vec() } else { Vec::new() };
-                    key_map.insert(v.validator_id, (dh_key, kem_key));
-                }
+    // Build key provider from genesis validator set.
+    let mut key_map: HashMap<Hash32, ([u8; 32], Vec<u8>)> = HashMap::new();
+    {
+        let account_pubkeys: HashMap<Hash32, &Vec<u8>> = config
+            .genesis
+            .accounts
+            .iter()
+            .filter_map(|a| a.pubkey.as_ref().map(|pk| (a.account_id, pk)))
+            .collect();
+        for v in &config.genesis.validators {
+            if let Some(pubkey) = account_pubkeys.get(&v.validator_id) {
+                let mut dh_key = [0u8; 32];
+                let copy_len = pubkey.len().min(32);
+                dh_key[..copy_len].copy_from_slice(&pubkey[..copy_len]);
+                let kem_key = if pubkey.len() > 32 { pubkey[32..].to_vec() } else { Vec::new() };
+                key_map.insert(v.validator_id, (dh_key, kem_key));
             }
         }
-        let key_provider = Arc::new(move |peer_id: &Hash32| -> Option<([u8; 32], Vec<u8>)> {
-            key_map.get(peer_id).cloned()
-        });
-        tokio::spawn(async move {
-            TcpTransport::accept_loop(listener, identity, key_provider, transport).await;
-            r_p2p.store(false, Ordering::Release);
-        });
     }
+    let key_provider = Arc::new(move |peer_id: &Hash32| -> Option<([u8; 32], Vec<u8>)> {
+        key_map.get(peer_id).cloned()
+    });
 
-    tracing::info!("Node entering consensus loop (live block production)");
+    if config.multi_validator {
+        // ── Multi-Validator BFT Mode ──
+        tracing::info!("Node entering multi-validator BFT consensus mode");
 
-    // Start the async block production loop
-    let loop_handle =
-        ConsensusDriver::run_block_loop(driver.clone(), running.clone(), block_interval);
+        let bft_config = malachite_consensus::ConsensusNetworkConfig::default();
+        let channels = malachite_consensus::ConsensusChannels::default();
+        let node_addr = Address32::new(*local_identity.peer_id());
 
-    // Wait for the block loop to complete (it exits when running becomes false)
-    match loop_handle.await {
-        Ok(()) => tracing::info!("Block loop exited cleanly"),
-        Err(e) => tracing::error!("Block loop panicked or was cancelled: {}", e),
+        let mut entries = Vec::new();
+        for v in &config.genesis.validators {
+            let voting_power: u64 =
+                if v.bonded_stake > u64::MAX as u128 { u64::MAX } else { v.bonded_stake as u64 };
+            let pk =
+                key_provider(&v.validator_id).map(|(dh, _kem)| dh.to_vec()).unwrap_or_default();
+            entries.push((v.validator_id, pk, voting_power));
+        }
+        let validator_set = malachite_consensus::build_validator_set(entries);
+
+        let proposer_seed = {
+            use sha3::Digest;
+            let mut h = sha3::Sha3_256::new();
+            h.update(&local_peer_id);
+            h.update(&config.genesis.timestamp.to_le_bytes());
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&h.finalize());
+            out
+        };
+
+        // Build external network bridge with empty peer list (peers added dynamically).
+        let bridge = Arc::new(std::sync::Mutex::new(network_bridge::NetworkBridge {
+            outgoing: channels.outgoing_tx.clone(),
+            peers: Vec::new(),
+        }));
+
+        // Consensus handler: TCP inbound messages → BFT incoming channel.
+        let incoming_tx = channels.incoming_tx.clone();
+        let consensus_handler: tcp::ConsensusMessageHandler =
+            Arc::new(move |_peer_id: Hash32, data: Vec<u8>| {
+                if data.is_empty() {
+                    return;
+                }
+                let msg = match data[0] {
+                    0x01 => match network_bridge::decode_vote(&data[1..]) {
+                        Some(vote) => malachite_consensus::ConsensusNetworkMsg::Vote(vote),
+                        None => {
+                            tracing::warn!("BFT: failed to decode vote from peer");
+                            return;
+                        }
+                    },
+                    0x02 => match network_bridge::decode_proposal(&data[1..]) {
+                        Some(proposal) => {
+                            malachite_consensus::ConsensusNetworkMsg::Proposal(proposal)
+                        }
+                        None => {
+                            tracing::warn!("BFT: failed to decode proposal from peer");
+                            return;
+                        }
+                    },
+                    tag => {
+                        tracing::warn!("BFT: unknown consensus msg tag 0x{:02x}", tag);
+                        return;
+                    }
+                };
+                let _ = incoming_tx.send(msg);
+            });
+
+        // Start TCP accept loop with consensus handler.
+        {
+            let transport = Arc::clone(&tcp_transport);
+            let identity = Arc::clone(&local_identity);
+            let r_p2p = running.clone();
+            let handler = consensus_handler.clone();
+            tokio::spawn(async move {
+                TcpTransport::accept_loop(
+                    listener,
+                    identity,
+                    key_provider,
+                    transport,
+                    Some(handler),
+                )
+                .await;
+                r_p2p.store(false, Ordering::Release);
+            });
+        }
+
+        // Start BFT consensus loop.
+        let bft_handle = ConsensusDriver::run_bft_loop(
+            driver.clone(),
+            running.clone(),
+            bft_config,
+            channels,
+            local_identity.clone(),
+            node_addr,
+            validator_set,
+            proposer_seed,
+            None,                 // peer_tx_rx_pairs — not used with external bridge
+            Some(bridge.clone()), // external bridge
+        );
+
+        // Connect to configured peers.
+        let bridge_for_peers = Arc::clone(&bridge);
+        let handler_for_peers = consensus_handler.clone();
+        let identity_for_peers = Arc::clone(&local_identity);
+        let my_bind_addr = actual_addr;
+        tokio::spawn(async move {
+            for peer_addr in config.peer_addrs.iter().copied() {
+                if peer_addr == my_bind_addr {
+                    continue;
+                }
+                tracing::info!("Connecting to peer: {}", peer_addr);
+                let remote_peer_id = [0u8; 32]; // TODO: resolve peer_id from config/keystore
+                let remote_dh = [0u8; 32];
+                let remote_kem = Vec::new();
+
+                match tcp::connect_and_maintain(
+                    peer_addr,
+                    Arc::clone(&identity_for_peers),
+                    remote_peer_id,
+                    remote_dh,
+                    remote_kem,
+                    Arc::clone(&handler_for_peers),
+                )
+                .await
+                {
+                    Ok((_peer_id, sender)) => {
+                        tracing::info!(
+                            "Connected to peer {} (peer_id: {})",
+                            peer_addr,
+                            hex::encode(_peer_id),
+                        );
+                        if let Ok(mut b) = bridge_for_peers.lock() {
+                            b.peers.push(sender);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to connect to peer {}: {}", peer_addr, e);
+                    }
+                }
+            }
+        });
+
+        // Wait for the BFT loop to complete.
+        match bft_handle.await {
+            Ok(()) => tracing::info!("BFT loop exited cleanly"),
+            Err(e) => tracing::error!("BFT loop panicked: {}", e),
+        }
+    } else {
+        // ── Single-Validator Block Production Mode (default) ──
+        {
+            let transport = Arc::clone(&tcp_transport);
+            let identity = Arc::clone(&local_identity);
+            let r_p2p = running.clone();
+            tokio::spawn(async move {
+                TcpTransport::accept_loop(listener, identity, key_provider, transport, None).await;
+                r_p2p.store(false, Ordering::Release);
+            });
+        }
+
+        tracing::info!("Node entering consensus loop (live block production)");
+
+        let loop_handle =
+            ConsensusDriver::run_block_loop(driver.clone(), running.clone(), block_interval);
+
+        match loop_handle.await {
+            Ok(()) => tracing::info!("Block loop exited cleanly"),
+            Err(e) => tracing::error!("Block loop panicked or was cancelled: {}", e),
+        }
     }
     running.store(false, Ordering::SeqCst);
 

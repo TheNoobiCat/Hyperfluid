@@ -211,8 +211,8 @@ impl LlmProvider for StubProvider {
 // ── Factory ───────────────────────────────────────────────────────────────
 
 /// Create an LLM provider from the config section.
-/// Falls back to StubProvider if config is minimal or blank.
-pub fn provider_from_config(section: &LlmSection) -> Box<dyn LlmProvider> {
+/// Returns an error if the provider type is not configured properly.
+pub fn provider_from_config(section: &LlmSection) -> Result<Box<dyn LlmProvider>, LlmError> {
     match section.provider.to_lowercase().as_str() {
         "openai" | "openai-compatible" => {
             let api_url = section
@@ -221,16 +221,29 @@ pub fn provider_from_config(section: &LlmSection) -> Box<dyn LlmProvider> {
                 .unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".into());
             let api_key = section.api_key.clone().unwrap_or_default();
             if api_key.is_empty() {
-                Box::new(StubProvider)
+                Err(LlmError::NotConfigured(
+                    "OpenAI API key is required for openai provider".into(),
+                ))
             } else {
-                Box::new(OpenAiProvider::new(api_url, api_key, section.model.clone()))
+                Ok(Box::new(OpenAiProvider::new(api_url, api_key, section.model.clone())))
             }
         }
-        "ollama" => {
+        "stub" => Ok(Box::new(StubProvider)),
+        "ollama" | "local" => {
             let api_url =
                 section.api_url.clone().unwrap_or_else(|| "http://localhost:11434/api/chat".into());
-            Box::new(OllamaProvider::new(api_url, section.model.clone()))
+            if section.model.is_empty() || section.model == "default" {
+                Err(LlmError::NotConfigured(
+                    "No local LLM provider available. Configure Ollama or set provider to `openai`."
+                        .into(),
+                ))
+            } else {
+                Ok(Box::new(OllamaProvider::new(api_url, section.model.clone())))
+            }
         }
-        _ => Box::new(StubProvider),
+        other => Err(LlmError::NotConfigured(format!(
+            "Unknown LLM provider '{}'. Supported: openai, openai-compatible, ollama, local",
+            other
+        ))),
     }
 }

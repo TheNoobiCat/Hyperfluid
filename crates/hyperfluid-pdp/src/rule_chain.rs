@@ -20,10 +20,16 @@ use crate::types::{
 
 /// Evaluates an action plan through the deterministic 5-step rule chain.
 /// Records the decision in the audit log.
+///
+/// The `evaluator_signature` is an ML-DSA-65 signature over the audit entry,
+/// provided by the consensus driver for non-repudiation (F-7). If `None`,
+/// the audit entry is recorded with an empty signature (backward compatible
+/// for callers that do not yet sign audit entries).
 pub fn evaluate(
     request: &ActionPlanRequest,
     ctx: &PdpContext,
     audit_log: &mut AuditLog,
+    evaluator_signature: Option<Vec<u8>>,
 ) -> ActionPlanResponse {
     let mut response = ActionPlanResponse {
         plan_id: request.plan_id,
@@ -46,16 +52,10 @@ pub fn evaluate(
     }
 
     // Record decision in append-only audit log.
-    // NOTE: evaluator_signature is an empty stub — the PdpContext does not
-    // currently carry an evaluator key. This field MUST be wired from the
-    // consensus layer before production deployment.
-    audit_log.record(
-        &response,
-        request.action_type,
-        request.agent_id,
-        ctx.current_height,
-        vec![], // evaluator_signature — stub
-    );
+    // The evaluator_signature is provided by the consensus driver (F-7).
+    // If None (legacy callers), an empty byte vector is recorded.
+    let sig = evaluator_signature.unwrap_or_default();
+    audit_log.record(&response, request.action_type, request.agent_id, ctx.current_height, sig);
 
     response
 }
@@ -240,7 +240,30 @@ fn quota_ids_for_action(action_type: ActionType) -> Vec<String> {
             vec!["lease_active_per_agent".to_string()]
         }
         ActionType::CreateTask => vec!["task_create_per_stage".to_string()],
-        _ => vec![],
+        // Explicitly listed quota-free variants — no quotas enforced for these actions.
+        ActionType::DelegateOperation
+        | ActionType::ReleaseTask
+        | ActionType::StakeOperation
+        | ActionType::SubmitEvidence
+        | ActionType::SubmitReview
+        | ActionType::SubmitTaskCompletion
+        | ActionType::Transfer
+        | ActionType::PublishTopicMessage => vec![],
+        // Catch-all — log a warning to alert operators when a newly added ActionType
+        // silently skips quota enforcement. This arm MUST not be the default path
+        // for any currently known variant (all are listed above).
+        //
+        // #[allow(unreachable_patterns)]: All variants are in the same crate (currently
+        // exhaustive). This arm exists as future-proofing: when a new variant is added,
+        // the runtime warning fires instead of silently returning an empty vec.
+        #[allow(unreachable_patterns)]
+        _ => {
+            tracing::warn!(
+                "quota_ids_for_action: unhandled ActionType {:?} — no quotas enforced",
+                action_type,
+            );
+            vec![]
+        }
     }
 }
 
@@ -338,7 +361,7 @@ mod tests {
         let request = make_request([0u8; 32], [1u8; 32], ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(0, 1000, 0, None);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
     }
@@ -348,7 +371,7 @@ mod tests {
         let request = make_request([1u8; 32], [0u8; 32], ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(0, 1000, 0, None);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
     }
@@ -359,7 +382,7 @@ mod tests {
         request.agent_signature = vec![0u8; 32];
         let ctx = make_ctx(0, 1000, 0, None);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
     }
@@ -372,7 +395,7 @@ mod tests {
         let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(50, 1000, 0, None);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
     }
@@ -384,7 +407,7 @@ mod tests {
         let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
         let ctx = make_ctx(50, 1000, 0, Some(pk));
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
     }
@@ -405,7 +428,7 @@ mod tests {
         );
         let ctx = make_ctx(50, 1000, 0, Some(pk_b)); // verify with pk_b but signed with seed_a
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
     }
@@ -425,7 +448,7 @@ mod tests {
         );
         request.nonce = 999; // tamper after signing
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
     }
@@ -444,7 +467,7 @@ mod tests {
             &seed,
         );
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Approved);
     }
 
@@ -459,7 +482,7 @@ mod tests {
             make_signed_request(plan_id, agent_id, ActionType::ClaimTaskLease, 1, 100, &pk, &seed);
         ctx.consumed_plan_ids = vec![plan_id];
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
     }
@@ -481,7 +504,7 @@ mod tests {
         ctx_wrong_nonce.agent_nonce = 3; // nonce doesn't match expected +1
         request.agent_signature = sign_test_request(&request, &seed); // re-sign with nonce=5
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx_wrong_nonce, &mut audit_log);
+        let result = evaluate(&request, &ctx_wrong_nonce, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
     }
@@ -503,7 +526,7 @@ mod tests {
         ctx_expired.current_height = 150; // past expiry
         request.agent_signature = sign_test_request(&request, &seed);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx_expired, &mut audit_log);
+        let result = evaluate(&request, &ctx_expired, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
     }
@@ -525,7 +548,7 @@ mod tests {
         ctx_normal.current_height = 100;
         request.agent_signature = sign_test_request(&request, &seed);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx_normal, &mut audit_log);
+        let result = evaluate(&request, &ctx_normal, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
     }
@@ -547,7 +570,7 @@ mod tests {
         ctx_valid.agent_nonce = 4; // request.nonce == ctx.nonce + 1
         request.agent_signature = sign_test_request(&request, &seed);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx_valid, &mut audit_log);
+        let result = evaluate(&request, &ctx_valid, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Approved);
     }
 
@@ -572,7 +595,7 @@ mod tests {
             window_start_height: 0,
         }];
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::QuotaExhausted));
     }
@@ -596,7 +619,7 @@ mod tests {
             window_start_height: 0,
         }];
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Approved);
     }
 
@@ -619,7 +642,7 @@ mod tests {
         ctx_poor.agent_balance_attagx = 0;
         request.agent_signature = sign_test_request(&request, &seed);
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx_poor, &mut audit_log);
+        let result = evaluate(&request, &ctx_poor, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Denied);
         assert_eq!(result.deny_reason, Some(DenyReason::InsufficientFunds));
     }
@@ -638,7 +661,7 @@ mod tests {
             &seed,
         );
         let mut audit_log = AuditLog::new();
-        let result = evaluate(&request, &ctx, &mut audit_log);
+        let result = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(result.decision, Decision::Approved);
     }
 
@@ -657,8 +680,8 @@ mod tests {
         );
 
         let mut audit_log = AuditLog::new();
-        let r1 = evaluate(&request, &ctx, &mut audit_log);
-        let r2 = evaluate(&request, &ctx, &mut audit_log);
+        let r1 = evaluate(&request, &ctx, &mut audit_log, None);
+        let r2 = evaluate(&request, &ctx, &mut audit_log, None);
         assert_eq!(r1.decision, r2.decision);
         assert_eq!(r1.deny_reason, r2.deny_reason);
     }

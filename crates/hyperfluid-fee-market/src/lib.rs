@@ -95,21 +95,31 @@ pub fn compute_next_base_fee(
 
 /// Compute total transaction cost: (base_fee + priority_fee)
 /// Staged for fee deduction at tx execution.
-#[allow(dead_code)]
+///
+/// Wired in `ConsensusDriver::produce_block()` → for each tx, computes
+/// `compute_tx_fee(base_fee, tx.priority_fee)` and deducts the total
+/// from the sender's balance. The base fee portion is burned; the priority
+/// fee portion accrues to the validator reward pool.
 pub fn compute_tx_fee(base_fee: u128, priority_fee: u128) -> u128 {
     base_fee.saturating_add(priority_fee)
 }
 
 /// Determine if a transaction meets the minimum fee requirement.
 /// Staged for mempool admission gate.
-#[allow(dead_code)]
+///
+/// Wired in `ConsensusDriver::submit_tx()` / `produce_block()` — called
+/// before including a transaction to verify `max_fee >= base_fee`.
 pub fn tx_meets_min_fee(max_fee: u128, base_fee: u128) -> bool {
     max_fee >= base_fee
 }
 
 /// Compute the burn portion of a transaction fee.
 /// Staged for fee burning at tx execution.
-#[allow(dead_code)]
+///
+/// Per the EIP-1559 spec, 100% of base fees are burned. Wired in
+/// `ConsensusDriver::produce_block()` — after executing all txs, the
+/// total burn is computed via `compute_burn_amount(base_fee, total_gas_used)`
+/// and accumulated into `FeeMarketState::fee_burn_accumulator`.
 pub fn compute_burn_amount(base_fee: u128, gas_used: u64) -> u128 {
     base_fee.saturating_mul(gas_used as u128)
 }
@@ -123,7 +133,11 @@ impl FeeMarketState {
 /// Compute validator rebate from total priority fees across epoch.
 /// Proportional to validator's stake share of total bonded stake.
 /// Staged for reward distribution.
-#[allow(dead_code)]
+///
+/// Wired in `ConsensusDriver::produce_block()` — at epoch boundaries, for
+/// each active validator, compute their rebate from the accumulated priority
+/// fee pool. The sum of all rebates equals `total_priority_fees` (assuming
+/// no truncation loss).
 pub fn compute_validator_rebate(
     validator_stake: u128,
     total_bonded_stake: u128,
@@ -137,7 +151,10 @@ pub fn compute_validator_rebate(
 
 /// Check per-sender mempool transaction limit.
 /// Staged for mempool admission.
-#[allow(dead_code)]
+///
+/// Wired in `ConsensusDriver::submit_tx()` — before accepting a transaction
+/// from a sender, verify `tx_count <= config.max_per_sender_tx`. Returns
+/// `true` if the sender may submit additional transactions.
 pub fn sender_within_mempool_limit(tx_count: u32, config: &FeeConfig) -> bool {
     tx_count <= config.max_per_sender_tx
 }

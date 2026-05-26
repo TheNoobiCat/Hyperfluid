@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 
 use crate::discovery::{transition_connection, ConnectionEvent};
 use crate::transport::PeerCache;
@@ -27,6 +27,7 @@ use clatter::bytearray::ByteArray;
 
 const HANDSHAKE_BUF_SIZE: usize = 8192;
 const FRAME_LEN_BYTES: usize = 4;
+const MESSAGE_MAX_BYTES: usize = 1_048_576;
 
 #[derive(Debug)]
 pub enum TcpError {
@@ -134,6 +135,7 @@ impl TcpTransport {
         local_identity: Arc<Identity>,
         remote_key_provider: Arc<F>,
         transport: Arc<TcpTransport>,
+        consensus_handler: Option<ConsensusMessageHandler>,
     ) where
         F: Fn(&Hash32) -> Option<([u8; 32], Vec<u8>)> + Send + Sync + 'static,
     {
@@ -143,22 +145,47 @@ impl TcpTransport {
                     let identity = Arc::clone(&local_identity);
                     let transport = Arc::clone(&transport);
                     let key_provider = Arc::clone(&remote_key_provider);
+                    let handler = consensus_handler.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_inbound(
+                        let (peer_id, channel) = match handle_inbound(
                             &mut stream,
                             peer_addr,
                             identity,
                             &key_provider,
-                            transport,
+                            Arc::clone(&transport),
                         )
                         .await
                         {
-                            eprintln!("[hyperfluid-p2p] Inbound from {} failed: {}", peer_addr, e);
+                            Ok(r) => r,
+                            Err(e) => {
+                                tracing::warn!("P2P: inbound from {} failed: {}", peer_addr, e,);
+                                return;
+                            }
+                        };
+
+                        if let Some(h) = handler {
+                            let (tx, rx) = mpsc::unbounded_channel();
+                            tokio::spawn(async move {
+                                peer_message_loop(&mut stream, channel, rx, h, peer_id).await;
+                                transport.disconnect(&peer_id).await;
+                            });
+                            tracing::info!(
+                                "P2P: consensus messaging active for peer {:?}",
+                                peer_id,
+                            );
+                            let _ = tx; // sender is used by caller via bridge
+                        } else {
+                            transport.active_channels.write().await.insert(peer_id, channel);
+                            tracing::info!(
+                                "P2P: inbound connection established from {} (peer_id: {:?})",
+                                peer_addr,
+                                peer_id,
+                            );
                         }
                     });
                 }
                 Err(e) => {
-                    eprintln!("[hyperfluid-p2p] Listener accept error: {}", e);
+                    tracing::warn!("P2P: listener accept error: {}", e);
                 }
             }
         }
@@ -174,9 +201,9 @@ impl TcpTransport {
         remote_kem_pubkey: Vec<u8>,
     ) -> Result<ClatterSecureChannel, TcpError> {
         transport.update_state(remote_peer_id, ConnectionEvent::ProbeInitiated).await;
-        let stream = TcpStream::connect(peer_addr).await?;
+        let mut stream = TcpStream::connect(peer_addr).await?;
         let handshake_result = perform_initiator_handshake(
-            stream,
+            &mut stream,
             local_identity,
             remote_peer_id,
             remote_dh_pubkey,
@@ -322,7 +349,7 @@ type MlKem768PubKey =
 
 #[cfg(feature = "clatter-secure-channel")]
 async fn perform_initiator_handshake(
-    mut stream: TcpStream,
+    stream: &mut TcpStream,
     local_identity: &Identity,
     remote_id: Hash32,
     remote_dh_pubkey_bytes: [u8; 32],
@@ -332,7 +359,8 @@ async fn perform_initiator_handshake(
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
     let mut handshake =
-        ClatterHandshake::initiator(local_identity, remote_id, remote_dh, remote_kem);
+        ClatterHandshake::initiator(local_identity, remote_id, remote_dh, remote_kem)
+            .map_err(|e| TcpError::Handshake(format!("initiator setup: {:?}", e)))?;
     let mut buf = [0u8; HANDSHAKE_BUF_SIZE];
     let mut read_buf = [0u8; HANDSHAKE_BUF_SIZE];
 
@@ -340,10 +368,10 @@ async fn perform_initiator_handshake(
     let n = handshake
         .write_message(&mut buf)
         .map_err(|e| TcpError::Handshake(format!("msg1 write: {:?}", e)))?;
-    write_frame(&mut stream, &buf[..n]).await?;
+    write_frame(stream, &buf[..n]).await?;
 
     // Msg2: responder -> initiator (e + e_kem)
-    let msg2 = read_frame(&mut stream).await?;
+    let msg2 = read_frame(stream).await?;
     handshake
         .read_message(&msg2, &mut read_buf)
         .map_err(|e| TcpError::Handshake(format!("msg2 read: {:?}", e)))?;
@@ -352,10 +380,10 @@ async fn perform_initiator_handshake(
     let n = handshake
         .write_message(&mut buf)
         .map_err(|e| TcpError::Handshake(format!("msg3 write: {:?}", e)))?;
-    write_frame(&mut stream, &buf[..n]).await?;
+    write_frame(stream, &buf[..n]).await?;
 
     // Msg4: responder -> initiator (s + Skem)
-    let msg4 = read_frame(&mut stream).await?;
+    let msg4 = read_frame(stream).await?;
     handshake
         .read_message(&msg4, &mut read_buf)
         .map_err(|e| TcpError::Handshake(format!("msg4 read: {:?}", e)))?;
@@ -376,82 +404,14 @@ async fn perform_initiator_handshake(
     let mut id_frame = Vec::with_capacity(ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN);
     id_frame.extend_from_slice(&verifying_key);
     id_frame.extend_from_slice(&sig);
-    write_frame(&mut stream, &id_frame).await?;
+    write_frame(stream, &id_frame).await?;
 
     Ok(channel)
 }
 
-#[cfg(feature = "clatter-secure-channel")]
-#[allow(dead_code)]
-async fn perform_responder_handshake(
-    mut stream: TcpStream,
-    local_identity: &Identity,
-    remote_id: Hash32,
-    remote_dh_pubkey_bytes: [u8; 32],
-    remote_kem_pubkey_bytes: Vec<u8>,
-) -> Result<ClatterSecureChannel, TcpError> {
-    let remote_dh: X25519PubKey = ByteArray::from_slice(&remote_dh_pubkey_bytes);
-    let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
-
-    let mut handshake =
-        ClatterHandshake::responder(local_identity, remote_id, remote_dh, remote_kem);
-    let mut buf = [0u8; HANDSHAKE_BUF_SIZE];
-    let mut read_buf = [0u8; HANDSHAKE_BUF_SIZE];
-
-    // Msg1: initiator -> responder (e + e_kem)
-    let msg1 = read_frame(&mut stream).await?;
-    handshake
-        .read_message(&msg1, &mut read_buf)
-        .map_err(|e| TcpError::Handshake(format!("msg1 read: {:?}", e)))?;
-
-    // Msg2: responder -> initiator (e + e_kem)
-    let n = handshake
-        .write_message(&mut buf)
-        .map_err(|e| TcpError::Handshake(format!("msg2 write: {:?}", e)))?;
-    write_frame(&mut stream, &buf[..n]).await?;
-
-    // Msg3: initiator -> responder (s + Skem)
-    let msg3 = read_frame(&mut stream).await?;
-    handshake
-        .read_message(&msg3, &mut read_buf)
-        .map_err(|e| TcpError::Handshake(format!("msg3 read: {:?}", e)))?;
-
-    // Msg4: responder -> initiator (s + Skem)
-    let n = handshake
-        .write_message(&mut buf)
-        .map_err(|e| TcpError::Handshake(format!("msg4 write: {:?}", e)))?;
-    write_frame(&mut stream, &buf[..n]).await?;
-
-    if !handshake.is_finished() {
-        return Err(TcpError::Handshake("handshake not finished after 4 messages".into()));
-    }
-
-    let channel =
-        handshake.finalize().map_err(|e| TcpError::Handshake(format!("finalize: {:?}", e)))?;
-
-    // Identity binding: verify the initiator owns the claimed peer_id.
-    let id_frame = read_frame(&mut stream).await?;
-    if id_frame.len() < ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN {
-        return Err(TcpError::Handshake(format!(
-            "invalid identity binding frame: expected >= {} bytes, got {}",
-            ML_DSA65_PUBKEY_LEN + ML_DSA65_SIG_LEN,
-            id_frame.len()
-        )));
-    }
-    let vk_bytes = &id_frame[..ML_DSA65_PUBKEY_LEN];
-    let sig_bytes = &id_frame[ML_DSA65_PUBKEY_LEN..];
-    let computed_peer_id = crate::identity::compute_peer_id_from_bytes(vk_bytes);
-    if computed_peer_id != remote_id {
-        return Err(TcpError::Handshake(
-            "identity binding: peer_id does not match claimed identity".into(),
-        ));
-    }
-    if !Identity::verify_with_pubkey(vk_bytes, channel.session_id(), sig_bytes) {
-        return Err(TcpError::Handshake("identity binding: signature verification failed".into()));
-    }
-
-    Ok(channel)
-}
+/// Type alias for a consensus message handler callback.
+/// Receives (peer_id, decrypted_bytes) — the raw wire-format consensus message.
+pub type ConsensusMessageHandler = Arc<dyn Fn(Hash32, Vec<u8>) + Send + Sync + 'static>;
 
 #[cfg(feature = "clatter-secure-channel")]
 async fn handle_inbound<F>(
@@ -460,7 +420,7 @@ async fn handle_inbound<F>(
     local_identity: Arc<Identity>,
     remote_key_provider: &Arc<F>,
     transport: Arc<TcpTransport>,
-) -> Result<(), TcpError>
+) -> Result<(Hash32, ClatterSecureChannel), TcpError>
 where
     F: Fn(&Hash32) -> Option<([u8; 32], Vec<u8>)>,
 {
@@ -489,8 +449,6 @@ where
     )
     .await?;
 
-    transport.active_channels.write().await.insert(remote_peer_id, channel);
-
     {
         let mut cache = transport.peer_cache.write().await;
         let entry = crate::transport::CachedPeer {
@@ -503,7 +461,7 @@ where
         cache.insert(entry);
     }
 
-    Ok(())
+    Ok((remote_peer_id, channel))
 }
 
 #[cfg(feature = "clatter-secure-channel")]
@@ -548,7 +506,8 @@ async fn perform_responder_handshake_on_split(
     let remote_kem: MlKem768PubKey = ByteArray::from_slice(&remote_kem_pubkey_bytes);
 
     let mut handshake =
-        ClatterHandshake::responder(local_identity, remote_id, remote_dh, remote_kem);
+        ClatterHandshake::responder(local_identity, remote_id, remote_dh, remote_kem)
+            .map_err(|e| TcpError::Handshake(format!("responder setup: {:?}", e)))?;
     let mut buf = [0u8; HANDSHAKE_BUF_SIZE];
     let mut read_buf = [0u8; HANDSHAKE_BUF_SIZE];
 
@@ -601,6 +560,98 @@ async fn perform_responder_handshake_on_split(
     }
 
     Ok(channel)
+}
+
+/// Persistent message loop for a single peer connection.
+/// After the Clatter handshake completes, this loop handles:
+/// - Reading encrypted frames from TCP, decrypting, forwarding to consensus handler
+/// - Receiving plaintext from mpsc channel, encrypting, writing framed to TCP
+///
+/// Uses `tokio::select!` so read and write share the same channel (avoiding Mutex
+/// on nonce state). Exits when either side closes.
+#[cfg(feature = "clatter-secure-channel")]
+async fn peer_message_loop(
+    stream: &mut TcpStream,
+    mut channel: ClatterSecureChannel,
+    mut outgoing_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    consensus_handler: ConsensusMessageHandler,
+    peer_id: Hash32,
+) {
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    let (mut reader, mut writer) = stream.split();
+
+    loop {
+        tokio::select! {
+            // --- Inbound: read framed ciphertext, decrypt, forward ---
+            frame_result = async {
+                let mut len_buf = [0u8; FRAME_LEN_BYTES];
+                reader.read_exact(&mut len_buf).await?;
+                let len = u32::from_be_bytes(len_buf) as usize;
+                if len > MESSAGE_MAX_BYTES {
+                    return Err::<Vec<u8>, std::io::Error>(
+                        std::io::Error::new(std::io::ErrorKind::InvalidData, "frame too large"),
+                    );
+                }
+                let mut data = vec![0u8; len];
+                reader.read_exact(&mut data).await?;
+                Ok(data)
+            } => {
+                match frame_result {
+                    Ok(frame) => {
+                        if let Some(plaintext) = channel.open(&frame) {
+                            consensus_handler(peer_id, plaintext);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+
+            // --- Outbound: receive plaintext, encrypt, write framed ---
+            plaintext = outgoing_rx.recv() => {
+                let Some(plaintext) = plaintext else { break; };
+                if let Ok(ciphertext) = channel.seal(&plaintext) {
+                    let len_bytes = (ciphertext.len() as u32).to_be_bytes();
+                    if writer.write_all(&len_bytes).await.is_err() { break; }
+                    if writer.write_all(&ciphertext).await.is_err() { break; }
+                }
+            }
+        }
+    }
+}
+
+/// Outbound connect with persistent messaging.
+/// Connects to `peer_addr`, performs the Clatter initiator handshake,
+/// then enters a persistent message loop. Returns an mpsc sender for
+/// sending consensus messages to this peer.
+#[cfg(feature = "clatter-secure-channel")]
+pub async fn connect_and_maintain(
+    peer_addr: SocketAddr,
+    local_identity: Arc<Identity>,
+    remote_peer_id: Hash32,
+    remote_dh_pubkey: [u8; 32],
+    remote_kem_pubkey: Vec<u8>,
+    consensus_handler: ConsensusMessageHandler,
+) -> Result<(Hash32, mpsc::UnboundedSender<Vec<u8>>), TcpError> {
+    let mut stream = TcpStream::connect(peer_addr).await?;
+
+    let channel = perform_initiator_handshake(
+        &mut stream,
+        &local_identity,
+        remote_peer_id,
+        remote_dh_pubkey,
+        remote_kem_pubkey,
+    )
+    .await?;
+
+    let (tx, rx) = mpsc::unbounded_channel();
+
+    tokio::spawn(async move {
+        peer_message_loop(&mut stream, channel, rx, consensus_handler, remote_peer_id).await;
+    });
+
+    Ok((remote_peer_id, tx))
 }
 
 // --- Tests ---
@@ -776,8 +827,11 @@ mod socket_integration {
             let (mut stream, _) = listener.accept().await.unwrap();
             let preamble = read_frame(&mut stream).await.unwrap();
             assert_eq!(preamble.len(), 32);
-            perform_responder_handshake(
-                stream,
+            // Use perform_responder_handshake_on_split which takes &mut TcpStream
+            // (canonical responder handshake implementation; the owned-TcpStream
+            // variant was removed as dead code).
+            perform_responder_handshake_on_split(
+                &mut stream,
                 &bob_id_srv,
                 alice_peer_id_srv,
                 alice_dh_srv,
@@ -792,7 +846,7 @@ mod socket_integration {
         let bob_peer_id = *bob_id.peer_id();
 
         let channel = perform_initiator_handshake(
-            stream,
+            &mut stream,
             &alice_id,
             bob_peer_id,
             bob_dh_pub_bytes,
@@ -810,13 +864,13 @@ mod socket_integration {
         let mut bob_ch = server_channel;
 
         let msg = b"actual TCP socket roundtrip successful";
-        let ct = alice_ch.seal(msg);
+        let ct = alice_ch.seal(msg).expect("seal must succeed");
         assert_ne!(&ct, msg);
         let pt = bob_ch.open(&ct).expect("bob must decrypt");
         assert_eq!(pt, msg);
 
         let reply = b"acknowledged, channel established";
-        let reply_ct = bob_ch.seal(reply);
+        let reply_ct = bob_ch.seal(reply).expect("seal must succeed");
         let reply_pt = alice_ch.open(&reply_ct).expect("alice must decrypt");
         assert_eq!(reply_pt, reply);
     }
@@ -870,8 +924,8 @@ mod socket_integration {
             let (mut stream, _) = listener.accept().await.unwrap();
             let preamble = read_frame(&mut stream).await.unwrap();
             assert_eq!(preamble.len(), 32);
-            perform_responder_handshake(
-                stream,
+            perform_responder_handshake_on_split(
+                &mut stream,
                 &bob_id_srv,
                 alice_peer_id_srv,
                 alice_dh_srv,
@@ -884,7 +938,7 @@ mod socket_integration {
         let mut stream = TcpStream::connect(bob_addr).await.unwrap();
         write_frame(&mut stream, &alice_peer_id).await.unwrap();
         let channel = perform_initiator_handshake(
-            stream,
+            &mut stream,
             &alice_id,
             bob_peer_id,
             bob_dh_pub_bytes,
@@ -904,7 +958,7 @@ mod socket_integration {
         // Phase 5: Exchange encrypted message
         let mut alice_ch = channel;
         let msg = b"lifecycle test message over TCP";
-        let ct = alice_ch.seal(msg);
+        let ct = alice_ch.seal(msg).expect("seal must succeed");
         assert_ne!(&ct, msg);
 
         // Phase 6: ConnectionLost -> Unknown

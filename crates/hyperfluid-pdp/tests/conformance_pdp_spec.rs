@@ -60,8 +60,8 @@ fn conforms_to_pdp_spec_1_7_deterministic_evaluation() {
     let ctx = make_ctx(50, 1000, 0, None);
 
     let mut audit_log = AuditLog::new();
-    let r1 = evaluate(&request, &ctx, &mut audit_log);
-    let r2 = evaluate(&request, &ctx, &mut audit_log);
+    let r1 = evaluate(&request, &ctx, &mut audit_log, None);
+    let r2 = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(r1.decision, r2.decision);
     assert_eq!(r1.deny_reason, r2.deny_reason);
 }
@@ -71,7 +71,7 @@ fn conforms_to_pdp_spec_1_7_schema_violation_rejected() {
     let request = make_request([0u8; 32], [1u8; 32], ActionType::ClaimTaskLease, 1, 100);
     let ctx = make_ctx(0, 1000, 0, None);
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::SchemaViolation));
 }
@@ -87,7 +87,7 @@ fn conforms_to_pdp_spec_1_7_signature_verification_valid() {
     request.agent_signature = sk.sign(&msg).to_vec();
     let ctx = make_ctx(50, 1000, 0, Some(pk));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.deny_reason, None);
 }
 
@@ -103,7 +103,7 @@ fn conforms_to_pdp_spec_1_7_signature_invalid_wrong_key() {
     request.agent_signature = sk.sign(&msg).to_vec();
     let ctx = make_ctx(50, 1000, 0, Some(pk_b));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
 }
@@ -120,7 +120,7 @@ fn conforms_to_pdp_spec_1_7_signature_invalid_tampered() {
     request.nonce = 999;
     let ctx = make_ctx(50, 1000, 0, Some(pk));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
 }
@@ -131,7 +131,7 @@ fn conforms_to_pdp_spec_1_7_signature_rejected_no_key_binding() {
     let request = make_request([1u8; 32], agent_id, ActionType::ClaimTaskLease, 1, 100);
     let ctx = make_ctx(50, 1000, 0, None);
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::SignatureInvalid));
 }
@@ -149,7 +149,7 @@ fn conforms_to_pdp_spec_1_7_replay_protection_duplicate_plan_id() {
     let mut ctx = make_ctx(50, 1000, 0, Some(pk));
     ctx.consumed_plan_ids = vec![plan_id];
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
 }
@@ -165,7 +165,7 @@ fn conforms_to_pdp_spec_1_7_replay_wrong_nonce_rejected() {
     request.agent_signature = sk.sign(&msg).to_vec();
     let ctx = make_ctx(50, 1000, 3, Some(pk));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::ReplayDetected));
 }
@@ -181,7 +181,7 @@ fn conforms_to_pdp_spec_1_7_ttl_expired_rejected() {
     request.agent_signature = sk.sign(&msg).to_vec();
     let ctx = make_ctx(100, 1000, 0, Some(pk));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::TTLExpired));
 }
@@ -203,7 +203,7 @@ fn conforms_to_pdp_spec_1_7_quota_exhaustion_rejected() {
         window_start_height: 0,
     }];
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::QuotaExhausted));
 }
@@ -219,7 +219,7 @@ fn conforms_to_pdp_spec_1_7_fee_check_insufficient_balance() {
     request.agent_signature = sk.sign(&msg).to_vec();
     let ctx = make_ctx(50, 0, 0, Some(pk));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied);
     assert_eq!(result.deny_reason, Some(DenyReason::InsufficientFunds));
 }
@@ -235,7 +235,7 @@ fn conforms_to_pdp_spec_1_7_full_chain_approval() {
     request.agent_signature = sk.sign(&msg).to_vec();
     let ctx = make_ctx(50, 1000, 0, Some(pk));
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &ctx, &mut audit_log);
+    let result = evaluate(&request, &ctx, &mut audit_log, None);
     assert_eq!(result.deny_reason, None);
 }
 

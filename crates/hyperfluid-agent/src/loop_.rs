@@ -67,6 +67,7 @@ pub struct AgentRuntime {
     pub limits: ResourceLimits,
     pub state: AgentLoopState,
     pub identity: IdentityBlock,
+    pub p2p_identity: Option<hyperfluid_p2p::identity::Identity>,
     pub db: Database,
     pub working_dir: PathBuf,
     pub shutdown: Arc<AtomicBool>,
@@ -135,7 +136,8 @@ impl AgentRuntime {
         }
 
         // Create LLM provider from config
-        let provider = llm::provider_from_config(&config.llm);
+        let provider = llm::provider_from_config(&config.llm)
+            .map_err(|e| AgentError::Config(format!("LLM provider setup: {}", e)))?;
 
         Ok(Self {
             config,
@@ -143,6 +145,7 @@ impl AgentRuntime {
             limits,
             state,
             identity,
+            p2p_identity: None,
             db,
             working_dir: working_dir.to_path_buf(),
             shutdown: Arc::new(AtomicBool::new(false)),
@@ -239,6 +242,24 @@ impl AgentRuntime {
             } else {
                 Vec::new()
             };
+
+            // 6a. Isolation checks before tool execution
+            if let Err(e) =
+                crate::isolation::enforce_disk_quota(&self.working_dir, self.limits.max_disk_bytes)
+            {
+                tracing::warn!("Disk quota check: {}", e);
+            }
+            if let Ok(fd_limit) =
+                crate::isolation::check_file_descriptor_limit(self.limits.max_file_descriptors)
+            {
+                if fd_limit > 0 && fd_limit < self.limits.max_file_descriptors {
+                    tracing::warn!(
+                        "FD limit ({}) is below configured max ({})",
+                        fd_limit,
+                        self.limits.max_file_descriptors
+                    );
+                }
+            }
 
             // 6b. Run-forever guard: if no tool calls and no active work, nudge the agent
             if tool_calls.is_empty() {
@@ -348,20 +369,48 @@ impl AgentRuntime {
             self.trigger_handoff()?;
         }
 
-        // 4. [LLM call — stubbed]
-        let llm_response = LlmResponse {
-            content: String::new(),
-            tokens_used: 10, // simulate some token usage per iteration
-            finish_reason: "stub".to_string(),
-        };
+        // 4. Build messages for LLM
+        let recent_msgs: Vec<LlmMessage> = self
+            .db
+            .get_recent_messages(1000)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(role, content, _timestamp)| LlmMessage { role, content })
+            .collect();
+
+        // 4b. Call the LLM provider
+        let llm_request =
+            LlmRequest { system_prompt: _system_prompt, messages: recent_msgs, max_tokens: 4096 };
+        let llm_response = self.provider.complete(&llm_request)?;
+
         self.state.total_tokens_used =
             self.state.total_tokens_used.saturating_add(llm_response.tokens_used as u64);
         self.db.insert_message("assistant", &llm_response.content)?;
 
-        // 5. Parse tool calls (stub — empty)
-        let tool_calls: Vec<ToolCall> = Vec::new();
+        // 5. Parse tool calls from LLM response (if any)
+        let tool_calls: Vec<ToolCall> = if llm_response.content.trim().is_empty() {
+            Vec::new()
+        } else if let Some(start) = llm_response.content.find('[') {
+            let end = llm_response.content[start..].find(']').map(|e| start + e + 1);
+            match end {
+                Some(end) => {
+                    serde_json::from_str(&llm_response.content[start..end]).unwrap_or_default()
+                }
+                None => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
 
-        // 6. Execute each tool call
+        // 6. Isolation checks before tool execution
+        if let Err(e) =
+            crate::isolation::enforce_disk_quota(&self.working_dir, self.limits.max_disk_bytes)
+        {
+            tracing::warn!("Disk quota check: {}", e);
+        }
+        let _ = crate::isolation::check_file_descriptor_limit(self.limits.max_file_descriptors);
+
+        // 6a. Execute each tool call
         for tc in &tool_calls {
             if let Err(e) = tools::validate_tool_input(&tc.tool_name, &tc.arguments) {
                 let now = unix_timestamp_now();
@@ -454,13 +503,38 @@ impl AgentRuntime {
         let todos_snapshot = self.db.get_active_todos()?;
 
         // Inject handoff reflection prompt and capture LLM summary
-        // (stub: uses internal state JSON until LLM provider is wired)
         self.db.insert_message("user", prompt::HANDOFF_REFLECTION_PROMPT)?;
-        let summary: Vec<u8> = {
-            // TODO: replace with LLM call using HANDOFF_REFLECTION_PROMPT
-            // The LLM response text should be saved as the summary.
-            // Current fallback: serialized agent state (not useful to the LLM).
-            serde_json::to_vec(&self.state).unwrap_or_default()
+
+        // Call LLM to generate a prose summary of the recent conversation
+        let recent_msgs: Vec<LlmMessage> = self
+            .db
+            .get_recent_messages(100)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(role, content, _timestamp)| LlmMessage { role, content })
+            .collect();
+
+        let summary_request = LlmRequest {
+            system_prompt: "You are summarizing an agent session. Provide a brief prose \
+                summary of what was accomplished, what is in progress, and what to do next."
+                .to_string(),
+            messages: recent_msgs,
+            max_tokens: 1024,
+        };
+
+        let summary: Vec<u8> = match self.provider.complete(&summary_request) {
+            Ok(response) => {
+                if response.content.is_empty() {
+                    // Fallback: use serialized state if LLM returns nothing
+                    serde_json::to_vec(&self.state).unwrap_or_default()
+                } else {
+                    response.content.into_bytes()
+                }
+            }
+            Err(_) => {
+                // Fallback on LLM failure: serialize state
+                serde_json::to_vec(&self.state).unwrap_or_default()
+            }
         };
 
         let record = HandoffRecord {
@@ -579,7 +653,8 @@ impl AgentRuntime {
         }
 
         // Create LLM provider from config (not stub)
-        let provider = llm::provider_from_config(&config.llm);
+        let provider = llm::provider_from_config(&config.llm)
+            .map_err(|e| AgentError::Config(format!("LLM provider setup: {}", e)))?;
 
         Ok(Self {
             config,
@@ -587,6 +662,7 @@ impl AgentRuntime {
             limits,
             state,
             identity,
+            p2p_identity: None,
             db,
             working_dir: working_dir.to_path_buf(),
             shutdown: Arc::new(AtomicBool::new(false)),
@@ -604,6 +680,57 @@ impl AgentRuntime {
         let json = serde_json::to_string(&self.state)?;
         self.db.set_state("loop_state", &json)?;
         Ok(())
+    }
+}
+
+// ── Load or Create (for --run CLI mode) ──
+
+impl AgentRuntime {
+    /// Loads or creates an AgentRuntime from `config.toml` and `agent.key` files.
+    ///
+    /// 1. Loads config from `config_path`.
+    /// 2. Loads or generates an ML-DSA-65 identity key from `key_path`.
+    /// 3. Creates the runtime with the seeded identity.
+    ///
+    /// This is the primary entry point for the `--run` CLI mode.
+    pub fn load_or_create(config_path: &Path, key_path: &Path) -> Result<Self, AgentError> {
+        let config = Config::load(config_path)
+            .map_err(|e| AgentError::Config(format!("Failed to load config: {}", e)))?;
+
+        // Load or generate identity key
+        let p2p_identity = if key_path.exists() {
+            let seed_bytes = std::fs::read(key_path).map_err(|e| AgentError::Io(e))?;
+            if seed_bytes.len() != 32 {
+                return Err(AgentError::Config(format!(
+                    "Agent key must be exactly 32 bytes, got {}",
+                    seed_bytes.len()
+                )));
+            }
+            let mut seed = [0u8; 32];
+            seed.copy_from_slice(&seed_bytes);
+            hyperfluid_p2p::identity::Identity::from_seed(&seed)
+        } else {
+            let identity = hyperfluid_p2p::identity::Identity::generate();
+            let seed = identity.to_seed();
+            std::fs::write(key_path, &seed).map_err(|e| AgentError::Io(e))?;
+            identity
+        };
+
+        let db_path = config_path.parent().unwrap_or(Path::new(".")).join("agent.db");
+        let working_dir = config_path.parent().unwrap_or(Path::new(".")).join("work");
+
+        let mut runtime = Self::new(config, &db_path, &working_dir)?;
+        runtime.p2p_identity = Some(p2p_identity);
+
+        // Update identity block with ML-DSA derived peer id
+        if let Some(ref id) = runtime.p2p_identity {
+            runtime.identity = IdentityBlock {
+                agent_id: *id.peer_id(),
+                trust_stage: runtime.identity.trust_stage,
+            };
+        }
+
+        Ok(runtime)
     }
 }
 
@@ -680,6 +807,8 @@ mod tests {
         cfg.limits.loop_interval_ms = 10; // fast for tests
         cfg.limits.handoff_threshold_pct = 70;
         cfg.limits.handoff_trigger_messages = 50;
+        cfg.llm.provider = "stub".to_string();
+        cfg.llm.model = "test".to_string();
         cfg.llm.context_limit_tokens = 8192;
         cfg
     }
@@ -945,20 +1074,21 @@ project_name = "hyperfluid-agent"
 agent_name = "recovery-agent"
 
 [llm]
-provider = "local"
-model = "default"
+provider = "stub"
+model = "test"
+context_limit_tokens = 8192
 
 [limits]
 loop_interval_ms = 10
 tool_timeout_ms = 120000
 handoff_threshold_pct = 70
 handoff_trigger_messages = 50
-max_ram_bytes = 0
-max_cpu_cores = 0
-cpu_throttle_pct = 0
-max_disk_bytes = 0
-max_file_descriptors = 0
-max_concurrent_connections = 0
+max_ram_bytes = 536870912
+max_cpu_cores = 1
+cpu_throttle_pct = 50
+max_disk_bytes = 1073741824
+max_file_descriptors = 256
+max_concurrent_connections = 10
 "#;
         std::fs::write(&config_path, config_toml).unwrap();
 

@@ -39,7 +39,7 @@ impl Committee {
     /// Sort ensures determinism regardless of reveal arrival order.
     /// The fallback uses only historical entropy (previous seed) plus epoch number —
     /// no current-epoch malleable data.
-    /// Staged for commit-reveal.
+    /// Staged for commit-reveal in Stage 03.
     #[allow(dead_code)]
     pub fn compute_committee_seed(
         epoch: u64,
@@ -126,7 +126,8 @@ impl Committee {
 
             let total_stake: u128 = stakes.iter().sum();
             let selector = if total_stake > 0 {
-                let selector_bytes: [u8; 16] = entropy[..16].try_into().unwrap();
+                let mut selector_bytes = [0u8; 16];
+                selector_bytes.copy_from_slice(&entropy[..16]);
                 u128::from_le_bytes(selector_bytes) % total_stake
             } else {
                 0u128
@@ -254,6 +255,11 @@ pub struct TransactionEnvelope {
     pub tx_payload: Vec<u8>,
     pub approved_plan_id: Option<Hash32>,
     pub gateway_signature: Option<Signature>,
+    /// ML-DSA-65 signature from the agent who authored this transaction.
+    /// Verified against `key_bindings` in PDP validation.
+    /// Empty vec if signature is not yet provided (SPEC_DEVIATION: pre-signature
+    /// phase — all agents are trusted for now).
+    pub signature: Vec<u8>,
 }
 
 /// All transaction types on the protocol. Source: consensus-spec.md Section 1.3

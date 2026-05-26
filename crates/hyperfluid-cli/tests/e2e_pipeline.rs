@@ -77,7 +77,7 @@ fn e2e_transfer_flow_full_pipeline() {
     };
 
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &pdp_ctx, &mut audit_log);
+    let result = evaluate(&request, &pdp_ctx, &mut audit_log, None);
 
     assert_eq!(result.decision, Decision::Approved, "PDP must approve valid signed transfer");
     assert_eq!(result.deny_reason, None);
@@ -157,7 +157,7 @@ fn e2e_rejects_tampered_request_after_cli_sign() {
     };
 
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &pdp_ctx, &mut audit_log);
+    let result = evaluate(&request, &pdp_ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied, "PDP must reject tampered request");
     assert_eq!(result.deny_reason, Some(hyperfluid_pdp::types::DenyReason::SignatureInvalid));
 }
@@ -191,7 +191,7 @@ fn e2e_rejects_unsigned_request() {
     };
 
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &pdp_ctx, &mut audit_log);
+    let result = evaluate(&request, &pdp_ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Denied, "PDP must reject unsigned request");
     assert_eq!(result.deny_reason, Some(hyperfluid_pdp::types::DenyReason::SignatureInvalid));
 }
@@ -227,8 +227,8 @@ fn e2e_deterministic_pipeline() {
     };
 
     let mut audit_log = AuditLog::new();
-    let r1 = evaluate(&request, &pdp_ctx, &mut audit_log);
-    let r2 = evaluate(&request, &pdp_ctx, &mut audit_log);
+    let r1 = evaluate(&request, &pdp_ctx, &mut audit_log, None);
+    let r2 = evaluate(&request, &pdp_ctx, &mut audit_log, None);
 
     assert_eq!(r1.decision, r2.decision);
     assert_eq!(r1.deny_reason, r2.deny_reason);
@@ -266,7 +266,7 @@ fn e2e_task_create_full_pipeline() {
     };
 
     let mut audit_log = AuditLog::new();
-    let result = evaluate(&request, &pdp_ctx, &mut audit_log);
+    let result = evaluate(&request, &pdp_ctx, &mut audit_log, None);
     assert_eq!(result.decision, Decision::Approved, "PDP must approve valid task create");
 
     // State machine: create task with escrow

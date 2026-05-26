@@ -1,6 +1,19 @@
 // === C6 Fast-Path: Topic Merge Lifecycle ===
 //
 // Source: fastpath-spec.md §1.4 State Transitions
+//
+// # Cryptographic Signature Handling
+//
+// This crate deliberately avoids cryptographic dependencies. All signature
+// verification for fast-path proposals, approvals, and challenges is
+// DELEGATED to the consensus driver (caller). The fast-path engine operates
+// on already-verified data.
+//
+// SPEC_DEVIATION: signature verification delegated to caller (consensus
+// driver) to keep fast-path crate free of crypto dependencies. The engine
+// performs a debug_assert! sanity check that signature byte vectors are
+// non-empty at each entry point, but does NOT verify cryptographic
+// signatures.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -44,20 +57,36 @@ impl FastPathEngine {
 
     pub fn submit_proposal(
         &mut self,
-        proposal: FastPathProposal,
+        mut proposal: FastPathProposal,
         current_height: u64,
-    ) -> Result<(), FastPathError> {
+    ) -> Result<Hash32, FastPathError> {
+        // SPEC_DEVIATION: proposer signature verified by consensus driver before calling
+        debug_assert!(
+            !proposal.proposer_signature.is_empty(),
+            "caller must verify proposer signature before submit_proposal"
+        );
+
         if proposal.expires_at_height <= current_height {
             return Err(FastPathError::ProposalExpired);
         }
+
+        // Compute canonical proposal ID from content (F-85)
+        proposal.proposal_id = compute_proposal_id(
+            &proposal.topic_id,
+            &proposal.proposer_id,
+            &proposal.base_topic_head,
+            &proposal.proposed_head,
+            current_height,
+        );
 
         // Duplicate proposal check
         if self.proposals.iter().any(|p| p.proposal_id == proposal.proposal_id) {
             return Err(FastPathError::DuplicateProposal);
         }
 
+        let pid = proposal.proposal_id;
         self.proposals.push(proposal);
-        Ok(())
+        Ok(pid)
     }
 
     // ── Review & Certificate Issuance ────────────────────────────────────
@@ -76,27 +105,38 @@ impl FastPathEngine {
             .find(|p| p.proposal_id == proposal_id)
             .ok_or(FastPathError::ProposalNotFound)?;
 
-        // Count unique approvers and their total weight
-        let mut total_approvals: u128 = 0;
-        let mut seen_reviewers = BTreeSet::new();
+        // Count unique participants and their total weight (F-56)
+        let mut total_participants: u128 = 0;
+        let mut unseen_reviewers = BTreeSet::new();
         let mut valid_approvals = Vec::new();
 
         for sig in &approvals {
-            if sig.vote != ReviewerVote::Approve {
-                continue;
+            // Reject duplicate reviewer regardless of vote type
+            if !unseen_reviewers.insert(sig.reviewer_id) {
+                return Err(FastPathError::ReviewerNotIndependent);
             }
-            if !seen_reviewers.insert(sig.reviewer_id) {
-                return Err(FastPathError::ReviewerNotIndependent); // duplicate
+            total_participants += 1; // Simplified: each reviewer = 1 weight unit
+
+            match sig.vote {
+                ReviewerVote::Approve => {
+                    valid_approvals.push(sig.clone());
+                }
+                ReviewerVote::Deny | ReviewerVote::Abstain => {
+                    // Counted toward quorum but not toward approval
+                }
             }
-            total_approvals += 1; // Simplified: each reviewer = 1 weight unit
-            valid_approvals.push(sig.clone());
         }
 
-        // Check quorum: need 2f+1 weighted approvals (ceil division)
+        // Check quorum: need 2f+1 weighted participants (ceil division)
         let quorum_weight =
             (topic_snapshot_weight * self.params.quorum_threshold_num as u128).div_ceil(100);
-        if total_approvals < quorum_weight {
+        if total_participants < quorum_weight {
             return Err(FastPathError::InsufficientQuorum);
+        }
+
+        // Check at least one approval (F-27, F-56)
+        if valid_approvals.is_empty() {
+            return Err(FastPathError::AllVotesDeny);
         }
 
         // At least one independent reviewer (different from proposer)
@@ -104,20 +144,25 @@ impl FastPathEngine {
             return Err(FastPathError::ReviewerNotIndependent);
         }
 
+        // Build aggregate signature from all approval signatures (F-27)
+        let aggregate_signature: Vec<u8> =
+            valid_approvals.iter().flat_map(|s| s.signature.clone()).collect();
+
         let certificate = FastPathCertificate {
             proposal_id,
             topic_id: proposal.topic_id,
             base_topic_head: proposal.base_topic_head,
             proposed_head: proposal.proposed_head,
             approvals: valid_approvals,
-            aggregate_signature: vec![],
+            aggregate_signature,
             signer_set_hash,
             issued_at_height: current_height,
             challenge_until_height: current_height + self.params.challenge_window_blocks,
         };
 
         self.certificates.push(certificate);
-        Ok(self.certificates.last().unwrap())
+        // F-54: replace unwrap with proper error propagation
+        self.certificates.last().ok_or(FastPathError::CertificateNotFound)
     }
 
     // ── Per-Reviewer Approval Accumulation ───────────────────────────────
@@ -141,17 +186,19 @@ impl FastPathEngine {
         current_height: u64,
         topic_snapshot_weight: u128,
     ) -> Result<Option<&FastPathCertificate>, FastPathError> {
+        // SPEC_DEVIATION: signature verified by consensus driver before calling
+        debug_assert!(
+            !approval.signature.is_empty(),
+            "caller must verify approval signature before submit_approval"
+        );
+
         // 1. Verify proposal exists
         if !self.proposals.iter().any(|p| p.proposal_id == proposal_id) {
             return Err(FastPathError::ProposalNotFound);
         }
 
-        // 2. Only count Approve votes — rejections handled by challenge mechanism
-        if approval.vote != ReviewerVote::Approve {
-            return Ok(None);
-        }
-
-        // 3. Check for duplicate and add to pending
+        // 2. Store all vote types (Approve, Deny, Abstain) for quorum counting (F-57, F-86)
+        //    Duplicate detection applied regardless of vote type.
         let mut has_duplicate = false;
         {
             let pending = self.pending_approvals.entry(proposal_id).or_default();
@@ -166,22 +213,32 @@ impl FastPathEngine {
             return Err(FastPathError::ReviewerNotIndependent);
         }
 
-        // 4. Snapshot the accumulated approvals to free the mutable borrow
+        // 3. Snapshot the accumulated approvals to free the mutable borrow
         let all_approvals = self.pending_approvals.get(&proposal_id).cloned().unwrap_or_default();
 
-        // 5. Check quorum: need 2f+1 weighted approvals
-        let total_approvals = all_approvals.len() as u128;
+        // 4. Check quorum: need 2f+1 weighted participants (all types count)
+        let total_participants = all_approvals.len() as u128;
         let quorum_weight =
             (topic_snapshot_weight * self.params.quorum_threshold_num as u128).div_ceil(100);
-        if total_approvals < quorum_weight {
+        if total_participants < quorum_weight {
             return Ok(None);
+        }
+
+        // 5. Check for at least one Approve vote (F-57, F-86)
+        if !all_approvals.iter().any(|s| s.vote == ReviewerVote::Approve) {
+            // All votes are Deny/Abstain — proposal fails, clear pending
+            self.pending_approvals.remove(&proposal_id);
+            return Err(FastPathError::AllVotesDeny);
         }
 
         // 6. Independence check: at least one approver is not the proposer
         let Some(proposal) = self.proposals.iter().find(|p| p.proposal_id == proposal_id) else {
             return Err(FastPathError::ProposalNotFound);
         };
-        if !all_approvals.iter().any(|sig| sig.reviewer_id != proposal.proposer_id) {
+        if !all_approvals
+            .iter()
+            .any(|sig| sig.reviewer_id != proposal.proposer_id && sig.vote == ReviewerVote::Approve)
+        {
             return Err(FastPathError::ReviewerNotIndependent);
         }
 
@@ -213,7 +270,8 @@ impl FastPathEngine {
             Ok(_) => {
                 // Clear pending — certificate is now stored in self.certificates
                 self.pending_approvals.remove(&proposal_id);
-                Ok(Some(self.certificates.last().unwrap()))
+                // F-55: replace unwrap with proper error propagation
+                Ok(Some(self.certificates.last().ok_or(FastPathError::CertificateNotFound)?))
             }
             Err(e) => Err(e),
         }
@@ -227,6 +285,12 @@ impl FastPathEngine {
         current_height: u64,
         current_epoch: u64,
     ) -> Result<(), FastPathError> {
+        // SPEC_DEVIATION: signature verified by consensus driver before calling
+        debug_assert!(
+            !challenge.signature.is_empty(),
+            "caller must verify challenge signature before submit_challenge"
+        );
+
         let cert = self
             .certificates
             .iter()
@@ -301,7 +365,11 @@ impl FastPathEngine {
             return Err(FastPathError::Challenged);
         }
 
-        let proposal = self.proposals.iter_mut().find(|p| p.proposal_id == proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .iter_mut()
+            .find(|p| p.proposal_id == proposal_id)
+            .ok_or(FastPathError::ProposalNotFound)?;
 
         // Advance topic head
         let new_head = proposal.proposed_head;
@@ -330,8 +398,7 @@ impl FastPathEngine {
 }
 
 /// Compute a proposal ID from its content.
-/// Staged for client-side ID derivation.
-#[allow(dead_code)]
+/// Used in submit_proposal to derive the canonical proposal ID.
 pub fn compute_proposal_id(
     topic_id: &Hash32,
     proposer_id: &Hash32,
@@ -363,6 +430,8 @@ pub enum FastPathError {
     ChallengeRateLimitExceeded,
     Challenged,
     TopicMismatch,
+    /// All submitted votes were Deny/Abstain — no approvals to certify.
+    AllVotesDeny,
 }
 
 #[cfg(test)]
@@ -372,40 +441,40 @@ mod tests {
     #[test]
     fn submit_proposal_succeeds() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = compute_proposal_id(&[0xAA; 32], &[0xBB; 32], &[0x00; 32], &[0xFF; 32], 1);
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten by engine
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3], // non-empty for debug_assert
         };
 
         let result = engine.submit_proposal(proposal, 100);
         assert!(result.is_ok());
+        let returned_id = result.unwrap();
+        assert_ne!(returned_id, [0u8; 32]); // ID was computed, not the dummy
     }
 
     #[test]
     fn issue_certificate_with_quorum() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x01; 32];
         let proposer_id = [0xBB; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten by engine
             topic_id: [0xAA; 32],
             proposer_id,
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         // 70 approvals → quorum of 67 met
         let approvals: Vec<ReviewerSignature> = (0..70u8)
@@ -413,7 +482,7 @@ mod tests {
                 reviewer_id: [i; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![i; 8], // non-empty for aggregate
             })
             .collect();
 
@@ -422,24 +491,25 @@ mod tests {
         let cert = result.unwrap();
         assert_eq!(cert.proposal_id, p_id);
         assert_eq!(cert.challenge_until_height, 200 + 144);
+        // F-27: aggregate_signature should be non-empty
+        assert!(!cert.aggregate_signature.is_empty());
     }
 
     #[test]
     fn insufficient_quorum_rejected() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x02; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten by engine
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         // Only 10 approvals, need 67
         let approvals: Vec<ReviewerSignature> = (0..10u8)
@@ -447,7 +517,7 @@ mod tests {
                 reviewer_id: [i; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![i; 8],
             })
             .collect();
 
@@ -458,26 +528,25 @@ mod tests {
     #[test]
     fn finalize_unchallenged_certificate() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x03; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         let approvals: Vec<ReviewerSignature> = (0..70u8)
             .map(|i| ReviewerSignature {
                 reviewer_id: [i; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![i; 8],
             })
             .collect();
 
@@ -491,26 +560,25 @@ mod tests {
     #[test]
     fn challenge_submitted_successfully() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x04; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         let approvals: Vec<ReviewerSignature> = (0..70u8)
             .map(|i| ReviewerSignature {
                 reviewer_id: [i; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![i; 8],
             })
             .collect();
         engine.issue_certificate(p_id, approvals, [0; 32], 200, 100).unwrap();
@@ -521,7 +589,7 @@ mod tests {
             challenger_id: [0xCC; 32],
             evidence_hash: [0xEE; 32],
             challenger_bond: 100,
-            signature: vec![],
+            signature: vec![1, 2, 3, 4], // non-empty for debug_assert
         };
 
         let result = engine.submit_challenge(challenge, 250, 0);
@@ -537,25 +605,24 @@ mod tests {
         let challenger = [0xCC; 32];
 
         // First, create a certificate
-        let p_id = [0x05; 32];
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         let approvals: Vec<ReviewerSignature> = (0..70u8)
             .map(|i| ReviewerSignature {
                 reviewer_id: [i; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![i; 8],
             })
             .collect();
         engine.issue_certificate(p_id, approvals, [0; 32], 200, 100).unwrap();
@@ -568,7 +635,7 @@ mod tests {
                 challenger_id: challenger,
                 evidence_hash: [0xEE; 32],
                 challenger_bond: 100,
-                signature: vec![],
+                signature: vec![1, 2, 3, 4], // non-empty for debug_assert
             };
             engine.submit_challenge(challenge, 250, 0).unwrap();
         }
@@ -580,7 +647,7 @@ mod tests {
             challenger_id: challenger,
             evidence_hash: [0xEE; 32],
             challenger_bond: 100,
-            signature: vec![],
+            signature: vec![5, 6, 7, 8], // non-empty for debug_assert
         };
         assert_eq!(
             engine.submit_challenge(challenge4, 250, 0),
@@ -591,26 +658,25 @@ mod tests {
     #[test]
     fn certificate_replay_rejected() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x06; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         let approvals: Vec<ReviewerSignature> = (0..70u8)
             .map(|i| ReviewerSignature {
                 reviewer_id: [i; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![i; 8],
             })
             .collect();
         engine.issue_certificate(p_id, approvals, [0; 32], 200, 100).unwrap();
@@ -627,20 +693,19 @@ mod tests {
     #[test]
     fn conforms_to_fastpath_spec_section1_7_submit_approval_accumulates() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x10; 32];
         let proposer_id = [0xBB; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id,
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         // topic_snapshot_weight = 4 → quorum = ceil(4 * 67 / 100) = 3
         let weight = 4u128;
@@ -652,7 +717,7 @@ mod tests {
                 reviewer_id: [1; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![1, 2, 3, 4],
             },
             200,
             weight,
@@ -667,7 +732,7 @@ mod tests {
                 reviewer_id: [2; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![5, 6, 7, 8],
             },
             200,
             weight,
@@ -682,7 +747,7 @@ mod tests {
                 reviewer_id: [3; 32],
                 vote: ReviewerVote::Approve,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![9, 10, 11, 12],
             },
             200,
             weight,
@@ -698,25 +763,24 @@ mod tests {
     #[test]
     fn conforms_to_fastpath_spec_section1_7_duplicate_approval_rejected() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x11; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
         let approval = ReviewerSignature {
             reviewer_id: [1; 32],
             vote: ReviewerVote::Approve,
             reason_hash: [0; 32],
-            signature: vec![],
+            signature: vec![1, 2, 3, 4],
         };
 
         // First submission: Ok(None) — not enough quorum yet
@@ -732,28 +796,28 @@ mod tests {
     #[test]
     fn conforms_to_fastpath_spec_section1_7_approve_vote_required() {
         let mut engine = FastPathEngine::new(FastPathParams::default());
-        let p_id = [0x12; 32];
 
         let proposal = FastPathProposal {
-            proposal_id: p_id,
+            proposal_id: [0; 32], // dummy, overwritten
             topic_id: [0xAA; 32],
             proposer_id: [0xBB; 32],
             base_topic_head: [0x00; 32],
             proposed_head: [0xFF; 32],
             bundle_manifest_hash: [0; 32],
             expires_at_height: 1000,
-            proposer_signature: vec![],
+            proposer_signature: vec![1, 2, 3],
         };
-        engine.submit_proposal(proposal, 100).unwrap();
+        let p_id = engine.submit_proposal(proposal, 100).unwrap();
 
-        // Deny vote should not count toward quorum → Ok(None)
+        // Deny vote is stored and counted toward quorum in total, but
+        // with weight=5 → quorum=4, only 1 participant → Ok(None)
         let result = engine.submit_approval(
             p_id,
             ReviewerSignature {
                 reviewer_id: [1; 32],
                 vote: ReviewerVote::Deny,
                 reason_hash: [0; 32],
-                signature: vec![],
+                signature: vec![1, 2, 3, 4],
             },
             200,
             5,

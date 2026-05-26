@@ -93,7 +93,11 @@ impl TestNode {
 fn make_test_genesis(accounts: Vec<(Hash32, u128)>) -> GenesisConfig {
     let genesis_accounts: Vec<GenesisAccount> = accounts
         .into_iter()
-        .map(|(account_id, balance)| GenesisAccount { account_id, balance, pubkey: None })
+        .map(|(account_id, balance)| GenesisAccount {
+            account_id,
+            balance,
+            pubkey: Some(dummy_pubkey()),
+        })
         .collect();
 
     GenesisConfig {
@@ -128,7 +132,12 @@ fn make_transfer(
         tx_payload: payload.encode(),
         approved_plan_id: None,
         gateway_signature: None,
+        signature: vec![0u8; 3309],
     }
+}
+
+fn dummy_pubkey() -> Vec<u8> {
+    vec![0u8; 1952]
 }
 
 // ─── 1. Two Nodes Produce Blocks Independently ───────────────────────────────

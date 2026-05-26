@@ -9,10 +9,10 @@ pub type Hash32 = [u8; 32];
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReviewerVote {
     Approve,
-    /// Not currently constructed in production code — used via `!= Approve` filter.
-    /// Kept for spec completeness (fastpath-spec.md §1.3 lists Deny as valid vote).
-    #[allow(dead_code)]
+    /// Reviewer explicitly denies the proposal. Counted toward quorum but not approval.
     Deny,
+    /// Reviewer abstains from voting. Counted toward quorum but not approval.
+    Abstain,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

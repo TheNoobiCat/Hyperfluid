@@ -1,6 +1,7 @@
 use clap::Subcommand;
+use hyperfluid_p2p::identity::Identity;
 
-use crate::commands::{format_output, rpc_post};
+use crate::commands::{format_output, rpc_post, sha3_256_hash};
 use crate::OutputFormat;
 
 fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
@@ -36,6 +37,9 @@ pub enum GovernanceAction {
         voter: String,
         #[arg(long)]
         nonce: u64,
+        /// Target hash for the vote (hex, 32 bytes) — required. Previously hardcoded to zero.
+        #[arg(long)]
+        target_hash: String,
     },
     List,
     Get {
@@ -49,6 +53,7 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
+    _identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         GovernanceAction::Propose {
@@ -60,15 +65,8 @@ pub fn run(
         } => {
             let target = parse_hash32(&target_hash)?;
             let proposer_id = parse_hash32(&proposer)?;
-            let proposal_id = {
-                use sha3::Digest;
-                let mut h = sha3::Sha3_256::new();
-                h.update(proposer_id);
-                h.update(target);
-                let mut out = [0u8; 32];
-                out.copy_from_slice(&h.finalize());
-                out
-            };
+            // F-88: Use shared sha3_256_hash
+            let proposal_id = sha3_256_hash(&[proposer_id.as_slice(), target.as_slice()].concat());
             rpc_post(
                 client,
                 node_url,
@@ -83,7 +81,8 @@ pub fn run(
                 }),
             )?
         }
-        GovernanceAction::Vote { proposal_id, option, voter, nonce } => {
+        // F-69: Use provided target_hash instead of hardcoded zero
+        GovernanceAction::Vote { proposal_id, option, voter, nonce, target_hash } => {
             let approve = option.to_lowercase() == "yes" || option.to_lowercase() == "approve";
             rpc_post(
                 client,
@@ -94,7 +93,7 @@ pub fn run(
                     "approve": approve,
                     "voter": voter,
                     "nonce": nonce,
-                    "target_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+                    "target_hash": target_hash,
                 }),
             )?
         }

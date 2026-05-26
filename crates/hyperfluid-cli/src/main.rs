@@ -20,6 +20,14 @@ struct Cli {
     /// Output format: text (default) or json
     #[arg(long, global = true, default_value = "text")]
     output: OutputFormat,
+
+    /// Path to ML-DSA-65 seed file (32 bytes as hex). Default: ~/.hyperfluid/agent.key
+    #[arg(long, global = true)]
+    key_file: Option<String>,
+
+    /// Raw 32-byte hex seed for ML-DSA-65 identity (alternative to --key-file)
+    #[arg(long, global = true)]
+    key_hex: Option<String>,
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -76,20 +84,43 @@ fn main() {
     let cli = Cli::parse();
     let node_url =
         std::env::var("HYPERFLUID_NODE_URL").unwrap_or_else(|_| "http://127.0.0.1:8545".into());
+
+    let identity = std::thread::Builder::new()
+        .stack_size(10 * 1024 * 1024)
+        .spawn({
+            let key_file = cli.key_file.clone();
+            let key_hex = cli.key_hex.clone();
+            move || {
+                commands::load_identity(key_file.as_deref(), key_hex.as_deref())
+                    .unwrap_or_else(|_| hyperfluid_p2p::identity::Identity::generate())
+            }
+        })
+        .expect("failed to spawn identity thread")
+        .join()
+        .expect("identity thread panicked");
+
     let client = reqwest::blocking::Client::new();
 
     let result = match cli.command {
-        Command::Tx { action } => commands::tx::run(action, cli.output, &client, &node_url),
+        Command::Tx { action } => {
+            commands::tx::run(action, cli.output, &client, &node_url, &identity)
+        }
         Command::Query { action } => commands::query::run(action, cli.output, &client, &node_url),
-        Command::Task { action } => commands::task::run(action, cli.output, &client, &node_url),
-        Command::Review { action } => commands::review::run(action, cli.output, &client, &node_url),
+        Command::Task { action } => {
+            commands::task::run(action, cli.output, &client, &node_url, &identity)
+        }
+        Command::Review { action } => {
+            commands::review::run(action, cli.output, &client, &node_url, &identity)
+        }
         Command::Governance { action } => {
-            commands::governance::run(action, cli.output, &client, &node_url)
+            commands::governance::run(action, cli.output, &client, &node_url, &identity)
         }
         Command::FastPath { action } => {
-            commands::fastpath::run(action, cli.output, &client, &node_url)
+            commands::fastpath::run(action, cli.output, &client, &node_url, &identity)
         }
-        Command::Agent { action } => commands::agent::run(action, cli.output, &client, &node_url),
+        Command::Agent { action } => {
+            commands::agent::run(action, cli.output, &client, &node_url, &identity)
+        }
         Command::Idea { action } => commands::idea::run(action, cli.output, &client, &node_url),
     };
 

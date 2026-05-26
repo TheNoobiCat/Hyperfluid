@@ -333,6 +333,12 @@ fn handle_tx_submit(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
         Err(_) => return (400, r#"{"error":"invalid hex in 'payload'"}"#.into()),
     };
 
+    let signature = req
+        .get("signature")
+        .and_then(|v| v.as_str())
+        .map(|s| hex::decode(s).unwrap_or_default())
+        .unwrap_or_default();
+
     let tx_type = match tx_type_str {
         "transfer" => hyperfluid_consensus::types::TxType::TransferTx,
         "task_create" => hyperfluid_consensus::types::TxType::TaskCreateTx,
@@ -403,6 +409,7 @@ fn handle_tx_submit(driver: &mut ConsensusDriver, body: &str) -> (u16, String) {
         tx_payload: payload,
         approved_plan_id: None,
         gateway_signature: None,
+        signature,
     };
 
     // Submit to driver (validates + queues in mempool for next block)
@@ -485,36 +492,66 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
         Ok(id) => id,
         Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
     };
-    let target_hash = req
-        .get("target_hash")
-        .and_then(|v| v.as_str())
-        .and_then(|s| hex::decode(s).ok())
-        .map(|b| {
+    let target_hash = match req.get("target_hash").and_then(|v| v.as_str()) {
+        Some(s) => {
+            let bytes = match hex::decode(s) {
+                Ok(b) => b,
+                Err(_) => {
+                    return (400, r#"{"error":"Invalid target_hash: hex decode failed"}"#.into())
+                }
+            };
+            if bytes.len() != 32 {
+                return (400, r#"{"error":"target_hash must be 32 bytes (64 hex chars)"}"#.into());
+            }
             let mut arr = [0u8; 32];
-            arr.copy_from_slice(&b);
+            arr.copy_from_slice(&bytes);
             arr
-        })
-        .unwrap_or([0u8; 32]);
-    let title_hash = req
-        .get("title_hash")
-        .and_then(|v| v.as_str())
-        .and_then(|s| hex::decode(s).ok())
-        .map(|b| {
+        }
+        None => {
+            // Not provided — default to zero hash.
+            [0u8; 32]
+        }
+    };
+    let title_hash = match req.get("title_hash").and_then(|v| v.as_str()) {
+        Some(s) => {
+            let bytes = match hex::decode(s) {
+                Ok(b) => b,
+                Err(_) => {
+                    return (400, r#"{"error":"Invalid title_hash: hex decode failed"}"#.into())
+                }
+            };
+            if bytes.len() != 32 {
+                return (400, r#"{"error":"title_hash must be 32 bytes (64 hex chars)"}"#.into());
+            }
             let mut arr = [0u8; 32];
-            arr.copy_from_slice(&b);
+            arr.copy_from_slice(&bytes);
             arr
-        })
-        .unwrap_or([0u8; 32]);
-    let description_hash = req
-        .get("description_hash")
-        .and_then(|v| v.as_str())
-        .and_then(|s| hex::decode(s).ok())
-        .map(|b| {
+        }
+        None => [0u8; 32],
+    };
+    let description_hash = match req.get("description_hash").and_then(|v| v.as_str()) {
+        Some(s) => {
+            let bytes = match hex::decode(s) {
+                Ok(b) => b,
+                Err(_) => {
+                    return (
+                        400,
+                        r#"{"error":"Invalid description_hash: hex decode failed"}"#.into(),
+                    )
+                }
+            };
+            if bytes.len() != 32 {
+                return (
+                    400,
+                    r#"{"error":"description_hash must be 32 bytes (64 hex chars)"}"#.into(),
+                );
+            }
             let mut arr = [0u8; 32];
-            arr.copy_from_slice(&b);
+            arr.copy_from_slice(&bytes);
             arr
-        })
-        .unwrap_or([0u8; 32]);
+        }
+        None => [0u8; 32],
+    };
 
     // Compute proposal_id = SHA3-256(proposer || target_hash)
     let proposal_id = {
@@ -530,6 +567,11 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
     // Build SCALE-encoded GovernancePayload (see driver.rs line 62):
     //   proposal_id (32) + proposer_id (32) + is_vote=false (1) + vote_approve=false (1)
     //   + target_hash (32) + title_hash (32) + description_hash (32)
+    let signature = req
+        .get("signature")
+        .and_then(|v| v.as_str())
+        .map(|s| hex::decode(s).unwrap_or_default())
+        .unwrap_or_default();
     let mut payload = Vec::with_capacity(162);
     payload.extend_from_slice(&proposal_id);
     payload.extend_from_slice(&proposer);
@@ -546,6 +588,7 @@ fn handle_governance_propose(driver: &mut ConsensusDriver, body: &str) -> (u16, 
         tx_payload: payload,
         approved_plan_id: None,
         gateway_signature: None,
+        signature,
     };
 
     let accepted = driver.submit_tx(tx).is_ok();
@@ -572,28 +615,66 @@ fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, Str
         Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
     };
     let vote_yes = req.get("approve").and_then(|v| v.as_bool()).unwrap_or(false);
-    let target_hash = req
-        .get("target_hash")
-        .and_then(|v| v.as_str())
-        .and_then(|s| hex::decode(s).ok())
-        .map(|b| {
+    let target_hash = match req.get("target_hash").and_then(|v| v.as_str()) {
+        Some(s) => {
+            let bytes = match hex::decode(s) {
+                Ok(b) => b,
+                Err(_) => {
+                    return (400, r#"{"error":"Invalid target_hash: hex decode failed"}"#.into())
+                }
+            };
+            if bytes.len() != 32 {
+                return (400, r#"{"error":"target_hash must be 32 bytes (64 hex chars)"}"#.into());
+            }
             let mut arr = [0u8; 32];
-            arr.copy_from_slice(&b);
+            arr.copy_from_slice(&bytes);
             arr
-        })
-        .unwrap_or([0u8; 32]);
+        }
+        None => [0u8; 32], // not provided — default to zero hash
+    };
+
+    // Compute title_hash from optional "title" string, or use zero if absent.
+    let title_hash = match req.get("title").and_then(|v| v.as_str()) {
+        Some(title) => {
+            use sha3::Digest;
+            let mut hasher = sha3::Sha3_256::new();
+            hasher.update(title.as_bytes());
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&hasher.finalize());
+            out
+        }
+        None => [0u8; 32], // not provided
+    };
+
+    // Compute description_hash from optional "description" string, or use zero if absent.
+    let description_hash = match req.get("description").and_then(|v| v.as_str()) {
+        Some(desc) => {
+            use sha3::Digest;
+            let mut hasher = sha3::Sha3_256::new();
+            hasher.update(desc.as_bytes());
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&hasher.finalize());
+            out
+        }
+        None => [0u8; 32], // not provided
+    };
 
     // Build SCALE-encoded GovernancePayload for vote:
     //   proposal_id (32) + proposer_id/voter (32) + is_vote=true (1) + vote_approve (1)
     //   + target_hash (32) + title_hash (32) + description_hash (32)
+    let signature = req
+        .get("signature")
+        .and_then(|v| v.as_str())
+        .map(|s| hex::decode(s).unwrap_or_default())
+        .unwrap_or_default();
     let mut payload = Vec::with_capacity(162);
     payload.extend_from_slice(&proposal_id);
     payload.extend_from_slice(&voter);
     payload.push(1u8); // is_vote = true
     payload.push(if vote_yes { 1u8 } else { 0u8 }); // vote_approve
     payload.extend_from_slice(&target_hash);
-    payload.extend_from_slice(&[0u8; 32]); // title_hash (unused for vote)
-    payload.extend_from_slice(&[0u8; 32]); // description_hash (unused for vote)
+    payload.extend_from_slice(&title_hash); // F-83: computed from "title" if provided
+    payload.extend_from_slice(&description_hash); // F-83: computed from "description" if provided
 
     let tx = TransactionEnvelope {
         tx_type: hyperfluid_consensus::types::TxType::GovernanceTx(
@@ -602,6 +683,7 @@ fn handle_governance_vote(driver: &mut ConsensusDriver, body: &str) -> (u16, Str
         tx_payload: payload,
         approved_plan_id: None,
         gateway_signature: None,
+        signature,
     };
 
     let accepted = driver.submit_tx(tx).is_ok();
@@ -831,12 +913,58 @@ fn handle_fastpath_approve(driver: &mut ConsensusDriver, body: &str) -> (u16, St
         Ok(id) => id,
         Err(e) => return (400, format!(r#"{{"error":"{}"}}"#, e)),
     };
-    use hyperfluid_fastpath::types::{ReviewerSignature, ReviewerVote};
-    let approval = ReviewerSignature {
+
+    // F-8: Parse the reviewer's signature (hex-encoded ML-DSA-65 signature)
+    let signature_hex = match req.get("signature").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return (400, r#"{"error":"missing 'signature' field"}"#.into()),
+    };
+    let signature_bytes = match hex::decode(signature_hex) {
+        Ok(b) => b,
+        Err(_) => return (400, r#"{"error":"invalid hex in 'signature'"}"#.into()),
+    };
+
+    // F-25: Compute reason_hash from the reviewer's reason string
+    let reason = req.get("reason").and_then(|v| v.as_str()).unwrap_or("");
+    let reason_hash = {
+        use sha3::Digest;
+        let mut hasher = sha3::Sha3_256::new();
+        hasher.update(reason.as_bytes());
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&hasher.finalize());
+        out
+    };
+
+    // F-8: Look up the reviewer's public key from the state machine account
+    let account = match driver.state_machine.get_account(&reviewer_id) {
+        Some(acct) => acct,
+        None => return (400, r#"{"error":"Reviewer identity not found"}"#.into()),
+    };
+    let pubkey = match account.pubkey.as_ref() {
+        Some(pk) => pk.clone(),
+        None => return (400, r#"{"error":"Reviewer identity not found"}"#.into()),
+    };
+
+    // F-8: Build the signed message: proposal_id (32) || reviewer_id (32) || vote_byte (1) || reason_hash (32)
+    use hyperfluid_p2p::identity::Identity;
+    let vote_byte: u8 = 1u8; // Approve
+    let mut signing_message = Vec::with_capacity(97);
+    signing_message.extend_from_slice(&proposal_id);
+    signing_message.extend_from_slice(&reviewer_id);
+    signing_message.push(vote_byte);
+    signing_message.extend_from_slice(&reason_hash);
+
+    // F-8: Verify the signature against the reviewer's pubkey
+    if !Identity::verify_with_pubkey(&pubkey, &signing_message, &signature_bytes) {
+        return (400, r#"{"error":"Invalid reviewer signature"}"#.into());
+    }
+
+    use hyperfluid_fastpath::types::ReviewerVote;
+    let approval = hyperfluid_fastpath::types::ReviewerSignature {
         reviewer_id,
         vote: ReviewerVote::Approve,
-        signature: vec![],
-        reason_hash: [0u8; 32],
+        signature: signature_bytes,
+        reason_hash,
     };
     let topic_weight: u128 = req.get("topic_weight").and_then(|v| v.as_u64()).unwrap_or(1) as u128;
     match driver.fastpath.submit_approval(proposal_id, approval, driver.height, topic_weight) {

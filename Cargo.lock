@@ -1254,6 +1254,7 @@ dependencies = [
  "chrono",
  "crossterm",
  "hex",
+ "hyperfluid-p2p",
  "ratatui",
  "reqwest",
  "rusqlite",
@@ -1284,6 +1285,7 @@ dependencies = [
  "clap",
  "hex",
  "hyperfluid-collaboration",
+ "hyperfluid-p2p",
  "hyperfluid-pdp",
  "hyperfluid-state",
  "ml-dsa",
@@ -1355,6 +1357,7 @@ dependencies = [
 name = "hyperfluid-node"
 version = "0.1.0"
 dependencies = [
+ "arc-malachitebft-core-types",
  "hex",
  "hyperfluid-artifact",
  "hyperfluid-consensus",
@@ -1379,10 +1382,13 @@ name = "hyperfluid-p2p"
 version = "0.1.0"
 dependencies = [
  "clatter",
+ "hex",
  "ml-dsa",
  "serde",
  "sha3 0.10.9",
+ "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1394,6 +1400,7 @@ dependencies = [
  "serde",
  "sha3 0.10.9",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

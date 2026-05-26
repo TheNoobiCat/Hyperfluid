@@ -1,7 +1,8 @@
 use clap::Subcommand;
+use hyperfluid_p2p::identity::Identity;
 use parity_scale_codec::Encode;
 
-use crate::commands::{format_output, rpc_post};
+use crate::commands::{format_output, rpc_post, sha3_256_hash};
 use crate::OutputFormat;
 
 fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
@@ -12,16 +13,6 @@ fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
     let mut out = [0u8; 32];
     out.copy_from_slice(&bytes);
     Ok(out)
-}
-
-#[allow(dead_code)]
-fn sha3_256_hash(data: &[u8]) -> [u8; 32] {
-    use sha3::Digest;
-    let mut hasher = sha3::Sha3_256::new();
-    hasher.update(data);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&hasher.finalize());
-    out
 }
 
 #[derive(Subcommand)]
@@ -75,6 +66,7 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
+    _identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         FastPathAction::List { topic } => {
@@ -85,18 +77,17 @@ pub fn run(
             let proposed = parse_hash32(&proposed_head)?;
             let manifest_hash = parse_hash32(&manifest)?;
             let proposer_id = parse_hash32(&proposer)?;
-            let proposal_id = {
-                let mut h = sha3::Sha3_256::new();
-                use sha3::Digest;
-                h.update(topic_id);
-                h.update(proposer_id);
-                h.update([0u8; 32]); // base_topic_head = genesis
-                h.update(proposed);
-                h.update(nonce.to_le_bytes());
-                let mut out = [0u8; 32];
-                out.copy_from_slice(&h.finalize());
-                out
-            };
+            // F-88: Use shared sha3_256_hash (removed duplicate dead_code function)
+            let proposal_id = sha3_256_hash(
+                &[
+                    topic_id.as_slice(),
+                    proposer_id.as_slice(),
+                    &[0u8; 32], // base_topic_head = genesis
+                    proposed.as_slice(),
+                    &nonce.to_le_bytes(),
+                ]
+                .concat(),
+            );
             let payload = (proposal_id, topic_id, proposer_id, proposed, false);
             rpc_post(
                 client,

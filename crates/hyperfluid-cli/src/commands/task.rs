@@ -1,8 +1,11 @@
 use clap::Subcommand;
+use hyperfluid_p2p::identity::Identity;
 use parity_scale_codec::Encode;
 
-use crate::commands::{format_output, rpc_post};
+use crate::commands::{format_output, rpc_post, sha3_256_hash, sign_payload, EMPTY_SKILLS_HASH};
 use crate::OutputFormat;
+
+type Hash32 = [u8; 32];
 
 fn parse_hash32(hex_str: &str) -> Result<[u8; 32], String> {
     let bytes = hex::decode(hex_str).map_err(|e| format!("invalid hex: {}", e))?;
@@ -33,6 +36,9 @@ pub enum TaskAction {
         sender: String,
         #[arg(long)]
         nonce: u64,
+        /// Topic ID for task categorization (hex, 32 bytes). Required for submission.
+        #[arg(long)]
+        topic_id: String,
     },
     Status {
         #[arg(long)]
@@ -87,6 +93,7 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
+    identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         TaskAction::Submit {
@@ -98,20 +105,23 @@ pub fn run(
             sponsor,
             sender,
             nonce,
+            topic_id,
         } => {
-            // Task create uses generic task_create payload — encode as SCALE tuple
+            // F-67: Topic ID is now required — parse_hash32 will reject invalid hex
+            let topic_id_bytes = parse_hash32(&topic_id)?;
             let sender_id = parse_hash32(&sender)?;
             let meta_hash = sha3_256_hash(title.as_bytes());
+            // F-89: Use EMPTY_SKILLS_HASH instead of zero for missing skills
             let skills_hash = required_skills
                 .as_deref()
                 .map(|s| sha3_256_hash(s.as_bytes()))
-                .unwrap_or([0u8; 32]);
+                .unwrap_or(EMPTY_SKILLS_HASH);
             let payload = (
-                sender_id,   // proposer_id
-                bounty,      // bounty_agx
-                meta_hash,   // metadata_hash
-                skills_hash, // required_skills_hash
-                [0u8; 32],   // topic_id (derived from seed_ref)
+                sender_id,      // proposer_id
+                bounty,         // bounty_agx
+                meta_hash,      // metadata_hash
+                skills_hash,    // required_skills_hash
+                topic_id_bytes, // topic_id (F-67: no longer hardcoded zero)
                 nonce,
             );
             rpc_post(
@@ -131,17 +141,21 @@ pub fn run(
         TaskAction::Status { task_id } => {
             rpc_post(client, node_url, "/task/status", serde_json::json!({ "task_id": task_id }))?
         }
-        TaskAction::Claim { task_id, agent, nonce: _ } => {
+        // F-31: Wire nonce into Claim payload and sign with Identity
+        TaskAction::Claim { task_id, agent, nonce } => {
             let task_id_bytes = parse_hash32(&task_id)?;
             let agent_id = parse_hash32(&agent)?;
-            let payload = (task_id_bytes, agent_id, 0u128, false); // collateral=0 (filled by driver), trust_stage_flag=false
+            let payload = (task_id_bytes, agent_id, nonce, 0u128, false);
+            let (payload_hex, sig_hex, pubkey_hex) = sign_payload(identity, &payload);
             rpc_post(
                 client,
                 node_url,
                 "/tx/submit",
                 serde_json::json!({
                     "tx_type": "claim_task",
-                    "payload": hex::encode(payload.encode()),
+                    "payload": payload_hex,
+                    "signature": sig_hex,
+                    "pubkey": pubkey_hex,
                 }),
             )?
         }
@@ -196,12 +210,13 @@ pub fn run(
                         })
                         .transpose()?
                         .unwrap_or_default();
+                    // F-90: Use EMPTY_SKILLS_HASH instead of hardcoded zero
                     let skills_hash = c
                         .get("required_skills_hash")
                         .and_then(|v| v.as_str())
                         .map(parse_hash32)
                         .transpose()?
-                        .unwrap_or([0u8; 32]);
+                        .unwrap_or(EMPTY_SKILLS_HASH);
                     Ok((task_id, share, depends_on, skills_hash))
                 })
                 .collect::<Result<Vec<_>, String>>()?;
@@ -227,15 +242,4 @@ pub fn run(
         }
     };
     Ok(format_output(&result, format))
-}
-
-type Hash32 = [u8; 32];
-
-fn sha3_256_hash(data: &[u8]) -> Hash32 {
-    use sha3::Digest;
-    let mut hasher = sha3::Sha3_256::new();
-    hasher.update(data);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&hasher.finalize());
-    out
 }

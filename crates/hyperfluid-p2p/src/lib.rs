@@ -24,7 +24,7 @@ pub use transport::{CachedPeer, PeerCache};
 #[cfg(feature = "clatter-secure-channel")]
 pub use secure_channel::ClatterSecureChannel as SecureChannel;
 
-#[cfg(not(feature = "clatter-secure-channel"))]
+#[cfg(all(not(feature = "clatter-secure-channel"), feature = "mock-secure-channel"))]
 pub use transport::MockSecureChannel as SecureChannel;
 
 #[cfg(feature = "clatter-secure-channel")]
@@ -32,5 +32,5 @@ pub use secure_channel::ClatterHandshake;
 
 pub use types::{
     BootstrapResponse, CapabilityFlags, ConnState, ConnectionState, DHTEntry, DiscoveryConfig,
-    GossipBloomFilter, GossipMessage, Hash32, PeerId, PeerInfo, TrustPolicy,
+    GossipBloomFilter, GossipMessage, Hash32, PeerId, PeerInfo, SecureChannelError, TrustPolicy,
 };

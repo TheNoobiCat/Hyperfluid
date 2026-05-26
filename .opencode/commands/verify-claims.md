@@ -139,4 +139,6 @@ Stage: [current stage from PROJECT-STATUS.md]
 - Total: N
 ```
 
+Write this in a new file called verify-claims-report-[current date].md inside .opencode/verify-claims-reports/
+
 No CI mimic. No doc updates. No fixes. Read-only.

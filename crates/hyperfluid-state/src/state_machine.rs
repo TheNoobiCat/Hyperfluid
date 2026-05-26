@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::smt::SparseMerkleTree;
+use crate::state_sync::Snapshot;
 use crate::{
     state_key, Account, EscrowStatus, Hash32, HeartbeatPayload, KeyPrefix, ReviewRecord,
     ReviewVerdict, Task, TaskLease, TaskStatus, TopicRecord, TopicStatus, TrustStageEnum,
@@ -211,9 +212,30 @@ impl StateMachine {
         }
     }
 
+    /// Set the public key for an account, verifying it matches the pubkey_hash.
+    /// Must be called before the first outgoing transfer (pubkey reveal).
+    /// Returns Rejected if the account doesn't exist, pubkey is already set,
+    /// or the pubkey_hash doesn't match.
+    pub fn reveal_pubkey(&mut self, account_id: Hash32, pubkey_bytes: Vec<u8>) -> ExecutionResult {
+        match self.accounts.get_mut(&account_id) {
+            Some(account) => {
+                if account.pubkey.is_some() {
+                    return ExecutionResult::Rejected; // already revealed
+                }
+                let computed_hash = crate::sha3_256(&pubkey_bytes);
+                if computed_hash != account.pubkey_hash {
+                    return ExecutionResult::Rejected; // hash mismatch
+                }
+                account.pubkey = Some(pubkey_bytes);
+                ExecutionResult::Success
+            }
+            None => ExecutionResult::Rejected,
+        }
+    }
+
     /// Execute a transfer from sender to recipient.
     /// TransferTx: debit sender.balance -= amount, credit recipient.balance += amount.
-    /// Enforces: sender nonce check, sufficient balance, non-zero amount.
+    /// Enforces: sender nonce check, sufficient balance, non-zero amount, pubkey revealed.
     pub fn execute_transfer(
         &mut self,
         sender_id: Hash32,
@@ -242,17 +264,12 @@ impl StateMachine {
 
         // Debit sender
         if let Some(sender) = self.accounts.get_mut(&sender_id) {
+            // First-spend: pubkey must be revealed before transfer (spec 2.7 hook 5)
+            if sender.pubkey.is_none() {
+                return ExecutionResult::Rejected;
+            }
             sender.balance = sender.balance.saturating_sub(amount);
             sender.nonce = nonce;
-            // First-spend: reveal pubkey (spec 2.7 hook 5)
-            if sender.pubkey.is_none() {
-                // pubkey must be embedded in the transaction; for now we
-                // mark that the account has been used (pubkey_hash was set
-                // at creation, full pubkey reveal happens per FR-0005/0006).
-                // SPEC_DEVIATION: pubkey reveal from first transaction
-                // payload is deferred until ML-DSA signature verification
-                // is integrated in C1 consensus proper.
-            }
         } else {
             // Sender account doesn't exist – auto-create with 0 balance?
             // Per spec Section 2.4: Account created on first inbound transfer.
@@ -267,7 +284,7 @@ impl StateMachine {
                 account_id: recipient_id,
                 balance: 0,
                 nonce: 0,
-                pubkey_hash: [0u8; 32],
+                pubkey_hash: recipient_id,
                 pubkey: None,
             });
             recipient.balance = recipient.balance.saturating_add(amount);
@@ -278,14 +295,23 @@ impl StateMachine {
 
     /// Mark an action plan as consumed for replay protection.
     /// Returns Rejected if the plan_id was already consumed. (spec 2.7 hook 4)
-    /// Staged for PDP integration.
-    #[allow(dead_code)]
     pub fn consume_plan_id(&mut self, plan_id: Hash32, _ctx: ExecutionContext) -> ExecutionResult {
         if self.consumed_plans.contains(&plan_id) {
             return ExecutionResult::Rejected;
         }
         self.consumed_plans.insert(plan_id);
         ExecutionResult::Success
+    }
+
+    /// Execute an action plan by consuming its plan_id for replay protection.
+    /// Returns Rejected if the plan_id was already consumed.
+    /// Wired from PDP integration — calls consume_plan_id internally.
+    pub fn execute_action_plan(
+        &mut self,
+        plan_id: Hash32,
+        ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        self.consume_plan_id(plan_id, ctx)
     }
 
     /// Execute a TaskCreateTx.
@@ -1277,8 +1303,6 @@ impl StateMachine {
 
     /// Consume a freshness nonce for artifact replay prevention.
     /// Returns Rejected if nonce already consumed (replay detected).
-    /// Staged for artifact replay protection.
-    #[allow(dead_code)]
     pub fn consume_freshness_nonce(
         &mut self,
         task_id: Hash32,
@@ -1290,6 +1314,17 @@ impl StateMachine {
         }
         self.consumed_nonces.insert((task_id, nonce));
         ExecutionResult::Success
+    }
+
+    /// Consume a freshness nonce for artifact/chunk replay prevention.
+    /// Wired from ProofOfPossession verification — calls consume_freshness_nonce.
+    pub fn execute_consume_freshness_nonce(
+        &mut self,
+        task_id: Hash32,
+        nonce: Hash32,
+        ctx: ExecutionContext,
+    ) -> ExecutionResult {
+        self.consume_freshness_nonce(task_id, nonce, ctx)
     }
 
     // ── Trust Ladder ────────────────────────────────────────────────
@@ -1567,6 +1602,19 @@ impl StateMachine {
         self.review_task_map.iter()
     }
 
+    /// Capture a state snapshot for checkpointing or RPC.
+    /// Wires snapshot_state into production code.
+    pub fn get_snapshot(&self, epoch: u64, height: u64, block_hash: Hash32) -> Snapshot {
+        crate::state_sync::snapshot_state(self, epoch, height, block_hash)
+    }
+
+    /// Compute a checksum over the current state for integrity verification.
+    /// Wires compute_state_checksum into production code.
+    pub fn get_state_checksum(&self) -> Hash32 {
+        let snapshot = crate::state_sync::snapshot_state(self, 0, 0, [0u8; 32]);
+        crate::state_sync::compute_state_checksum(&snapshot.sst_keys)
+    }
+
     pub fn delegations_count(&self) -> usize {
         self.delegations.len()
     }
@@ -1603,7 +1651,10 @@ impl StateMachine {
 
         let slash_amount = vt.self_bond / 10; // 10% slash
 
-        let vt = self.validators.get_mut(&validator_id).unwrap();
+        let vt = match self.validators.get_mut(&validator_id) {
+            Some(vt) => vt,
+            None => return ExecutionResult::Rejected,
+        };
         vt.self_bond = vt.self_bond.saturating_sub(slash_amount);
         vt.state = ValidatorLifecycleState::Paused;
         vt.jailed_until_height = current_height + min_jail_blocks;

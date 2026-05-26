@@ -6,7 +6,7 @@
 //!
 //! Source: docs/04-specifications/protocol/p2p-wire-spec.md Section 1.2, 1.8
 
-use crate::types::Hash32;
+use crate::types::{Hash32, SecureChannelError};
 use sha3::digest::Update;
 use sha3::Digest;
 use sha3::Sha3_256;
@@ -39,9 +39,13 @@ impl MockSecureChannel {
     }
 
     /// Encrypt a plaintext message for the remote peer.
-    pub fn seal(&mut self, plaintext: &[u8]) -> Vec<u8> {
+    ///
+    /// Always returns `Ok(...)` — the mock XOR cipher has no failure modes.
+    /// The `Result` return type matches the production `ClatterSecureChannel::seal`
+    /// so that generic code (conformance tests, etc.) works with both backends.
+    pub fn seal(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, SecureChannelError> {
         self.nonce = self.nonce.saturating_add(1);
-        xof_encrypt(&self.shared_secret, self.nonce, plaintext)
+        Ok(xof_encrypt(&self.shared_secret, self.nonce, plaintext))
     }
 
     /// Decrypt a message received from the remote peer.
@@ -202,7 +206,7 @@ mod tests {
         let mut ch_bob = MockSecureChannel::establish(bob, alice);
 
         let msg = b"hello over relay";
-        let ciphertext = ch_alice.seal(msg);
+        let ciphertext = ch_alice.seal(msg).expect("seal must succeed");
         assert_ne!(&ciphertext, msg, "ciphertext must differ from plaintext");
 
         let decrypted = ch_bob.open(&ciphertext).expect("bob must decrypt alice's message");
@@ -219,7 +223,7 @@ mod tests {
         let mut ch_eve = MockSecureChannel::establish(eve, bob);
 
         let msg = b"secret data";
-        let ciphertext = ch_alice.seal(msg);
+        let ciphertext = ch_alice.seal(msg).expect("seal must succeed");
 
         let result = ch_eve.open(&ciphertext);
         assert!(
@@ -234,8 +238,8 @@ mod tests {
         let bob = [2u8; 32];
 
         let mut ch = MockSecureChannel::establish(alice, bob);
-        let c1 = ch.seal(b"msg1");
-        let c2 = ch.seal(b"msg2");
+        let c1 = ch.seal(b"msg1").expect("seal must succeed");
+        let c2 = ch.seal(b"msg2").expect("seal must succeed");
         assert_ne!(c1, c2, "different nonces produce different ciphertexts");
     }
 

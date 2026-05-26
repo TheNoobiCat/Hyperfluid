@@ -52,7 +52,74 @@ pub fn transition_connection(
 
         (ConnState::Upgrading, ConnectionEvent::ConnectionLost) => ConnState::Unknown,
 
-        _ => current.state,
+        // ── Explicit no-op arms ──────────────────────────────────────
+        // Every known (state, event) combination that is not a valid
+        // transition stays in the current state and logs a warning.
+        // Unknown combinations are caught here rather than silently ignored.
+        (ConnState::Unknown, ConnectionEvent::DirectConnectSuccess)
+        | (ConnState::Unknown, ConnectionEvent::DirectConnectTimeout)
+        | (ConnState::Unknown, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::Unknown, ConnectionEvent::UpgradeProbeSucceeded)
+        | (ConnState::Unknown, ConnectionEvent::ConnectionLost)
+        | (ConnState::Unknown, ConnectionEvent::MigrationComplete)
+        | (ConnState::Unknown, ConnectionEvent::AllRelayPathsLost) => {
+            eprintln!(
+                "[p2p] Warning: invalid transition {:?} from Unknown — staying in Unknown",
+                event
+            );
+            ConnState::Unknown
+        }
+
+        (ConnState::DirectProbing, ConnectionEvent::ProbeInitiated)
+        | (ConnState::DirectProbing, ConnectionEvent::UpgradeProbeSucceeded)
+        | (ConnState::DirectProbing, ConnectionEvent::ConnectionLost)
+        | (ConnState::DirectProbing, ConnectionEvent::MigrationComplete)
+        | (ConnState::DirectProbing, ConnectionEvent::AllRelayPathsLost) => {
+            eprintln!(
+                "[p2p] Warning: invalid transition {:?} from DirectProbing — staying in DirectProbing",
+                event
+            );
+            ConnState::DirectProbing
+        }
+
+        (ConnState::DirectActive, ConnectionEvent::ProbeInitiated)
+        | (ConnState::DirectActive, ConnectionEvent::DirectConnectSuccess)
+        | (ConnState::DirectActive, ConnectionEvent::DirectConnectTimeout)
+        | (ConnState::DirectActive, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::DirectActive, ConnectionEvent::MigrationComplete)
+        | (ConnState::DirectActive, ConnectionEvent::AllRelayPathsLost) => {
+            eprintln!(
+                "[p2p] Warning: invalid transition {:?} from DirectActive — staying in DirectActive",
+                event
+            );
+            ConnState::DirectActive
+        }
+
+        (ConnState::RelayActive, ConnectionEvent::ProbeInitiated)
+        | (ConnState::RelayActive, ConnectionEvent::DirectConnectSuccess)
+        | (ConnState::RelayActive, ConnectionEvent::DirectConnectTimeout)
+        | (ConnState::RelayActive, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::RelayActive, ConnectionEvent::ConnectionLost)
+        | (ConnState::RelayActive, ConnectionEvent::MigrationComplete) => {
+            eprintln!(
+                "[p2p] Warning: invalid transition {:?} from RelayActive — staying in RelayActive",
+                event
+            );
+            ConnState::RelayActive
+        }
+
+        (ConnState::Upgrading, ConnectionEvent::ProbeInitiated)
+        | (ConnState::Upgrading, ConnectionEvent::DirectConnectSuccess)
+        | (ConnState::Upgrading, ConnectionEvent::DirectConnectTimeout)
+        | (ConnState::Upgrading, ConnectionEvent::DirectConnectRefused)
+        | (ConnState::Upgrading, ConnectionEvent::UpgradeProbeSucceeded)
+        | (ConnState::Upgrading, ConnectionEvent::AllRelayPathsLost) => {
+            eprintln!(
+                "[p2p] Warning: invalid transition {:?} from Upgrading — staying in Upgrading",
+                event
+            );
+            ConnState::Upgrading
+        }
     }
 }
 

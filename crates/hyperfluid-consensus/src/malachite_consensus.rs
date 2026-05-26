@@ -61,7 +61,6 @@ pub enum ConsensusEvent {
 pub struct BftDriver {
     driver: Driver<HyperfluidContext>,
     identity: Arc<Identity>,
-    #[allow(dead_code)]
     node_addr: Address32,
     ctx: HyperfluidContext,
 }
@@ -101,6 +100,11 @@ impl BftDriver {
         height: u64,
         validator_set: HyperfluidValidatorSet,
     ) -> Vec<ConsensusEvent> {
+        tracing::debug!(
+            "BftDriver: starting height={} node_addr={}",
+            height,
+            hex::encode(self.node_addr.0),
+        );
         self.ctx = HyperfluidContext::new(validator_set.clone(), self.ctx.proposer_seed);
         self.driver.move_to_height(BlockHeight::new(height), validator_set);
 

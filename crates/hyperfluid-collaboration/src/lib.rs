@@ -11,5 +11,5 @@ pub use hyperfluid_state::{
     EscrowStatus, HeartbeatPayload, Task, TaskLease, TaskStatus, TopicRecord, TopicStatus,
     TrustStageEnum, TrustStageRecord,
 };
-pub use inbox::{InboxConfig, InboxDecision, InboxMessage, InboxRouter};
+pub use inbox::{compute_message_id, InboxConfig, InboxDecision, InboxMessage, InboxRouter};
 pub use replay::generate_nonce;

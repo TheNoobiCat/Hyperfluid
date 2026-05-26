@@ -16,12 +16,13 @@ name = "hyperfluid_node"
 path = "src/lib.rs"
 
 [dependencies]
-hyperfluid-consensus = { path = "../hyperfluid-consensus" }
+hyperfluid-consensus = { path = "../hyperfluid-consensus", features = ["pdp-bypass"] }
 hyperfluid-state = { path = "../hyperfluid-state" }
 hyperfluid-staking = { path = "../hyperfluid-staking" }
 hyperfluid-p2p = { path = "../hyperfluid-p2p" }
 hyperfluid-fastpath = { path = "../hyperfluid-fastpath" }
 hyperfluid-governance = { path = "../hyperfluid-governance" }
+arc-malachitebft-core-types = "0.7.0-pre"
 serde.workspace = true
 serde_json.workspace = true
 hex.workspace = true

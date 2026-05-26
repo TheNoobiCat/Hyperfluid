@@ -39,7 +39,7 @@ pub struct NetworkBridge {
 // ---------------------------------------------------------------------------
 
 /// Encode a SignedVote into bytes.
-fn encode_vote(vote: &SignedMessage<HyperfluidContext, HyperfluidVote>) -> Vec<u8> {
+pub fn encode_vote(vote: &SignedMessage<HyperfluidContext, HyperfluidVote>) -> Vec<u8> {
     let mut buf = Vec::with_capacity(128);
     // height
     buf.extend_from_slice(&vote.message.height.as_u64().to_le_bytes());
@@ -70,7 +70,7 @@ fn encode_vote(vote: &SignedMessage<HyperfluidContext, HyperfluidVote>) -> Vec<u
 }
 
 /// Decode bytes into a SignedVote. Returns None on failure.
-fn decode_vote(bytes: &[u8]) -> Option<SignedMessage<HyperfluidContext, HyperfluidVote>> {
+pub fn decode_vote(bytes: &[u8]) -> Option<SignedMessage<HyperfluidContext, HyperfluidVote>> {
     let mut cursor = 0usize;
 
     // height (8 bytes)
@@ -171,7 +171,9 @@ fn encode_proposal(proposal: &SignedMessage<HyperfluidContext, HyperfluidProposa
 }
 
 /// Decode bytes into a SignedProposal. Returns None on failure.
-fn decode_proposal(bytes: &[u8]) -> Option<SignedMessage<HyperfluidContext, HyperfluidProposal>> {
+pub fn decode_proposal(
+    bytes: &[u8],
+) -> Option<SignedMessage<HyperfluidContext, HyperfluidProposal>> {
     let mut cursor = 0usize;
 
     // height (8 bytes)
@@ -224,13 +226,23 @@ fn decode_proposal(bytes: &[u8]) -> Option<SignedMessage<HyperfluidContext, Hype
     }
     let sig_bytes = bytes[cursor..cursor + sig_len as usize].to_vec();
 
-    // Build the proposal with a placeholder block but preserve the value hash
+    // Derive parent_hash, state_root, and transaction_root from the value_hash
+    // using domain separation. The wire format only carries the block hash
+    // (value_hash), not the full block data, so we derive the roots
+    // deterministically from the hash itself.
+    let parent_hash =
+        crate::malachite_consensus::sha3_256_hash(&[&value_hash[..], &[0x00]].concat());
+    let state_root =
+        crate::malachite_consensus::sha3_256_hash(&[&value_hash[..], &[0x01]].concat());
+    let transaction_root =
+        crate::malachite_consensus::sha3_256_hash(&[&value_hash[..], &[0x02]].concat());
+
     let block = crate::types::Block {
         header: crate::types::BlockHeader {
             height,
-            parent_hash: [0u8; 32],
-            state_root: [0u8; 32],
-            transaction_root: [0u8; 32],
+            parent_hash,
+            state_root,
+            transaction_root,
             committee_id: 0,
             proposer_id: proposer_addr,
             timestamp: 0,

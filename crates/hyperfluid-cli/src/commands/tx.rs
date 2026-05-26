@@ -1,4 +1,5 @@
 use clap::Subcommand;
+use hyperfluid_p2p::identity::Identity;
 use parity_scale_codec::Encode;
 
 use crate::commands::{format_output, rpc_post};
@@ -85,6 +86,9 @@ pub enum TxAction {
         rate: u16,
         #[arg(long)]
         nonce: u64,
+        /// Delegator identity (hex, 32 bytes). Required — no longer hardcoded to zero.
+        #[arg(long)]
+        delegator: String,
     },
     Evidence {
         #[arg(long)]
@@ -105,6 +109,7 @@ pub fn run(
     format: OutputFormat,
     client: &reqwest::blocking::Client,
     node_url: &str,
+    _identity: &Identity,
 ) -> Result<String, String> {
     let result = match action {
         TxAction::Transfer { sender, recipient, amount, nonce } => {
@@ -222,9 +227,11 @@ pub fn run(
                 }),
             )?
         }
-        TxAction::Commission { validator, rate, nonce } => {
+        // F-68: Use provided delegator identity instead of hardcoded zero
+        TxAction::Commission { validator, rate, nonce, delegator } => {
+            let delegator_id = parse_hash32(&delegator)?;
             let v = parse_hash32(&validator)?;
-            let payload = ([0u8; 32], v, rate as u128, nonce);
+            let payload = (delegator_id, v, rate as u128, nonce);
             rpc_post(
                 client,
                 node_url,

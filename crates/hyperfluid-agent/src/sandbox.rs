@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 /// Configuration for a sandbox review run.
+#[derive(Debug)]
 pub struct SandboxConfig {
     /// Path to the artifact file to review.
     pub artifact_path: String,
@@ -21,6 +22,7 @@ pub struct SandboxConfig {
 }
 
 /// Result of a sandbox review.
+#[derive(Debug)]
 pub struct SandboxVerdict {
     /// The verdict decision.
     pub verdict: Verdict,
@@ -31,6 +33,7 @@ pub struct SandboxVerdict {
 }
 
 /// Possible sandbox verdicts.
+#[derive(Debug)]
 pub enum Verdict {
     /// Artifact accepted.
     Accept,

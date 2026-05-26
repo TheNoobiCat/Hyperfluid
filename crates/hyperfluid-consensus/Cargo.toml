@@ -26,6 +26,13 @@ arc-malachitebft-core-types = "0.7.0-pre"
 arc-malachitebft-core-driver = "0.7.0-pre"
 ml-dsa = { workspace = true }
 
+[features]
+default = []
+# When enabled, PDP validation is skipped for all transaction types.
+# Intended for testing scenarios where the full PDP state (key bindings,
+# nonce tracking, quota states) is not yet wired.
+pdp-bypass = []
+
 [dev-dependencies]
 serde_json.workspace = true
 rand = "0.8"

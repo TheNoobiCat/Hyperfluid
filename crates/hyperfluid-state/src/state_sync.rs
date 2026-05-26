@@ -43,8 +43,6 @@ pub struct SyncState {
 /// consumed plans, task IDs) into the snapshot's `sst_keys` using SCALE encoding.
 /// Builds an SMT from all keys and commits the root.
 /// Must include every collection that `StateMachine::compute_state_root()` uses.
-/// Staged for state sync (caller wiring pending).
-#[allow(dead_code)]
 pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Hash32) -> Snapshot {
     let mut smt = SparseMerkleTree::new();
     let mut sst_keys = Vec::new();
@@ -150,7 +148,7 @@ pub fn snapshot_state(sm: &StateMachine, epoch: u64, height: u64, block_hash: Ha
 
 /// Rebuild an SMT root from a set of (key, value) pairs and return the root.
 /// Staged for state sync rebuild.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "staged for state sync RPC in Stage 03")]
 pub fn build_smt_from_keys(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
     let mut smt = SparseMerkleTree::new();
     for (key, value) in keys {
@@ -172,8 +170,6 @@ pub fn verify_state_root_quorum(
 
 /// Compute a checksum over snapshot keys for integrity verification.
 /// Uses SHA3-256 over: count, key, value for each tuple.
-/// Staged for state sync.
-#[allow(dead_code)]
 pub fn compute_state_checksum(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
     let mut hasher = Sha3_256::new();
     Digest::update(&mut hasher, (keys.len() as u64).to_le_bytes());
@@ -192,7 +188,7 @@ pub fn compute_state_checksum(keys: &[(Hash32, Vec<u8>)]) -> Hash32 {
 
 /// Verify that a set of snapshot keys matches a given checksum.
 /// Staged for state sync verification.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "staged for state sync RPC in Stage 03")]
 pub fn verify_snapshot_checksum(keys: &[(Hash32, Vec<u8>)], expected_checksum: Hash32) -> bool {
     compute_state_checksum(keys) == expected_checksum
 }

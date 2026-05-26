@@ -43,7 +43,6 @@ impl GovernanceEngine {
     #[allow(clippy::too_many_arguments)]
     pub fn submit_proposal(
         &mut self,
-        proposal_id: Hash32,
         proposer_id: Hash32,
         proposed_commit: Hash32,
         bundle_manifest_hash: Hash32,
@@ -51,7 +50,17 @@ impl GovernanceEngine {
         current_height: u64,
         current_epoch: u64,
         _total_snapshot_stake: u128,
+        nonce: u64,
     ) -> Result<&GovernanceProposal, ProposalError> {
+        // Derive canonical proposal ID from content
+        let proposal_id = compute_proposal_id(
+            &proposer_id,
+            &proposed_commit,
+            &bundle_manifest_hash,
+            &current_commit,
+            nonce,
+        );
+
         // Check max open proposals
         if self.active_proposal_count() >= self.params.max_open_proposals as usize {
             return Err(ProposalError::MaxOpenProposalsReached);
@@ -93,7 +102,7 @@ impl GovernanceEngine {
         // Clear stale cooldown (proposer is active again)
         self.cooldowns.remove(&proposer_id);
 
-        Ok(&self.proposals[&proposal_id])
+        self.proposals.get(&proposal_id).ok_or(ProposalError::ProposalNotFound)
     }
 
     fn active_proposal_count(&self) -> usize {
@@ -107,6 +116,18 @@ impl GovernanceEngine {
         vote: GovernanceVote,
         current_height: u64,
     ) -> Result<(), ProposalError> {
+        // SPEC_DEVIATION: signature verification delegated to caller (consensus driver)
+        // to avoid adding hyperfluid-p2p dependency to governance crate.
+        // The caller MUST verify the ML-DSA-65 signature before calling this function.
+        // As a sanity check, we assert the signature length matches ML-DSA-65 (3309 bytes).
+        if vote.signature.len() != 3309 {
+            return Err(ProposalError::InvalidSignature);
+        }
+        debug_assert!(
+            vote.signature.len() == 3309,
+            "signature length must be exactly 3309 bytes (ML-DSA-65)"
+        );
+
         let proposal =
             self.proposals.get_mut(&vote.proposal_id).ok_or(ProposalError::ProposalNotFound)?;
 
@@ -264,8 +285,7 @@ impl GovernanceEngine {
 }
 
 /// Compute a proposal ID from its content.
-/// Staged for client-side ID derivation.
-#[allow(dead_code)]
+/// Used internally for canonical ID derivation in submit_proposal.
 pub fn compute_proposal_id(
     proposer_id: &Hash32,
     proposed_commit: &Hash32,
@@ -295,6 +315,7 @@ pub enum ProposalError {
     VoteWindowClosed,
     VoteWindowNotEnded,
     AlreadyVoted,
+    InvalidSignature,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -325,10 +346,8 @@ mod tests {
     #[test]
     fn submit_proposal_creates_active_proposal() {
         let mut engine = GovernanceEngine::new(GovernanceParams::default());
-        let p_id = compute_proposal_id(&[0xAA; 32], &[0xBB; 32], &[0xCC; 32], &[0xDD; 32], 1);
 
         let result = engine.submit_proposal(
-            p_id,
             [0xAA; 32],
             [0xBB; 32],
             [0xCC; 32],
@@ -336,6 +355,7 @@ mod tests {
             100,
             0,
             1_000_000_000,
+            1,
         );
         assert!(result.is_ok());
         let p = result.unwrap();
@@ -349,10 +369,8 @@ mod tests {
         let mut engine = GovernanceEngine::new(GovernanceParams::default());
         let proposer = make_proposer();
         for i in 0..32 {
-            let p_id = [i as u8; 32];
             engine
                 .submit_proposal(
-                    p_id,
                     proposer,
                     [i as u8; 32],
                     [0; 32],
@@ -360,12 +378,12 @@ mod tests {
                     100 + i as u64,
                     i as u64,
                     1_000_000_000,
+                    i as u64,
                 )
                 .unwrap();
         }
         // 33rd proposal should be rejected
         let result = engine.submit_proposal(
-            [33u8; 32],
             proposer,
             [33u8; 32],
             [0; 32],
@@ -373,6 +391,7 @@ mod tests {
             200,
             33,
             1_000_000_000,
+            33,
         );
         assert_eq!(result, Err(ProposalError::MaxOpenProposalsReached));
     }
@@ -381,11 +400,11 @@ mod tests {
     fn cast_vote_updates_tally() {
         let mut engine = GovernanceEngine::new(GovernanceParams::default());
         let proposer = make_proposer();
-        let p_id = compute_proposal_id(&proposer, &[0xBB; 32], &[0; 32], &[0; 32], 1);
 
-        engine
-            .submit_proposal(p_id, proposer, [0xBB; 32], [0; 32], [0; 32], 100, 0, 100_000_000_000)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, [0xBB; 32], [0; 32], [0; 32], 100, 0, 100_000_000_000, 1)
+            .unwrap()
+            .proposal_id;
 
         let vote = GovernanceVote {
             proposal_id: p_id,
@@ -393,7 +412,7 @@ mod tests {
             vote: VoteOption::Yes,
             reason_hash: [0; 32],
             vote_weight: 30_000_000_000,
-            signature: vec![],
+            signature: vec![0u8; 3309],
         };
         assert!(engine.cast_vote(vote, 200).is_ok());
 
@@ -406,11 +425,11 @@ mod tests {
     fn double_voting_rejected() {
         let mut engine = GovernanceEngine::new(GovernanceParams::default());
         let proposer = make_proposer();
-        let p_id = [0x42; 32];
 
-        engine
-            .submit_proposal(p_id, proposer, [0xBB; 32], [0; 32], [0; 32], 100, 0, 100_000)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, [0xBB; 32], [0; 32], [0; 32], 100, 0, 100_000, 1)
+            .unwrap()
+            .proposal_id;
 
         let vote1 = GovernanceVote {
             proposal_id: p_id,
@@ -418,7 +437,7 @@ mod tests {
             vote: VoteOption::Yes,
             reason_hash: [0; 32],
             vote_weight: 50_000,
-            signature: vec![],
+            signature: vec![0u8; 3309],
         };
         engine.cast_vote(vote1, 200).unwrap();
 
@@ -428,7 +447,7 @@ mod tests {
             vote: VoteOption::No,
             reason_hash: [0; 32],
             vote_weight: 50_000,
-            signature: vec![],
+            signature: vec![0u8; 3309],
         };
         assert_eq!(engine.cast_vote(vote2, 200), Err(ProposalError::AlreadyVoted));
     }
@@ -441,11 +460,11 @@ mod tests {
         });
         let proposer = make_proposer();
         let total_stake: u128 = 100_000;
-        let p_id = [0x01; 32];
 
-        engine
-            .submit_proposal(p_id, proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, total_stake)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, total_stake, 1)
+            .unwrap()
+            .proposal_id;
 
         // 45% of stake votes yes (> 40% quorum)
         engine
@@ -456,7 +475,7 @@ mod tests {
                     vote: VoteOption::Yes,
                     reason_hash: [0; 32],
                     vote_weight: 45_000,
-                    signature: vec![],
+                    signature: vec![0u8; 3309],
                 },
                 50,
             )
@@ -478,11 +497,11 @@ mod tests {
         });
         let proposer = make_proposer();
         let total_stake: u128 = 100_000;
-        let p_id = [0x02; 32];
 
-        engine
-            .submit_proposal(p_id, proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, total_stake)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, total_stake, 1)
+            .unwrap()
+            .proposal_id;
 
         // Only 10% votes yes (< 40% quorum)
         engine
@@ -493,7 +512,7 @@ mod tests {
                     vote: VoteOption::Yes,
                     reason_hash: [0; 32],
                     vote_weight: 10_000,
-                    signature: vec![],
+                    signature: vec![0u8; 3309],
                 },
                 50,
             )
@@ -514,11 +533,11 @@ mod tests {
         });
         let proposer = make_proposer();
         let total_stake: u128 = 100_000;
-        let p_id = [0x03; 32];
 
-        engine
-            .submit_proposal(p_id, proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, total_stake)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, total_stake, 1)
+            .unwrap()
+            .proposal_id;
 
         // 25% yes, 25% no — quorum met (50% > 40%), but yes not > 50% of participated
         engine
@@ -529,7 +548,7 @@ mod tests {
                     vote: VoteOption::Yes,
                     reason_hash: [0; 32],
                     vote_weight: 25_000,
-                    signature: vec![],
+                    signature: vec![0u8; 3309],
                 },
                 50,
             )
@@ -542,7 +561,7 @@ mod tests {
                     vote: VoteOption::No,
                     reason_hash: [0; 32],
                     vote_weight: 25_000,
-                    signature: vec![],
+                    signature: vec![0u8; 3309],
                 },
                 50,
             )
@@ -560,11 +579,11 @@ mod tests {
         });
         let proposer = make_proposer();
         let proposed_commit = [0xFF; 32];
-        let p_id = [0x04; 32];
 
-        engine
-            .submit_proposal(p_id, proposer, proposed_commit, [0; 32], [0; 32], 0, 0, 100_000)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, proposed_commit, [0; 32], [0; 32], 0, 0, 100_000, 1)
+            .unwrap()
+            .proposal_id;
 
         engine
             .cast_vote(
@@ -574,7 +593,7 @@ mod tests {
                     vote: VoteOption::Yes,
                     reason_hash: [0; 32],
                     vote_weight: 50_000,
-                    signature: vec![],
+                    signature: vec![0u8; 3309],
                 },
                 50,
             )
@@ -596,11 +615,11 @@ mod tests {
             ..GovernanceParams::default()
         });
         let proposer = make_proposer();
-        let p_id = [0x05; 32];
 
-        engine
-            .submit_proposal(p_id, proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, 100_000)
-            .unwrap();
+        let p_id = engine
+            .submit_proposal(proposer, [0xBB; 32], [0; 32], [0; 32], 0, 0, 100_000, 1)
+            .unwrap()
+            .proposal_id;
 
         engine.finalize_proposal(p_id, 200, 100_000, 10).unwrap();
 

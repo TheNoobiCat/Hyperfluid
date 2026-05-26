@@ -31,6 +31,8 @@ fn test_config(name: &str) -> Config {
     cfg.limits.loop_interval_ms = 10;
     cfg.limits.handoff_threshold_pct = 70;
     cfg.limits.handoff_trigger_messages = 50;
+    cfg.llm.provider = "stub".to_string();
+    cfg.llm.model = "test".to_string();
     cfg.llm.context_limit_tokens = 8192;
     cfg
 }
@@ -919,6 +921,13 @@ fn conforms_to_agent_runtime_spec_5_3_telegram_token_not_in_output() {
             user_id: 42,
             enabled: true,
         }),
+        llm: hyperfluid_agent::config::LlmSection {
+            provider: "stub".to_string(),
+            model: "test".to_string(),
+            api_url: None,
+            api_key: None,
+            context_limit_tokens: 8192,
+        },
         ..Default::default()
     };
 
