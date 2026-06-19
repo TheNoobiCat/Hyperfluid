@@ -1,7 +1,7 @@
 # Build Status — Stage 01 (Protocol Core) PARTIALLY COMPLETE | Stage 02 (Agent Runtime) COMPLETE
 
-**Last updated:** 2026-05-26 (Bug Audit Round 9: 14 bugs fixed across 8 crates. 7 new process guards added to checkpoint.md. CI all-green except 2 pre-existing BFT multi-node tests.)
-**Stage:** 01 — Protocol Core — **PARTIALLY COMPLETE** (validator lifecycle wired, slashing/rewards implemented, BFT multi-validator networking infrastructure wired — outbound peer key resolution deferred)
+**Last updated:** 2026-06-19 (Stage 01 deferred items resolved: outbound peer key resolution + multi-node BFT test. Pre-existing fix_F4_decode_proposal_non_zero_hashes test repaired.)
+**Stage:** 01 — Protocol Core — **COMPLETE** (validator lifecycle wired, slashing/rewards implemented, BFT multi-validator networking infrastructure wired, outbound peer key resolution done, multi-node BFT tests pass)
 **Stage:** 02 — Agent Runtime — **COMPLETE** (all 10 weeks complete)
 **Week 1-2 (Governance + Fast-Path + PDP):** COMPLETE (C4/C6/C9 libraries built + wired)
 **Week 3-4 (Agent Runtime C10):** COMPLETE (87 tests, infinite loop, tools, SQLite, handoff, sandbox)
@@ -44,9 +44,9 @@ All doc changes complete. Only Rust code changes remain (5 items from Round 1 ab
 | Accept loop with consensus handler (dynamic inbound peers) | Complete |
 | External NetworkBridge for dynamic peer management | Complete |
 | Public decode_vote for consensus handler | Complete |
-| Outbound peer key resolution (remote_peer_id, DH/KEM keys) | **DEFERRED** — hardcoded to zeros |
-| Multi-node BFT integration test (3+ nodes over TCP) | **DEFERRED** — blocked on key resolution |
-| 24h soak test | **DEFERRED** — blocked on multi-node test |
+| Outbound peer key resolution (remote_peer_id, DH/KEM keys) | **COMPLETE** — `--peers` format extended with `:dh_key:kem_key`, `--print-peer-info` flag added, local DH/KEM keypairs generated at startup |
+| Multi-node BFT integration test (3+ nodes over TCP) | **COMPLETE** — 2 multi-node tests pass (2-validator and 3-validator reach consensus) |
+| 24h soak test | **DEFERRED** — needs soak harness infrastructure |
 
 **Verification:** `cargo build`, `cargo test` (all passing), `cargo clippy` (pre-existing warnings only), `cargo fmt` applied.
 

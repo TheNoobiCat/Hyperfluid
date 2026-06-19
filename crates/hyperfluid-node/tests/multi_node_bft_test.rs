@@ -144,11 +144,12 @@ async fn spawn_validator_node(
     }
     let validator_set = malachite_consensus::build_validator_set(entries);
 
+    // All validators must use the same proposer seed so they agree
+    // on which validator is the proposer for each round.
     let proposer_seed = {
         use sha3::Digest;
         let mut h = sha3::Sha3_256::new();
-        h.update(peer_id);
-        h.update(genesis.timestamp.to_le_bytes());
+        h.update(genesis.chain_id.as_bytes());
         let mut out = [0u8; 32];
         out.copy_from_slice(&h.finalize());
         out
@@ -160,25 +161,46 @@ async fn spawn_validator_node(
     }));
 
     let incoming_tx = channels.incoming_tx.clone();
+    let handler_peer_id = peer_id;
     let consensus_handler: ConsensusMessageHandler = Arc::new(move |_: Hash32, data: Vec<u8>| {
         if data.is_empty() {
             return;
         }
-        let msg = match data[0] {
+        let tag = data[0];
+        eprintln!(
+            "[test] consensus_handler called for {:x} tag=0x{:02x} len={}",
+            handler_peer_id[0] as u32,
+            tag,
+            data.len()
+        );
+        let msg = match tag {
             0x01 => match network_bridge::decode_vote(&data[1..]) {
                 Some(vote) => malachite_consensus::ConsensusNetworkMsg::Vote(vote),
-                None => return,
+                None => {
+                    eprintln!("[test] failed to decode vote for {:x}", handler_peer_id[0] as u32);
+                    return;
+                }
             },
             0x02 => match network_bridge::decode_proposal(&data[1..]) {
                 Some(p) => malachite_consensus::ConsensusNetworkMsg::Proposal(p),
-                None => return,
+                None => {
+                    eprintln!(
+                        "[test] failed to decode proposal for {:x}",
+                        handler_peer_id[0] as u32
+                    );
+                    return;
+                }
             },
-            _ => return,
+            _ => {
+                eprintln!("[test] unknown tag 0x{:02x} for {:x}", tag, handler_peer_id[0] as u32);
+                return;
+            }
         };
+        eprintln!("[test] consensus_handler forwarding msg for {:x}", handler_peer_id[0] as u32);
         let _ = incoming_tx.send(msg);
     });
 
-    // Accept loop
+    // Accept loop — start before connecting so TCP handshake succeeds.
     let r_p2p = running.clone();
     let kp_a = key_provider.clone();
     let h_a = consensus_handler.clone();
@@ -189,7 +211,44 @@ async fn spawn_validator_node(
         r_p2p.store(false, Ordering::Release);
     });
 
-    // BFT loop
+    // Give accept loop time to start before initiating connections.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    eprintln!("[test] starting connections for node {:x}", peer_id[0] as u32);
+
+    // Connect to peers BEFORE starting BFT so proposals are not lost.
+    for (peer_addr, remote_peer_id) in &peer_infos {
+        let (remote_dh, remote_kem) = match key_provider(remote_peer_id) {
+            Some(k) => k,
+            None => {
+                eprintln!("[test] no keys for peer {:x}", remote_peer_id[0] as u32);
+                continue;
+            }
+        };
+        eprintln!("[test] connecting to {:x} at {}", remote_peer_id[0] as u32, peer_addr);
+        match tcp::connect_and_maintain(
+            *peer_addr,
+            Arc::clone(&identity),
+            *remote_peer_id,
+            remote_dh,
+            remote_kem,
+            consensus_handler.clone(),
+        )
+        .await
+        {
+            Ok((_, sender)) => {
+                eprintln!("[test] connected to {:x}", remote_peer_id[0] as u32);
+                if let Ok(mut b) = bridge.lock() {
+                    b.peers.push(sender);
+                }
+            }
+            Err(e) => {
+                eprintln!("[test] connect to {} failed: {}", peer_addr, e);
+            }
+        }
+    }
+
+    // BFT loop — started AFTER connections so peers are in the bridge.
     let bft_handle = ConsensusDriver::run_bft_loop(
         driver.clone(),
         running.clone(),
@@ -202,42 +261,6 @@ async fn spawn_validator_node(
         None,
         Some(bridge.clone()),
     );
-
-    // Give peers a moment to start their accept loops before connecting.
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Connect to peers
-    let b_conn = Arc::clone(&bridge);
-    let h_conn = consensus_handler.clone();
-    let id_conn = Arc::clone(&identity);
-    let kp_conn = key_provider.clone();
-    tokio::spawn(async move {
-        for (peer_addr, remote_peer_id) in &peer_infos {
-            let (remote_dh, remote_kem) = match kp_conn(remote_peer_id) {
-                Some(k) => k,
-                None => continue,
-            };
-            match tcp::connect_and_maintain(
-                *peer_addr,
-                Arc::clone(&id_conn),
-                *remote_peer_id,
-                remote_dh,
-                remote_kem,
-                Arc::clone(&h_conn),
-            )
-            .await
-            {
-                Ok((_, sender)) => {
-                    if let Ok(mut b) = b_conn.lock() {
-                        b.peers.push(sender);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[test] connect to {} failed: {}", peer_addr, e);
-                }
-            }
-        }
-    });
 
     tokio::time::sleep(Duration::from_secs(12)).await;
     running.store(false, Ordering::SeqCst);

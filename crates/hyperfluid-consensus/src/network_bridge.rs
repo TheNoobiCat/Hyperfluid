@@ -149,9 +149,10 @@ pub fn decode_vote(bytes: &[u8]) -> Option<SignedMessage<HyperfluidContext, Hype
     Some(SignedMessage::new(vote, MlDsa65Signature(sig_bytes)))
 }
 
-/// Encode a SignedProposal into bytes.
+/// Encode a SignedProposal into bytes, including the full block value.
 fn encode_proposal(proposal: &SignedMessage<HyperfluidContext, HyperfluidProposal>) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(128);
+    use parity_scale_codec::Encode;
+    let mut buf = Vec::with_capacity(256);
     // height
     buf.extend_from_slice(&proposal.message.height.as_u64().to_le_bytes());
     // round
@@ -159,14 +160,18 @@ fn encode_proposal(proposal: &SignedMessage<HyperfluidContext, HyperfluidProposa
     // value hash
     let value_hash = ValueTrait::id(&proposal.message.value).0;
     buf.extend_from_slice(&value_hash);
-    // pol_round
-    buf.extend_from_slice(&proposal.message.pol_round.as_u32().unwrap_or(0).to_le_bytes());
+    // pol_round (8 bytes as i64; -1 = Nil, 0+ = Some(r))
+    buf.extend_from_slice(&proposal.message.pol_round.as_i64().to_le_bytes());
     // proposer_addr
     buf.extend_from_slice(&proposal.message.proposer_addr.0);
     // signature: length-prefixed
     let sig_bytes = &proposal.signature.0;
     buf.extend_from_slice(&(sig_bytes.len() as u32).to_le_bytes());
     buf.extend_from_slice(sig_bytes);
+    // block value: SCALE-encoded with length prefix
+    let block_encoded = proposal.message.value.block.encode();
+    buf.extend_from_slice(&(block_encoded.len() as u32).to_le_bytes());
+    buf.extend_from_slice(&block_encoded);
     buf
 }
 
@@ -174,6 +179,7 @@ fn encode_proposal(proposal: &SignedMessage<HyperfluidContext, HyperfluidProposa
 pub fn decode_proposal(
     bytes: &[u8],
 ) -> Option<SignedMessage<HyperfluidContext, HyperfluidProposal>> {
+    use parity_scale_codec::Decode;
     let mut cursor = 0usize;
 
     // height (8 bytes)
@@ -198,12 +204,12 @@ pub fn decode_proposal(
     value_hash.copy_from_slice(&bytes[cursor..cursor + 32]);
     cursor += 32;
 
-    // pol_round (4 bytes)
-    if cursor + 4 > bytes.len() {
+    // pol_round (8 bytes as i64; -1 = Nil, 0+ = Some(r))
+    if cursor + 8 > bytes.len() {
         return None;
     }
-    let pol_round_u32 = u32::from_le_bytes(bytes[cursor..cursor + 4].try_into().ok()?);
-    cursor += 4;
+    let pol_round_i64 = i64::from_le_bytes(bytes[cursor..cursor + 8].try_into().ok()?);
+    cursor += 8;
 
     // proposer_addr (32 bytes)
     if cursor + 32 > bytes.len() {
@@ -225,38 +231,27 @@ pub fn decode_proposal(
         return None;
     }
     let sig_bytes = bytes[cursor..cursor + sig_len as usize].to_vec();
+    cursor += sig_len as usize;
 
-    // Derive parent_hash, state_root, and transaction_root from the value_hash
-    // using domain separation. The wire format only carries the block hash
-    // (value_hash), not the full block data, so we derive the roots
-    // deterministically from the hash itself.
-    let parent_hash =
-        crate::malachite_consensus::sha3_256_hash(&[&value_hash[..], &[0x00]].concat());
-    let state_root =
-        crate::malachite_consensus::sha3_256_hash(&[&value_hash[..], &[0x01]].concat());
-    let transaction_root =
-        crate::malachite_consensus::sha3_256_hash(&[&value_hash[..], &[0x02]].concat());
+    // block value length (4 bytes)
+    if cursor + 4 > bytes.len() {
+        return None;
+    }
+    let block_len = u32::from_le_bytes(bytes[cursor..cursor + 4].try_into().ok()?) as usize;
+    cursor += 4;
 
-    let block = crate::types::Block {
-        header: crate::types::BlockHeader {
-            height,
-            parent_hash,
-            state_root,
-            transaction_root,
-            committee_id: 0,
-            proposer_id: proposer_addr,
-            timestamp: 0,
-            epoch: height / 100,
-        },
-        transactions: vec![],
-    };
+    // block value bytes
+    if cursor + block_len > bytes.len() {
+        return None;
+    }
+    let block = crate::types::Block::decode(&mut &bytes[cursor..cursor + block_len]).ok()?;
     let block_value = crate::malachite::BlockValue::with_hash(block, ValueHash(value_hash));
 
     let proposal = HyperfluidProposal {
         height: BlockHeight::new(height),
         round: Round::new(round_u32),
         value: block_value,
-        pol_round: Round::new(pol_round_u32),
+        pol_round: Round::from(pol_round_i64),
         proposer_addr: Address32::new(proposer_addr),
     };
 
@@ -278,6 +273,10 @@ pub fn run_sender(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
+            let tag = match &msg {
+                ConsensusNetworkMsg::Vote(_) => 0x01u8,
+                ConsensusNetworkMsg::Proposal(_) => 0x02u8,
+            };
             let serialized = match &msg {
                 ConsensusNetworkMsg::Vote(vote) => {
                     let mut buf = vec![0x01u8];
@@ -300,8 +299,13 @@ pub fn run_sender(
                 }
             };
 
+            eprintln!("[BRIDGE] run_sender: msg tag=0x{:02x} peers={}", tag, peers.len());
+
             for peer in &peers {
-                let _ = peer.send(serialized.clone());
+                let result = peer.send(serialized.clone());
+                if result.is_err() {
+                    eprintln!("[BRIDGE] peer send failed");
+                }
             }
         }
 

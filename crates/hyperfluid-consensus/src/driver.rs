@@ -8,7 +8,9 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use arc_malachitebft_core_types::{Round, Timeout};
 
 use parity_scale_codec::{Decode, Encode};
 use sha3::{Digest, Sha3_256};
@@ -1464,11 +1466,31 @@ impl ConsensusDriver {
                 start_height = d.height.saturating_add(1);
             }
 
+            // Timeout queue: sorted vec of (Timeout, deadline). Earliest deadline first.
+            let mut timeout_queue: Vec<(Timeout, Instant)> = Vec::new();
+
+            // Helper: process events through handle_bft_event, inserting any new
+            // timeouts into the queue with per-step durations from config.
+            let process_events = |events: Vec<crate::malachite_consensus::ConsensusEvent>,
+                                  bft: &mut crate::malachite_consensus::BftDriver,
+                                  timeout_queue: &mut Vec<(Timeout, Instant)>|
+             -> () {
+                for event in events {
+                    Self::handle_bft_event(
+                        event,
+                        bft,
+                        &driver,
+                        &outgoing,
+                        &config,
+                        &channels.incoming_tx,
+                        timeout_queue,
+                    );
+                }
+            };
+
             // Start consensus at the next height
             let events = bft.start_height(start_height, validator_set);
-            for event in events {
-                Self::handle_bft_event(event, &mut bft, &driver, &outgoing, &config);
-            }
+            process_events(events, &mut bft, &mut timeout_queue);
 
             loop {
                 if !running.load(Ordering::Acquire) {
@@ -1481,22 +1503,55 @@ impl ConsensusDriver {
                     msg = incoming.recv() => {
                         let Some(msg) = msg else { break; };
 
-                        let events = match msg {
-                            ConsensusNetworkMsg::Vote(vote) => bft.process_vote(vote),
+                        let events = match &msg {
+                            ConsensusNetworkMsg::Vote(vote) => {
+                                let r = vote.message.round.as_u32().unwrap_or(0);
+                                let t = match vote.message.vote_type { arc_malachitebft_core_types::VoteType::Prevote => "Prevote", arc_malachitebft_core_types::VoteType::Precommit => "Precommit" };
+                                eprintln!("[BFT] RECV {} round={} val_type={:?}", t, r, vote.message.value_id.is_nil());
+                                let ev = bft.process_vote(vote.clone());
+                                eprintln!("[BFT] -> process_vote returned {} events", ev.len());
+                                ev
+                            }
                             ConsensusNetworkMsg::Proposal(proposal) => {
-                                bft.process_proposal(proposal, arc_malachitebft_core_types::Validity::Valid)
+                                let r = proposal.message.round.as_u32().unwrap_or(0);
+                                eprintln!("[BFT] RECV proposal round={}", r);
+                                let ev = bft.process_proposal(proposal.clone(), arc_malachitebft_core_types::Validity::Valid);
+                                eprintln!("[BFT] -> process_proposal returned {} events", ev.len());
+                                ev
                             }
                         };
 
-                        for event in events {
-                            Self::handle_bft_event(
-                                event, &mut bft, &driver, &outgoing, &config,
-                            );
-                        }
+                        process_events(events, &mut bft, &mut timeout_queue);
                     }
 
                     _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
-                        // Idle tick
+                        // Idle tick: fire all expired timeouts in order
+                        timeout_queue.sort_by_key(|(_, d)| *d);
+                        let now = Instant::now();
+                        {
+                            let q: Vec<String> = timeout_queue.iter().map(|(t, _)| {
+                                format!("{:?}r{}", t.kind, t.round.as_u32().unwrap_or(0))
+                            }).collect();
+                            eprintln!("[BFT] IDLE TICK queue=[{}]", q.join(","));
+                        }
+                        while !timeout_queue.is_empty() {
+                            let (timeout, deadline) = &timeout_queue[0];
+                            if now < *deadline {
+                                break;
+                            }
+                            let kind_str = format!("{:?}", timeout.kind);
+                            let r = timeout.round.as_u32().unwrap_or(0);
+                            let (timeout, _) = timeout_queue.remove(0);
+                            let events = bft.process_timeout(timeout);
+                            eprintln!("[BFT] TIMEOUT {} r{} -> {} events", kind_str, r, events.len());
+                            process_events(events, &mut bft, &mut timeout_queue);
+                            {
+                                let q: Vec<String> = timeout_queue.iter().map(|(t, _)| {
+                                    format!("{:?}r{}", t.kind, t.round.as_u32().unwrap_or(0))
+                                }).collect();
+                                eprintln!("[BFT] post-process queue=[{}]", q.join(","));
+                            }
+                        }
                     }
                 }
             }
@@ -1510,7 +1565,11 @@ impl ConsensusDriver {
         outgoing: &tokio::sync::mpsc::UnboundedSender<
             crate::malachite_consensus::ConsensusNetworkMsg,
         >,
-        _config: &crate::malachite_consensus::ConsensusNetworkConfig,
+        config: &crate::malachite_consensus::ConsensusNetworkConfig,
+        incoming_tx: &tokio::sync::mpsc::UnboundedSender<
+            crate::malachite_consensus::ConsensusNetworkMsg,
+        >,
+        timeout_queue: &mut Vec<(Timeout, Instant)>,
     ) {
         match event {
             crate::malachite_consensus::ConsensusEvent::RequestBlock { height, round } => {
@@ -1531,16 +1590,23 @@ impl ConsensusDriver {
                 let r = arc_malachitebft_core_types::Round::new(round);
                 let events = bft.propose_block_value(r, block);
                 for evt in events {
-                    Self::handle_bft_event(evt, bft, driver, outgoing, _config);
+                    Self::handle_bft_event(
+                        evt,
+                        bft,
+                        driver,
+                        outgoing,
+                        config,
+                        incoming_tx,
+                        timeout_queue,
+                    );
                 }
             }
             crate::malachite_consensus::ConsensusEvent::BlockCommitted { height, round, block } => {
-                tracing::info!(
-                    "BFT: block committed height={} round={} hash={} parent={}",
+                eprintln!(
+                    "[BFT] BLOCK COMMITTED height={} round={} hash={}",
                     height,
                     round,
                     hex::encode(block.header.block_hash()),
-                    hex::encode(block.header.parent_hash),
                 );
                 // Persist committed block into driver state so the BFT loop
                 // can advance chain state (GAP-01a).
@@ -1552,21 +1618,46 @@ impl ConsensusDriver {
                 }
             }
             crate::malachite_consensus::ConsensusEvent::BroadcastVote { vote, .. } => {
+                let r = vote.message.round.as_u32().unwrap_or(0);
+                let t = match vote.message.vote_type {
+                    arc_malachitebft_core_types::VoteType::Prevote => "Prevote",
+                    arc_malachitebft_core_types::VoteType::Precommit => "Precommit",
+                };
+                eprintln!(
+                    "[BFT] BROADCAST {} round={} val_type={:?}",
+                    t,
+                    r,
+                    vote.message.value_id.is_nil()
+                );
+                let _ = incoming_tx.send(ConsensusNetworkMsg::Vote(vote.clone()));
                 let _ = outgoing.send(ConsensusNetworkMsg::Vote(vote));
             }
             crate::malachite_consensus::ConsensusEvent::BroadcastProposal { proposal, .. } => {
+                let r = proposal.message.round.as_u32().unwrap_or(0);
+                eprintln!("[BFT] BROADCAST Proposal round={}", r);
+                let _ = incoming_tx.send(ConsensusNetworkMsg::Proposal(proposal.clone()));
                 let _ = outgoing.send(ConsensusNetworkMsg::Proposal(proposal));
             }
             crate::malachite_consensus::ConsensusEvent::ScheduleTimeout { height, round, kind } => {
-                tracing::debug!(
-                    "BFT: scheduling timeout height={} round={} kind={:?}",
+                // Deduplicate: remove existing timeout for same (round, kind) before inserting.
+                timeout_queue.retain(|(existing, _)| {
+                    existing.round.as_u32().unwrap_or(0) != round || existing.kind != kind
+                });
+                let duration = config.duration_for(&kind);
+                let t = Timeout::new(Round::new(round), kind);
+                let deadline = Instant::now() + duration;
+                timeout_queue.push((t, deadline));
+                eprintln!(
+                    "[BFT] SCHEDULE timeout {:?} height={} round={} dur={:?} queue_len={}",
+                    t.kind,
                     height,
                     round,
-                    kind,
+                    duration,
+                    timeout_queue.len(),
                 );
             }
             crate::malachite_consensus::ConsensusEvent::NewHeight { height, round } => {
-                tracing::info!("BFT: new round started height={} round={}", height, round,);
+                eprintln!("[BFT] NEW ROUND height={} round={}", height, round,);
             }
         }
     }
@@ -1865,11 +1956,21 @@ mod tests {
         let mut bft = BftDriver::new(set, [0xAAu8; 32], identity, addr);
 
         let (outgoing_tx, _outgoing_rx) = mpsc::unbounded_channel();
+        let (incoming_tx, _incoming_rx) = mpsc::unbounded_channel();
         let config = ConsensusNetworkConfig::default();
 
         // 4. Simulate a BFT commit event
         let event = ConsensusEvent::BlockCommitted { height: 1, round: 0, block };
-        ConsensusDriver::handle_bft_event(event, &mut bft, &driver, &outgoing_tx, &config);
+        let mut timeout_queue = Vec::new();
+        ConsensusDriver::handle_bft_event(
+            event,
+            &mut bft,
+            &driver,
+            &outgoing_tx,
+            &config,
+            &incoming_tx,
+            &mut timeout_queue,
+        );
 
         // 5. Verify driver state was updated
         let d = driver.lock().unwrap();

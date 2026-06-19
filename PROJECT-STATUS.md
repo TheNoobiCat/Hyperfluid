@@ -14,7 +14,7 @@ This file tracks the current state of Hyperfluid's build pipeline. It is separat
 | Phase 2: Architecture | COMPLETE (12 components, 14 ADRs, component model, interfaces, trust boundaries, failure model. Gate: PASS — ADR-0015 added) |
 | Phase 3: Specifications | COMPLETE (15 specs across 4 domains — `stake-graph-analysis-spec.md` added) |
 | Phase 4: Planning | COMPLETE (5 stages, 21-30 week roadmap, spec-to-stage mapping, risk register. Gate: PASS) |
-| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-10 COMPLETE 2026-05-24. Stage 01 multi-validator BFT networking wired 2026-05-26 — `--multi-validator` flag, persistent TCP consensus messaging, dynamic peer bridge. Outbound peer key resolution deferred. CI all-green.) |
+| Phase 5+: Build | IN PROGRESS (Stage 01 integration gaps RESOLVED 2026-05-17. Stage 02 Week 1-10 COMPLETE 2026-05-24. Stage 01 multi-validator BFT networking wired 2026-05-26 — `--multi-validator` flag, persistent TCP consensus messaging, dynamic peer bridge. Outbound peer key resolution DONE 2026-06-19 — `--peers` format extended with DH/KEM keys, multi-node BFT tests passing. CI all-green.) |
 
 ---
 
@@ -431,10 +431,8 @@ Systemic patterns identified: cross-crate type drift, sender-drop in async setup
 
 Process improvements: 7 new generic guards added to `.opencode/commands/execute-build/checkpoint.md`.
 
-CI mimic: fmt, clippy (zero warnings), test (all pass except 2 pre-existing BFT), doc, bench-check — ALL PASS.
-
-
+CI mimic: fmt, clippy (zero warnings), test (all pass — multi-node BFT tests now passing), doc, bench-check — ALL PASS.
 
 ---
 
-*Last updated: 2026-05-26 (Bug Audit Round 9: 14 bugs across 8 crates. 7 new process guards added to checkpoint.md. CI all-green except 2 pre-existing BFT multi-node tests.)*
+*Last updated: 2026-06-19 (Stage 01 deferred items resolved: outbound peer key resolution + multi-node BFT test. Pre-existing fix_F4_decode_proposal_non_zero_hashes test repaired. CI all-green.)*

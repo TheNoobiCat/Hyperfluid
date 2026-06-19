@@ -91,7 +91,9 @@ pub(crate) fn load_identity(
     if default_path.exists() {
         return load_identity_from_file(&default_path);
     }
-    eprintln!("Warning: No identity found — using ephemeral key. Configure with --key-file or --key-hex.");
+    eprintln!(
+        "Warning: No identity found — using ephemeral key. Configure with --key-file or --key-hex."
+    );
     Ok(Identity::generate())
 }
 

@@ -22,7 +22,7 @@ use parity_scale_codec::Encode;
 use std::sync::Arc;
 
 // Required trait imports for select_proposer / Height::INITIAL
-use arc_malachitebft_core_types::{Context, Height, Validator, VotingPower};
+use arc_malachitebft_core_types::{Context, Height, Validator, Value, VotingPower};
 use ml_dsa::{Generate, KeyExport, Keypair, MlDsa65, SigningKey};
 
 // ===========================================================================
@@ -273,16 +273,33 @@ fn fix_F3_signature_populated_from_tx() {
 // F-4: decode_proposal() zero hashes
 // ===========================================================================
 
-/// Build minimal valid proposal wire format with a known value_hash.
+/// Build minimal valid proposal wire format with a known value_hash and block.
 fn build_proposal_wire(height: u64, round: u32, value_hash: &[u8; 32]) -> Vec<u8> {
     let mut buf = Vec::new();
     buf.extend_from_slice(&height.to_le_bytes());
     buf.extend_from_slice(&round.to_le_bytes());
     buf.extend_from_slice(value_hash);
-    buf.extend_from_slice(&0u32.to_le_bytes()); // pol_round = 0
+    buf.extend_from_slice(&0i64.to_le_bytes()); // pol_round (i64: -1=Nil, 0+=Some)
     buf.extend_from_slice(&[0xCCu8; 32]); // proposer_addr
     buf.extend_from_slice(&100u32.to_le_bytes()); // sig_len
     buf.extend_from_slice(&[0xDDu8; 100]); // signature
+                                           // Include a SCALE-encoded block
+    let block = Block {
+        header: hyperfluid_consensus::types::BlockHeader {
+            height,
+            parent_hash: [0x42u8; 32],
+            state_root: [0x99u8; 32],
+            transaction_root: [0x77u8; 32],
+            committee_id: 0,
+            proposer_id: [0xCCu8; 32],
+            timestamp: height * 2,
+            epoch: 0,
+        },
+        transactions: vec![],
+    };
+    let block_encoded = parity_scale_codec::Encode::encode(&block);
+    buf.extend_from_slice(&(block_encoded.len() as u32).to_le_bytes());
+    buf.extend_from_slice(&block_encoded);
     buf
 }
 
@@ -292,18 +309,24 @@ fn fix_F4_decode_proposal_non_zero_hashes() {
     let wire = build_proposal_wire(1, 0, &value_hash);
     let decoded = decode_proposal(&wire).expect("F-4: valid proposal must decode");
 
-    let block = &decoded.message.value.block;
-    assert_ne!(
-        block.header.parent_hash, [0u8; 32],
-        "F-4: parent_hash derived from value_hash, not zero"
+    // The decoded block preserves the fields from the wire format
+    assert_eq!(
+        decoded.message.value.block.header.parent_hash, [0x42u8; 32],
+        "F-4: parent_hash from wire must be preserved"
     );
-    assert_ne!(
-        block.header.state_root, [0u8; 32],
-        "F-4: state_root derived from value_hash, not zero"
+    assert_eq!(
+        decoded.message.value.block.header.state_root, [0x99u8; 32],
+        "F-4: state_root from wire must be preserved"
     );
-    assert_ne!(
-        block.header.transaction_root, [0u8; 32],
-        "F-4: transaction_root derived from value_hash, not zero"
+    assert_eq!(
+        decoded.message.value.block.header.transaction_root, [0x77u8; 32],
+        "F-4: transaction_root from wire must be preserved"
+    );
+    // The value hash from the wire format is used as the BlockValue hash
+    assert_eq!(
+        decoded.message.value.id().0,
+        value_hash,
+        "F-4: value hash from wire format must be preserved"
     );
     // Verify determinism
     let wire2 = build_proposal_wire(1, 0, &value_hash);
@@ -311,14 +334,19 @@ fn fix_F4_decode_proposal_non_zero_hashes() {
     assert_eq!(
         decoded.message.value.block.header.parent_hash,
         decoded2.message.value.block.header.parent_hash,
-        "F-4: derived hashes must be deterministic"
+        "F-4: deterministic decode must match"
     );
-    // Different value_hash gives different derived hashes
+    assert_eq!(
+        decoded.message.value.id(),
+        decoded2.message.value.id(),
+        "F-4: value hash must be deterministic"
+    );
+    // Different value_hash gives different value hash
     let wire3 = build_proposal_wire(1, 0, &[0x99u8; 32]);
     let decoded3 = decode_proposal(&wire3).expect("F-4: third decode");
     assert_ne!(
-        decoded.message.value.block.header.parent_hash,
-        decoded3.message.value.block.header.parent_hash,
+        decoded.message.value.id(),
+        decoded3.message.value.id(),
         "F-4: different value_hash yields different derived hashes"
     );
 }

@@ -90,35 +90,39 @@ fn run_handshake(
     let mut buf_a = [0u8; HANDSHAKE_BUF_SIZE];
     let mut buf_b = [0u8; HANDSHAKE_BUF_SIZE];
 
-    let n = initiator.write_message(&[], &mut buf_a)
+    let n = initiator
+        .write_message(&[], &mut buf_a)
         .map_err(|e| SecureChannelError::TransportError(format!("msg1: {:?}", e)))?;
-    let _ = responder.read_message(&buf_a[..n], &mut buf_b)
+    let _ = responder
+        .read_message(&buf_a[..n], &mut buf_b)
         .map_err(|e| SecureChannelError::TransportError(format!("read msg1: {:?}", e)))?;
 
-    let n = responder.write_message(&[], &mut buf_b)
+    let n = responder
+        .write_message(&[], &mut buf_b)
         .map_err(|e| SecureChannelError::TransportError(format!("msg2: {:?}", e)))?;
-    let _ = initiator.read_message(&buf_b[..n], &mut buf_a)
+    let _ = initiator
+        .read_message(&buf_b[..n], &mut buf_a)
         .map_err(|e| SecureChannelError::TransportError(format!("read msg2: {:?}", e)))?;
 
-    let n = initiator.write_message(&[], &mut buf_a)
+    let n = initiator
+        .write_message(&[], &mut buf_a)
         .map_err(|e| SecureChannelError::TransportError(format!("msg3: {:?}", e)))?;
-    let _ = responder.read_message(&buf_a[..n], &mut buf_b)
+    let _ = responder
+        .read_message(&buf_a[..n], &mut buf_b)
         .map_err(|e| SecureChannelError::TransportError(format!("read msg3: {:?}", e)))?;
 
-    let n = responder.write_message(&[], &mut buf_b)
+    let n = responder
+        .write_message(&[], &mut buf_b)
         .map_err(|e| SecureChannelError::TransportError(format!("msg4: {:?}", e)))?;
-    let _ = initiator.read_message(&buf_b[..n], &mut buf_a)
+    let _ = initiator
+        .read_message(&buf_b[..n], &mut buf_a)
         .map_err(|e| SecureChannelError::TransportError(format!("read msg4: {:?}", e)))?;
 
     if !initiator.is_finished() {
-        return Err(SecureChannelError::TransportError(
-            "initiator handshake not finished".into(),
-        ));
+        return Err(SecureChannelError::TransportError("initiator handshake not finished".into()));
     }
     if !responder.is_finished() {
-        return Err(SecureChannelError::TransportError(
-            "responder handshake not finished".into(),
-        ));
+        return Err(SecureChannelError::TransportError("responder handshake not finished".into()));
     }
     Ok(())
 }
@@ -308,11 +312,15 @@ impl ClatterSecureChannel {
             if let Some(result) = cache.get_mut(&key) {
                 let transport = if initiator {
                     result.initiator_transport.take().ok_or_else(|| {
-                        SecureChannelError::TransportError("initiator transport already taken".into())
+                        SecureChannelError::TransportError(
+                            "initiator transport already taken".into(),
+                        )
                     })?
                 } else {
                     result.responder_transport.take().ok_or_else(|| {
-                        SecureChannelError::TransportError("responder transport already taken".into())
+                        SecureChannelError::TransportError(
+                            "responder transport already taken".into(),
+                        )
                     })?
                 };
                 let session_id = transport.get_handshake_hash();
@@ -347,7 +355,9 @@ impl ClatterSecureChannel {
                 .with_rs_kem(responder_kem_pub);
 
         let mut initiator_hs = ClatterHybridHandshake::new(initiator_params).map_err(|_| {
-            SecureChannelError::HandshakeConstruction("initiator handshake construction failed".into())
+            SecureChannelError::HandshakeConstruction(
+                "initiator handshake construction failed".into(),
+            )
         })?;
 
         let responder_params =
@@ -359,11 +369,14 @@ impl ClatterSecureChannel {
                 .with_rs_kem(initiator_kem_pub);
 
         let mut responder_hs = ClatterHybridHandshake::new(responder_params).map_err(|_| {
-            SecureChannelError::HandshakeConstruction("responder handshake construction failed".into())
+            SecureChannelError::HandshakeConstruction(
+                "responder handshake construction failed".into(),
+            )
         })?;
 
-        run_handshake(&mut initiator_hs, &mut responder_hs)
-            .map_err(|e| SecureChannelError::TransportError(format!("handshake failed: {:?}", e)))?;
+        run_handshake(&mut initiator_hs, &mut responder_hs).map_err(|e| {
+            SecureChannelError::TransportError(format!("handshake failed: {:?}", e))
+        })?;
 
         let initiator_transport = initiator_hs
             .finalize()
@@ -389,11 +402,9 @@ impl ClatterSecureChannel {
         let mut cache = shim_result_cache()
             .lock()
             .map_err(|_| SecureChannelError::TransportError("shim cache poisoned".into()))?;
-        let result = cache
-            .get_mut(&key)
-            .ok_or_else(|| {
-                SecureChannelError::TransportError("shim result missing from cache".into())
-            })?;
+        let result = cache.get_mut(&key).ok_or_else(|| {
+            SecureChannelError::TransportError("shim result missing from cache".into())
+        })?;
         let transport = if initiator {
             result.initiator_transport.take().ok_or_else(|| {
                 SecureChannelError::TransportError("initiator transport missing from cache".into())

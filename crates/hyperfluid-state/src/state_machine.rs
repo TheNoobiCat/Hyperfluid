@@ -402,11 +402,11 @@ impl StateMachine {
         // 1. Validate parent exists and caller is authorised
         let parent = match self.tasks.get(&parent_task_id) {
             Some(p) => {
-        let authorised = match p.status {
-            TaskStatus::Open => p.funder == caller_id,
-            TaskStatus::Claimed | TaskStatus::InProgress => p.primary_owner == caller_id,
-            TaskStatus::InReview | TaskStatus::Done | TaskStatus::Decomposed => false,
-        };
+                let authorised = match p.status {
+                    TaskStatus::Open => p.funder == caller_id,
+                    TaskStatus::Claimed | TaskStatus::InProgress => p.primary_owner == caller_id,
+                    TaskStatus::InReview | TaskStatus::Done | TaskStatus::Decomposed => false,
+                };
                 if !authorised {
                     return ExecutionResult::Rejected;
                 }

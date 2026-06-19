@@ -100,11 +100,6 @@ impl BftDriver {
         height: u64,
         validator_set: HyperfluidValidatorSet,
     ) -> Vec<ConsensusEvent> {
-        tracing::debug!(
-            "BftDriver: starting height={} node_addr={}",
-            height,
-            hex::encode(self.node_addr.0),
-        );
         self.ctx = HyperfluidContext::new(validator_set.clone(), self.ctx.proposer_seed);
         self.driver.move_to_height(BlockHeight::new(height), validator_set);
 
@@ -114,6 +109,12 @@ impl BftDriver {
             Round::ZERO,
         );
         let proposer_addr = *proposer.address();
+        eprintln!(
+            "[BFT] start_height: node_addr={} proposer_addr={} is_proposer={}",
+            hex::encode(self.node_addr.0),
+            hex::encode(proposer_addr.0),
+            self.node_addr == proposer_addr,
+        );
 
         match self.driver.process(Input::NewRound(
             BlockHeight::new(height),
@@ -150,6 +151,7 @@ impl BftDriver {
         match self.driver.process(Input::Proposal(proposal, validity)) {
             Ok(outputs) => self.handle_outputs(outputs, h),
             Err(e) => {
+                eprintln!("[BFT] proposal REJECTED: {:?}", e);
                 tracing::debug!("BFT proposal rejected: {:?}", e);
                 vec![]
             }

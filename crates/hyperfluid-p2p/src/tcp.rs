@@ -156,23 +156,25 @@ impl TcpTransport {
                             }
                         };
 
+                        // Update state machine for inbound connections so
+                        // cleanup (disconnect) fires ConnectionLost from a valid
+                        // DirectActive state, not from Unknown.
+                        transport.update_state(peer_id, ConnectionEvent::ProbeInitiated).await;
+                        transport
+                            .update_state(peer_id, ConnectionEvent::DirectConnectSuccess)
+                            .await;
+
                         if let Some(h) = handler {
-                            let (tx, rx) = mpsc::unbounded_channel();
-                            let sender = tx.clone();
+                            // Accept loop only needs inbound reads — no outbound channel.
+                            // Outbound messages go through connect_and_maintain's peer_message_loop.
                             tokio::spawn(async move {
-                                peer_message_loop(&mut stream, channel, rx, h, peer_id).await;
+                                peer_message_loop(&mut stream, channel, None, h, peer_id).await;
                                 transport.disconnect(&peer_id).await;
                             });
-                            if let Some(reg) = &registry {
-                                if let Ok(mut senders) = reg.lock() {
-                                    senders.push(sender);
-                                }
-                            }
                             tracing::info!(
                                 "P2P: consensus messaging active for peer {:?}",
                                 peer_id,
                             );
-                            let _ = sender; // keep clone alive in memory while message loop runs
                         } else {
                             transport.active_channels.write().await.insert(peer_id, channel);
                             tracing::info!(
@@ -587,7 +589,7 @@ async fn perform_responder_handshake_on_split(
 async fn peer_message_loop(
     stream: &mut TcpStream,
     mut channel: ClatterSecureChannel,
-    mut outgoing_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    outgoing_rx: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
     consensus_handler: ConsensusMessageHandler,
     peer_id: Hash32,
 ) {
@@ -596,40 +598,63 @@ async fn peer_message_loop(
 
     let (mut reader, mut writer) = stream.split();
 
+    let mut outgoing_rx = outgoing_rx;
+
     loop {
-        tokio::select! {
-            // --- Inbound: read framed ciphertext, decrypt, forward ---
-            frame_result = async {
-                let mut len_buf = [0u8; FRAME_LEN_BYTES];
-                reader.read_exact(&mut len_buf).await?;
-                let len = u32::from_be_bytes(len_buf) as usize;
-                if len > MESSAGE_MAX_BYTES {
-                    return Err::<Vec<u8>, std::io::Error>(
-                        std::io::Error::new(std::io::ErrorKind::InvalidData, "frame too large"),
-                    );
-                }
-                let mut data = vec![0u8; len];
-                reader.read_exact(&mut data).await?;
-                Ok(data)
-            } => {
-                match frame_result {
-                    Ok(frame) => {
-                        if let Some(plaintext) = channel.open(&frame) {
-                            consensus_handler(peer_id, plaintext);
-                        }
+        // If we have an outbound receiver, poll both inbound + outbound.
+        // Otherwise, only poll inbound (accept-loop path).
+        if let Some(ref mut rx) = outgoing_rx {
+            tokio::select! {
+                biased;
+
+                frame_result = async {
+                    let mut len_buf = [0u8; FRAME_LEN_BYTES];
+                    reader.read_exact(&mut len_buf).await?;
+                    let len = u32::from_be_bytes(len_buf) as usize;
+                    if len > MESSAGE_MAX_BYTES {
+                        return Err::<Vec<u8>, std::io::Error>(
+                            std::io::Error::new(std::io::ErrorKind::InvalidData, "frame too large"),
+                        );
                     }
-                    Err(_) => break,
+                    let mut data = vec![0u8; len];
+                    reader.read_exact(&mut data).await?;
+                    Ok(data)
+                } => {
+                    match frame_result {
+                        Ok(frame) => {
+                            if let Some(plaintext) = channel.open(&frame) {
+                                consensus_handler(peer_id, plaintext);
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+
+                plaintext = rx.recv() => {
+                    let Some(plaintext) = plaintext else { break; };
+                    if let Ok(ciphertext) = channel.seal(&plaintext) {
+                        let len_bytes = (ciphertext.len() as u32).to_be_bytes();
+                        if writer.write_all(&len_bytes).await.is_err() { break; }
+                        if writer.write_all(&ciphertext).await.is_err() { break; }
+                    }
                 }
             }
-
-            // --- Outbound: receive plaintext, encrypt, write framed ---
-            plaintext = outgoing_rx.recv() => {
-                let Some(plaintext) = plaintext else { break; };
-                if let Ok(ciphertext) = channel.seal(&plaintext) {
-                    let len_bytes = (ciphertext.len() as u32).to_be_bytes();
-                    if writer.write_all(&len_bytes).await.is_err() { break; }
-                    if writer.write_all(&ciphertext).await.is_err() { break; }
-                }
+        } else {
+            // Inbound-only mode (accept loop): block on TCP read
+            let mut len_buf = [0u8; FRAME_LEN_BYTES];
+            if reader.read_exact(&mut len_buf).await.is_err() {
+                break;
+            }
+            let len = u32::from_be_bytes(len_buf) as usize;
+            if len > MESSAGE_MAX_BYTES {
+                break;
+            }
+            let mut data = vec![0u8; len];
+            if reader.read_exact(&mut data).await.is_err() {
+                break;
+            }
+            if let Some(plaintext) = channel.open(&data) {
+                consensus_handler(peer_id, plaintext);
             }
         }
     }
@@ -666,7 +691,7 @@ pub async fn connect_and_maintain(
     let (tx, rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
-        peer_message_loop(&mut stream, channel, rx, consensus_handler, remote_peer_id).await;
+        peer_message_loop(&mut stream, channel, Some(rx), consensus_handler, remote_peer_id).await;
     });
 
     Ok((remote_peer_id, tx))

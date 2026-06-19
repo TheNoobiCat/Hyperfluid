@@ -7,6 +7,10 @@
 
 pub mod rpc;
 
+use clatter::bytearray::ByteArray;
+use clatter::crypto::dh::X25519;
+use clatter::crypto::kem::rust_crypto_ml_kem::MlKem768;
+use clatter::traits::{Dh, Kem};
 use hyperfluid_consensus::driver::ConsensusDriver;
 use hyperfluid_consensus::genesis::GenesisConfig;
 use hyperfluid_consensus::malachite::Address32;
@@ -23,6 +27,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[derive(Debug, Clone)]
+struct PeerEntry {
+    addr: SocketAddr,
+    peer_id: Hash32,
+    dh_pubkey: [u8; 32],
+    kem_pubkey: Vec<u8>,
+}
+
 #[derive(Debug)]
 struct NodeConfig {
     gen_genesis: bool,
@@ -32,7 +44,8 @@ struct NodeConfig {
     p2p_bind: SocketAddr,
     node_key_path: PathBuf,
     multi_validator: bool,
-    peer_addrs: Vec<(SocketAddr, Hash32)>,
+    peer_addrs: Vec<PeerEntry>,
+    print_peer_info: bool,
 }
 
 impl NodeConfig {
@@ -45,7 +58,8 @@ impl NodeConfig {
         let mut p2p_bind_str: Option<String> = None;
         let mut node_key_path = PathBuf::from("node_key");
         let mut multi_validator = false;
-        let mut peer_addrs: Vec<(SocketAddr, Hash32)> = Vec::new();
+        let mut peer_addrs: Vec<PeerEntry> = Vec::new();
+        let mut print_peer_info = false;
 
         let mut i = 1;
         while i < args.len() {
@@ -80,6 +94,9 @@ impl NodeConfig {
                 "--multi-validator" => {
                     multi_validator = true;
                 }
+                "--print-peer-info" => {
+                    print_peer_info = true;
+                }
                 "--peers" => {
                     i += 1;
                     if i < args.len() {
@@ -87,24 +104,58 @@ impl NodeConfig {
                             .split(',')
                             .filter_map(|entry| {
                                 let entry = entry.trim();
-                                if let Some((addr_str, peer_id_str)) = entry.split_once('=') {
-                                    let addr: SocketAddr = addr_str.trim().parse().ok()?;
-                                    let peer_id_bytes = hex::decode(peer_id_str.trim()).ok()?;
-                                    if peer_id_bytes.len() == 32 {
-                                        let mut peer_id = [0u8; 32];
-                                        peer_id.copy_from_slice(&peer_id_bytes);
-                                        Some((addr, peer_id))
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    // Peer ID required for P2P connections.
-                                    // Bare addresses are not supported.
+                                let addr_rest: Vec<&str> = entry.splitn(2, '=').collect();
+                                if addr_rest.len() < 2 {
                                     tracing::warn!(
                                         "Skipping peer entry with no peer_id: {}",
-                                        entry,
+                                        entry
                                     );
-                                    None
+                                    return None;
+                                }
+                                let addr_str = addr_rest[0];
+                                let rest = addr_rest[1];
+                                let addr: SocketAddr = addr_str.trim().parse().ok()?;
+
+                                // Format: addr=peer_id or addr=peer_id:dh_key_hex:kem_key_hex
+                                let sub_parts: Vec<&str> = rest.splitn(3, ':').collect();
+                                let peer_id_bytes = hex::decode(sub_parts[0].trim()).ok()?;
+                                if peer_id_bytes.len() != 32 {
+                                    tracing::warn!(
+                                        "Skipping peer with invalid peer_id length: {}",
+                                        entry
+                                    );
+                                    return None;
+                                }
+                                let mut peer_id = [0u8; 32];
+                                peer_id.copy_from_slice(&peer_id_bytes);
+
+                                if sub_parts.len() >= 3 {
+                                    // Extended format with DH and KEM keys
+                                    let dh_bytes = hex::decode(sub_parts[1].trim()).ok()?;
+                                    let kem_bytes = hex::decode(sub_parts[2].trim()).ok()?;
+                                    if dh_bytes.len() != 32 {
+                                        tracing::warn!(
+                                            "Skipping peer with invalid DH key length: {}",
+                                            entry
+                                        );
+                                        return None;
+                                    }
+                                    let mut dh_pubkey = [0u8; 32];
+                                    dh_pubkey.copy_from_slice(&dh_bytes);
+                                    Some(PeerEntry {
+                                        addr,
+                                        peer_id,
+                                        dh_pubkey,
+                                        kem_pubkey: kem_bytes,
+                                    })
+                                } else {
+                                    // Basic format — no DH/KEM keys; look up from key_map
+                                    Some(PeerEntry {
+                                        addr,
+                                        peer_id,
+                                        dh_pubkey: [0u8; 32],
+                                        kem_pubkey: Vec::new(),
+                                    })
                                 }
                             })
                             .collect();
@@ -141,6 +192,7 @@ impl NodeConfig {
             node_key_path,
             multi_validator,
             peer_addrs,
+            print_peer_info,
         }
     }
 }
@@ -181,6 +233,22 @@ fn load_or_create_identity(path: &PathBuf) -> Identity {
         );
     }
     identity
+}
+
+/// Format peer info for the `--peers` flag format: addr=peer_id_hex:dh_key_hex:kem_key_hex
+fn format_peer_info(
+    addr: SocketAddr,
+    peer_id: Hash32,
+    dh_pubkey: [u8; 32],
+    kem_pubkey: &[u8],
+) -> String {
+    format!(
+        "{}={}:{}:{}",
+        addr,
+        hex::encode(peer_id),
+        hex::encode(dh_pubkey),
+        hex::encode(kem_pubkey),
+    )
 }
 
 #[tokio::main]
@@ -267,8 +335,32 @@ async fn main() {
         hex::encode(local_peer_id),
     );
 
-    // Build key provider from genesis validator set.
+    // Generate local DH/KEM keys for Clatter handshake.
+    let local_dh = X25519::genkey().expect("DH keygen");
+    let local_kem = MlKem768::genkey().expect("KEM keygen");
+    let local_dh_pubkey: [u8; 32] = local_dh.public;
+    let local_kem_pubkey = local_kem.public.as_slice().to_vec();
+
+    // Handle --print-peer-info: print this node's peer info in --peers format.
+    if config.print_peer_info {
+        println!(
+            "{}",
+            format_peer_info(actual_addr, local_peer_id, local_dh_pubkey, &local_kem_pubkey)
+        );
+        return;
+    }
+
+    // Build key provider from genesis validator set and --peers entries.
     let mut key_map: HashMap<Hash32, ([u8; 32], Vec<u8>)> = HashMap::new();
+    // Insert own keys into key_map for inbound peers to resolve.
+    key_map.insert(local_peer_id, (local_dh_pubkey, local_kem_pubkey.clone()));
+    // Add keys from --peers entries that include DH/KEM key material.
+    for peer in &config.peer_addrs {
+        if peer.dh_pubkey != [0u8; 32] && !peer.kem_pubkey.is_empty() {
+            key_map.insert(peer.peer_id, (peer.dh_pubkey, peer.kem_pubkey.clone()));
+        }
+    }
+    // Add keys from genesis validator accounts (fallback — may not have real DH/KEM keys).
     {
         let account_pubkeys: HashMap<Hash32, &Vec<u8>> = config
             .genesis
@@ -277,12 +369,15 @@ async fn main() {
             .filter_map(|a| a.pubkey.as_ref().map(|pk| (a.account_id, pk)))
             .collect();
         for v in &config.genesis.validators {
-            if let Some(pubkey) = account_pubkeys.get(&v.validator_id) {
-                let mut dh_key = [0u8; 32];
-                let copy_len = pubkey.len().min(32);
-                dh_key[..copy_len].copy_from_slice(&pubkey[..copy_len]);
-                let kem_key = if pubkey.len() > 32 { pubkey[32..].to_vec() } else { Vec::new() };
-                key_map.insert(v.validator_id, (dh_key, kem_key));
+            if let std::collections::hash_map::Entry::Vacant(e) = key_map.entry(v.validator_id) {
+                if let Some(pubkey) = account_pubkeys.get(&v.validator_id) {
+                    let mut dh_key = [0u8; 32];
+                    let copy_len = pubkey.len().min(32);
+                    dh_key[..copy_len].copy_from_slice(&pubkey[..copy_len]);
+                    let kem_key =
+                        if pubkey.len() > 32 { pubkey[32..].to_vec() } else { Vec::new() };
+                    e.insert((dh_key, kem_key));
+                }
             }
         }
     }
@@ -316,11 +411,12 @@ async fn main() {
         }
         let validator_set = malachite_consensus::build_validator_set(entries);
 
+        // All validators must use the same proposer seed so they agree
+        // on which validator is the proposer for each round.
         let proposer_seed = {
             use sha3::Digest;
             let mut h = sha3::Sha3_256::new();
-            h.update(local_peer_id);
-            h.update(config.genesis.timestamp.to_le_bytes());
+            h.update(config.genesis.chain_id.as_bytes());
             let mut out = [0u8; 32];
             out.copy_from_slice(&h.finalize());
             out
@@ -405,8 +501,11 @@ async fn main() {
         let identity_for_peers = Arc::clone(&local_identity);
         let my_bind_addr = actual_addr;
         let key_provider_for_peers = key_provider.clone();
+        let peer_entries: Vec<PeerEntry> = config.peer_addrs.clone();
         tokio::spawn(async move {
-            for (peer_addr, peer_id) in config.peer_addrs.iter().copied() {
+            for peer_entry in &peer_entries {
+                let peer_addr = peer_entry.addr;
+                let peer_id = peer_entry.peer_id;
                 if peer_addr == my_bind_addr {
                     continue;
                 }
