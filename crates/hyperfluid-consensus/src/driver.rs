@@ -991,7 +991,6 @@ impl ConsensusDriver {
                     self.state_machine.execute_task_create(
                         payload.creator_id,
                         payload.bounty_agx,
-                        0, // fee: not yet tracked in payload
                         task_id,
                         payload.nonce,
                         payload.seed_ref,

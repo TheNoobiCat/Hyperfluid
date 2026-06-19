@@ -288,7 +288,6 @@ fn e2e_task_create_full_pipeline() {
     let result = sm.execute_task_create(
         agent_id,
         bounty,
-        0, // fee_agx
         task_id,
         1, // nonce
         sha3_256(b"seed-ref-001"),

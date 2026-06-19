@@ -35,7 +35,6 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
     let r = sm.execute_task_create(
         agent,
         bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -91,7 +90,6 @@ fn conforms_to_collaboration_spec_1_7_1_task_transitions_deterministic() {
     sm2.execute_task_create(
         agent,
         bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -135,7 +133,6 @@ fn conforms_to_collaboration_spec_1_7_1_task_creation_rejected_wrong_nonce() {
     let r = sm.execute_task_create(
         agent,
         100_000_000_000_000_000_000,
-        0,
         [0x01u8; 32],
         99,
         [0xBBu8; 32],
@@ -159,7 +156,6 @@ fn conforms_to_collaboration_spec_1_7_1_task_creation_rejected_insufficient_fund
     let r = sm.execute_task_create(
         agent,
         100_000_000_000_000_000_000,
-        0,
         [0x01u8; 32],
         1,
         [0xBBu8; 32],
@@ -184,7 +180,6 @@ fn conforms_to_collaboration_spec_1_7_1_duplicate_task_id_rejected() {
     let r = sm.execute_task_create(
         agent,
         100_000_000_000_000_000_000,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -201,7 +196,6 @@ fn conforms_to_collaboration_spec_1_7_1_duplicate_task_id_rejected() {
     let r = sm.execute_task_create(
         agent,
         100_000_000_000_000_000_000,
-        0,
         task_id,
         3,
         [0xBBu8; 32],
@@ -229,7 +223,6 @@ fn conforms_to_collaboration_spec_1_7_3_lease_ttl_enforced() {
     sm.execute_task_create(
         a1,
         bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -292,7 +285,6 @@ fn conforms_to_collaboration_spec_1_7_4_empty_heartbeat_rejected() {
     sm.execute_task_create(
         agent,
         bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -339,7 +331,6 @@ fn conforms_to_collaboration_spec_1_7_4_valid_heartbeat_accepted() {
     sm.execute_task_create(
         agent,
         bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -390,7 +381,6 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
         sm.execute_task_create(
             agent,
             100_000_000_000_000_000_000,
-            0,
             task_id,
             (2 * i + 1) as u64,
             [0xBBu8; 32],
@@ -427,7 +417,6 @@ fn conforms_to_collaboration_spec_1_7_5_lease_caps_by_trust_stage() {
         sm.execute_task_create(
             agent,
             100_000_000_000_000_000_000,
-            0,
             task_id,
             (2 * i + 1) as u64,
             [0xBBu8; 32],
@@ -468,7 +457,6 @@ fn conforms_to_collaboration_spec_1_7_6_lease_collateral_requirement() {
     sm.execute_task_create(
         agent,
         large_bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -500,7 +488,6 @@ fn conforms_to_collaboration_spec_1_7_6_lease_collateral_requirement() {
     sm.execute_task_create(
         agent,
         large_bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -531,7 +518,6 @@ fn conforms_to_collaboration_spec_1_7_6_lease_collateral_requirement() {
     sm.execute_task_create(
         agent,
         small_bounty,
-        0,
         task_id2,
         1,
         [0xBBu8; 32],
@@ -568,7 +554,6 @@ fn conforms_to_collaboration_spec_1_7_7_bounty_escrow_deducted() {
     let r = sm.execute_task_create(
         agent,
         bounty,
-        0,
         [0x01u8; 32],
         1,
         [0xBBu8; 32],
@@ -598,7 +583,6 @@ fn conforms_to_collaboration_spec_1_7_7_non_existent_creator_rejected() {
     let r = sm.execute_task_create(
         [0xAAu8; 32],
         100_000_000_000_000_000_000,
-        0,
         [0x01u8; 32],
         1,
         [0xBBu8; 32],
@@ -626,7 +610,6 @@ fn conforms_to_collaboration_spec_1_7_7_claiming_task_no_active_lease() {
     sm.execute_task_create(
         a1,
         bounty,
-        0,
         task_id,
         1,
         [0xBBu8; 32],

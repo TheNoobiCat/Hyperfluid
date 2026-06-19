@@ -29,7 +29,6 @@ fn setup_review_ready_state(
     sm.execute_task_create(
         worker_id,
         BOUNTY,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -84,7 +83,6 @@ fn conforms_to_review_spec_1_7_1_task_enters_inreview_on_completion() {
     sm.execute_task_create(
         worker,
         BOUNTY,
-        0,
         task_id,
         1,
         [0xBBu8; 32],
@@ -146,7 +144,6 @@ fn conforms_to_review_spec_1_7_1_completion_rejected_wrong_owner() {
     sm.execute_task_create(
         worker,
         BOUNTY,
-        0,
         task_id,
         1,
         [0xBBu8; 32],

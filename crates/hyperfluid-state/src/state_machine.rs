@@ -321,7 +321,6 @@ impl StateMachine {
         &mut self,
         creator_id: Hash32,
         bounty_agx: u128,
-        fee_agx: u128,
         task_id: Hash32,
         nonce: u64,
         seed_ref: Hash32,
@@ -342,15 +341,14 @@ impl StateMachine {
             return ExecutionResult::Rejected;
         }
 
-        let total_cost = bounty_agx.saturating_add(fee_agx);
         let creator_balance = self.accounts.get(&creator_id).map(|a| a.balance).unwrap_or(0);
-        if creator_balance < total_cost {
+        if creator_balance < bounty_agx {
             return ExecutionResult::Rejected;
         }
 
         match self.accounts.get_mut(&creator_id) {
             Some(creator) => {
-                creator.balance = creator.balance.saturating_sub(total_cost);
+                creator.balance = creator.balance.saturating_sub(bounty_agx);
                 creator.nonce = nonce;
             }
             None => return ExecutionResult::Rejected,
@@ -457,6 +455,8 @@ impl StateMachine {
         let parent_topic = parent.topic_id;
         let parent_sponsor = parent.sponsor_id;
         let parent_funder = parent.funder;
+        let caller_pubkey = self.accounts.get(&caller_id).and_then(|a| a.pubkey.as_ref());
+        let requester_pubkey = caller_pubkey.map(|pk| crate::sha3_256(pk)).unwrap_or([0u8; 32]);
         // Release parent immutable borrow before mutating self.tasks
         let _ = parent;
 
@@ -478,7 +478,7 @@ impl StateMachine {
                 required_skills_hash: child.required_skills_hash,
                 metadata_hash: parent_metadata,
                 sponsor_id: parent_sponsor,
-                requester_pubkey: [0u8; 32], // TODO: fetch from caller's Account.pubkey
+                requester_pubkey,
                 escrow_status: EscrowStatus::Locked,
             };
             self.tasks.insert(child.task_id, child_task);
@@ -1044,6 +1044,9 @@ impl StateMachine {
         let task_metadata = task.metadata_hash;
         let task_sponsor = task.sponsor_id;
         let task_id_copy = task.task_id;
+        let task_skills_hash = task.required_skills_hash;
+        let funder_pubkey = self.accounts.get(&task_funder).and_then(|a| a.pubkey.as_ref());
+        let requester_pubkey = funder_pubkey.map(|pk| crate::sha3_256(pk)).unwrap_or([0u8; 32]);
         task.status = TaskStatus::InReview;
         // Release mutable borrow before accessing self.tasks again
         let _ = task;
@@ -1069,10 +1072,10 @@ impl StateMachine {
                 bounty_agx: work_bounty * 5 / 100,
                 created_at_height: current_height,
                 lease_expires_height: current_height,
-                required_skills_hash: [0u8; 32], // TODO: compute from actual review skills
+                required_skills_hash: task_skills_hash,
                 metadata_hash: task_metadata,
                 sponsor_id: task_sponsor,
-                requester_pubkey: [0u8; 32], // TODO: fetch from task_funder's Account.pubkey
+                requester_pubkey,
                 escrow_status: EscrowStatus::Locked,
             };
             self.tasks.insert(review_task_id, review_task);
@@ -1956,7 +1959,6 @@ mod tests {
         let result = sm.execute_task_create(
             [1u8; 32],
             300,
-            10,
             [0xA1u8; 32],
             1,
             [0xBBu8; 32],
@@ -1969,7 +1971,7 @@ mod tests {
             ExecutionContext { height: 10, timestamp: 1000 },
         );
         assert_eq!(result, ExecutionResult::Success);
-        assert_eq!(sm.get_account(&[1u8; 32]).unwrap().balance, 690);
+        assert_eq!(sm.get_account(&[1u8; 32]).unwrap().balance, 700);
     }
 
     #[test]
@@ -1982,7 +1984,6 @@ mod tests {
         let r1 = sm.execute_task_create(
             [1u8; 32],
             100,
-            10,
             task_id,
             1,
             seed,
@@ -2000,7 +2001,6 @@ mod tests {
         let r2 = sm.execute_task_create(
             [1u8; 32],
             100,
-            10,
             task_id,
             2,
             seed,
@@ -2023,7 +2023,6 @@ mod tests {
         let result = sm.execute_task_create(
             [1u8; 32],
             100,
-            10,
             [0xA1u8; 32],
             1,
             [0xBBu8; 32],
@@ -2047,16 +2046,14 @@ mod tests {
         let seed_ref = [0xBBu8; 32];
         let agent_id = [2u8; 32];
         let bounty = 300_000_000_000_000_000_000u128; // 300 AGX
-        let fee = 10_000_000_000_000_000_000u128; // 10 AGX
 
         sm.init_account(test_account(1, 500_000_000_000_000_000_000, 0));
         sm.init_account(test_account(2, 500_000_000_000_000_000_000, 0));
 
-        // Create a task — escrow_status = Locked, 500 - 300 - 10 = 190 AGX remaining
+        // Create a task — escrow_status = Locked, 500 - 300 = 200 AGX remaining
         let r = sm.execute_task_create(
             creator_id,
             bounty,
-            fee,
             task_id,
             1,
             seed_ref,
@@ -2069,7 +2066,7 @@ mod tests {
             ctx(100),
         );
         assert_eq!(r, ExecutionResult::Success);
-        assert_eq!(sm.get_account(&creator_id).unwrap().balance, 190_000_000_000_000_000_000);
+        assert_eq!(sm.get_account(&creator_id).unwrap().balance, 200_000_000_000_000_000_000);
         assert_eq!(sm.tasks.get(&task_id).unwrap().escrow_status, EscrowStatus::Locked,);
 
         // Claim the task so status → Claimed, lease starts at height 100, expires at 220
@@ -2096,8 +2093,8 @@ mod tests {
         assert_eq!(task.escrow_status, EscrowStatus::Refunded);
         assert_eq!(task.bounty_agx, 0);
 
-        // Funder received the bounty back: 190 AGX + 300 AGX = 490 AGX
-        assert_eq!(sm.get_account(&creator_id).unwrap().balance, 490_000_000_000_000_000_000);
+        // Funder received the bounty back: 200 AGX + 300 AGX = 500 AGX
+        assert_eq!(sm.get_account(&creator_id).unwrap().balance, 500_000_000_000_000_000_000);
     }
 
     #[test]
@@ -2115,7 +2112,6 @@ mod tests {
         let r = sm.execute_task_create(
             creator_id,
             bounty,
-            0,
             task_id,
             1,
             [0xBBu8; 32],
@@ -2169,7 +2165,6 @@ mod tests {
         let r = sm.execute_task_create(
             creator_id,
             bounty,
-            0,
             task_id,
             1,
             [0xCCu8; 32],
@@ -2216,7 +2211,6 @@ mod tests {
         let r = sm.execute_task_create(
             [1u8; 32],
             100,
-            0,
             task_id,
             1,
             [0xDDu8; 32],

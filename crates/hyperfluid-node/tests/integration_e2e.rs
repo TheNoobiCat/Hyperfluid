@@ -203,7 +203,6 @@ fn e2e_09_task_create_flow() {
     let r = sm.execute_task_create(
         [8u8; 32],
         2_000_000_000_000_000_000,
-        500_000_000_000_000_000,
         task_id,
         1,
         seed_ref,
@@ -216,7 +215,7 @@ fn e2e_09_task_create_flow() {
         ctx(20),
     );
     assert_eq!(r, ExecutionResult::Success);
-    assert_eq!(sm.get_account(&[8u8; 32]).unwrap().balance, 7_500_000_000_000_000_000);
+    assert_eq!(sm.get_account(&[8u8; 32]).unwrap().balance, 8_000_000_000_000_000_000);
 }
 
 /// Duplicate task creation rejected.
@@ -231,7 +230,6 @@ fn e2e_10_task_create_duplicate_rejected() {
     let r1 = sm.execute_task_create(
         [8u8; 32],
         1_000_000,
-        100_000,
         task_id,
         1,
         seed,
@@ -249,7 +247,6 @@ fn e2e_10_task_create_duplicate_rejected() {
     let r2 = sm.execute_task_create(
         [8u8; 32],
         1_000_000,
-        100_000,
         task_id,
         2,
         seed,
@@ -372,7 +369,6 @@ fn e2e_15_multi_op_state_consistency() {
     sm.execute_task_create(
         [2u8; 32],
         10_000_000_000_000_000_000,
-        1_000_000_000_000_000_000,
         [0xA1; 32],
         1,
         [0xB1; 32],
