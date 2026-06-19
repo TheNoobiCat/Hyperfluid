@@ -33,6 +33,9 @@ Thumbs.db
 # Generated genesis files
 genesis.json
 
+# Runtime artifacts
+node_key
+
 personalnotes.md
 
 ascripts/
